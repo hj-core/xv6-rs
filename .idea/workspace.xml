@@ -7,7 +7,10 @@
     <cargoProject FILE="$PROJECT_DIR$/Cargo.toml" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="79d91817-cab6-48db-8c64-627b37812669" name="Changes" comment="" />
+    <list default="true" id="79d91817-cab6-48db-8c64-627b37812669" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/.cargo/config.toml" beforeDir="false" afterPath="$PROJECT_DIR$/.cargo/config.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -67,6 +70,11 @@
     &quot;accountId&quot;: &quot;5c7a7eec-58ac-47cc-a66f-0e0a2d58d92a&quot;
   }
 }</component>
+  <component name="JsbtTreeLayoutManager">
+    <layout place="tools.popupGrunt">
+      <scroll-view-position x="0" y="0" />
+    </layout>
+  </component>
   <component name="MacroExpansionManager">
     <option name="directoryName" value="vK8Gpbqi" />
   </component>
@@ -162,7 +170,7 @@
       <workItem from="1734351925311" duration="367000" />
       <workItem from="1734355946626" duration="302000" />
       <workItem from="1734406627358" duration="1108000" />
-      <workItem from="1734408039681" duration="5281000" />
+      <workItem from="1734408039681" duration="8379000" />
     </task>
     <servers />
   </component>
