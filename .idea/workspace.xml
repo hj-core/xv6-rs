@@ -8,7 +8,6 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="79d91817-cab6-48db-8c64-627b37812669" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/boot" afterDir="false" />
       <change afterPath="$PROJECT_DIR$/build.rs" afterDir="false" />
       <change afterPath="$PROJECT_DIR$/link.ld" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
@@ -190,7 +189,7 @@
       <workItem from="1734486748544" duration="6000" />
       <workItem from="1734489920337" duration="607000" />
       <workItem from="1734504012243" duration="20513000" />
-      <workItem from="1734531109165" duration="1178000" />
+      <workItem from="1734531109165" duration="1478000" />
     </task>
     <servers />
   </component>
