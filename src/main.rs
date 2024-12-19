@@ -1,8 +1,13 @@
 #![no_std]
 #![no_main]
 
-use core::arch::asm;
+use core::arch::{asm, global_asm};
 use core::panic::PanicInfo;
+
+// Entry point.
+// Must be placed at the address where qemu's -kernel jumps.
+// It just calls the _start.
+global_asm!(".section .text", ".global _entry", "_entry:", "call _start");
 
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
