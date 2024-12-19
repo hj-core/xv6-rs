@@ -40,6 +40,7 @@ pub extern "C" fn _start() -> ! {
 #[no_mangle]
 fn start_cpu() {
     machine::store_mhartid_to_tp();
+    machine::set_mstatus_to_s_mode();
 }
 
 #[panic_handler]
