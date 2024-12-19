@@ -3,6 +3,7 @@
 
 use core::arch::{asm, global_asm};
 use core::panic::PanicInfo;
+use xv6_rs::kernel;
 use xv6_rs::machine;
 
 // Entry point.
@@ -41,6 +42,7 @@ pub extern "C" fn _start() -> ! {
 fn start_cpu() {
     machine::store_mhartid_to_tp();
     machine::set_mstatus_to_s_mode();
+    machine::write_mepc(kernel::main as *const () as u64);
 }
 
 #[panic_handler]

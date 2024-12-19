@@ -28,3 +28,8 @@ fn read_mstatus() -> u64 {
 fn write_mstatus(value: u64) {
     unsafe { asm!("csrw mstatus, {0}", in(reg) value) }
 }
+
+// Write machine exception program counter
+pub fn write_mepc(value: u64) {
+    unsafe { asm!("csrw mepc, {0}", in(reg) value) }
+}
