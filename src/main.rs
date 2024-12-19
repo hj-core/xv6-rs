@@ -3,16 +3,43 @@
 
 use core::arch::{asm, global_asm};
 use core::panic::PanicInfo;
+use xv6_rs::machine;
 
 // Entry point.
 // Must be placed at the address where qemu's -kernel jumps.
 // It just calls the _start.
 global_asm!(".section .text", ".global _entry", "_entry:", "call _start");
 
+#[repr(C, align(16))]
+struct CpuStack {
+    data: [u8; machine::STACK_SIZE_PER_CPU * machine::MAX_CPUS],
+}
+
+static CPU_STACK: CpuStack = CpuStack {
+    data: [0; machine::STACK_SIZE_PER_CPU * machine::MAX_CPUS],
+};
+
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
-    unsafe { asm!("li s2, 5", "li s3, 7", "add s4, s2, s3", "mul s5, s3, s4",) }
+    unsafe {
+        asm!(
+        // set up stack for each CPU.
+        "csrr a2, mhartid",
+        "addi a2, a2, 1",
+        "mul a2, a2, a1",
+        "add sp, a0, a2",
+        // jump to start_cpu
+        "call start_cpu",
+        in("a0") &raw const CPU_STACK.data,
+        in("a1") machine::STACK_SIZE_PER_CPU,
+        );
+    }
     loop {}
+}
+
+#[no_mangle]
+fn start_cpu() {
+    unsafe { asm!("la a1, 1", "la a2, 2", "add a3, a1, a2", "mul a4, a2, a3") }
 }
 
 #[panic_handler]
