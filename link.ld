@@ -1,3 +1,5 @@
+ENTRY(_entry)
+
 SECTIONS {
   . = 0x80000000; /* Address where qemu's -kernel jumps. */
 
