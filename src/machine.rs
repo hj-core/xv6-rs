@@ -96,3 +96,65 @@ fn write_pmpaddr0(value: u64) {
 fn write_pmpcfg0(value: u64) {
     unsafe { asm!("csrw pmpcfg0, {0}", in(reg) value) }
 }
+
+pub fn set_up_timer_interrupts() {
+    // Enable S-mode timer interrupts in mie
+    const MIE_STIE: u64 = 1 << 5;
+    write_mie(read_mie() | MIE_STIE);
+
+    // Enable the "Sstc" extension for S-mode timer interrupts, i.e., stimecmp
+    const MENVCFG_STCE: u64 = 1 << 63;
+    write_menvcfg(read_menvcfg() | MENVCFG_STCE);
+
+    // Allow S-mode to read time
+    const MCOUNTEREN_TM: u64 = 0x2;
+    write_mcounteren(read_mcounteren() | MCOUNTEREN_TM);
+
+    // Ask for the very first timer interrupt
+    write_stimecmp(read_time() + 1_000_000)
+}
+
+// Write machine interrupt enable
+fn write_mie(value: u64) {
+    unsafe { asm!("csrw mie, {0}", in(reg) value) }
+}
+
+fn read_mie() -> u64 {
+    let mut result: u64;
+    unsafe { asm!("csrr {0}, mie", out(reg) result) };
+    result
+}
+
+// Write machine environment configuration
+fn write_menvcfg(value: u64) {
+    unsafe { asm!("csrw menvcfg, {0}", in(reg) value) }
+}
+
+fn read_menvcfg() -> u64 {
+    let mut result: u64;
+    unsafe { asm!("csrr {0}, menvcfg", out(reg) result) };
+    result
+}
+
+// Write machine counter-enable
+fn write_mcounteren(value: u64) {
+    unsafe { asm!("csrw mcounteren, {0}", in(reg) value) }
+}
+
+fn read_mcounteren() -> u64 {
+    let mut result: u64;
+    unsafe { asm!("csrr {0}, mcounteren", out(reg) result) };
+    result
+}
+
+// Write supervisor timer
+fn write_stimecmp(value: u64) {
+    unsafe { asm!("csrw stimecmp, {0}", in(reg) value) }
+}
+
+// Read machine(?) timer
+fn read_time() -> u64 {
+    let mut result: u64;
+    unsafe { asm!("csrr {0}, time", out(reg) result) };
+    result
+}
