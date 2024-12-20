@@ -46,6 +46,7 @@ fn start_cpu() {
     machine::disable_paging();
     machine::delegate_exceptions_to_s_mode();
     machine::delegate_interrupts_to_s_mode();
+    machine::enable_s_mode_interrupts();
 }
 
 #[panic_handler]

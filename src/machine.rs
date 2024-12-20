@@ -62,3 +62,22 @@ pub fn delegate_interrupts_to_s_mode() {
 fn write_mideleg(value: u64) {
     unsafe { asm!("csrw mideleg, {0}", in(reg) value) }
 }
+
+pub fn enable_s_mode_interrupts() {
+    const SIE_SEIE: u64 = 1 << 9; // External interrupts
+    const SIE_STIE: u64 = 1 << 5; // Timer interrupts
+    const SIE_SSIE: u64 = 1 << 1; // Software interrupts
+
+    write_sie(read_sie() | SIE_SEIE | SIE_STIE | SIE_SSIE);
+}
+
+// Write supervisor interrupt enable
+fn write_sie(value: u64) {
+    unsafe { asm!("csrw sie, {0}", in(reg) value) }
+}
+
+fn read_sie() -> u64 {
+    let mut result: u64;
+    unsafe { asm!("csrr {0}, sie", out(reg) result) };
+    result
+}
