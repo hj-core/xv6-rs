@@ -81,3 +81,18 @@ fn read_sie() -> u64 {
     unsafe { asm!("csrr {0}, sie", out(reg) result) };
     result
 }
+
+pub fn allow_s_mode_read_all_physical_memories() {
+    write_pmpaddr0(0x3fffffffffffff);
+    write_pmpcfg0(0xf);
+}
+
+// Write physical memory protection address 0
+fn write_pmpaddr0(value: u64) {
+    unsafe { asm!("csrw pmpaddr0, {0}", in(reg) value) }
+}
+
+// Write physical memory protection configuration 0
+fn write_pmpcfg0(value: u64) {
+    unsafe { asm!("csrw pmpcfg0, {0}", in(reg) value) }
+}
