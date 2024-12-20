@@ -47,6 +47,7 @@ fn start_cpu() {
     machine::delegate_exceptions_to_s_mode();
     machine::delegate_interrupts_to_s_mode();
     machine::enable_s_mode_interrupts();
+    machine::allow_s_mode_read_all_physical_memories();
 }
 
 #[panic_handler]
