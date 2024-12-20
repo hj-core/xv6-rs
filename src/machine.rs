@@ -42,3 +42,13 @@ pub fn disable_paging() {
 fn write_satp(value: u64) {
     unsafe { asm!("csrw satp, {0}", in(reg) value) }
 }
+
+pub fn delegate_exceptions_to_s_mode() {
+    // Some bits are read-only zero so the resulting medeleg is not 0xffff
+    write_medeleg(0xffff)
+}
+
+// Write machine exception delegation
+fn write_medeleg(value: u64) {
+    unsafe { asm!("csrw medeleg, {0}", in(reg) value) }
+}
