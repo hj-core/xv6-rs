@@ -33,3 +33,12 @@ fn write_mstatus(value: u64) {
 pub fn write_mepc(value: u64) {
     unsafe { asm!("csrw mepc, {0}", in(reg) value) }
 }
+
+pub fn disable_paging() {
+    write_satp(0)
+}
+
+// Write supervisor address translation and protection
+fn write_satp(value: u64) {
+    unsafe { asm!("csrw satp, {0}", in(reg) value) }
+}
