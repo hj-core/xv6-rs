@@ -39,7 +39,7 @@ pub extern "C" fn _start() -> ! {
 
 #[no_mangle]
 fn start_cpu() {
-    unsafe { asm!("la a1, 1", "la a2, 2", "add a3, a1, a2", "mul a4, a2, a3") }
+    machine::store_mhartid_to_tp();
 }
 
 #[panic_handler]
