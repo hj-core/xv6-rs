@@ -44,7 +44,8 @@ fn start_cpu() {
     machine::set_mstatus_to_s_mode();
     machine::write_mepc(kernel::main as *const () as u64);
     machine::disable_paging();
-    machine::delegate_exceptions_to_s_mode()
+    machine::delegate_exceptions_to_s_mode();
+    machine::delegate_interrupts_to_s_mode();
 }
 
 #[panic_handler]

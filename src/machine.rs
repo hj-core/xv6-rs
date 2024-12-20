@@ -52,3 +52,13 @@ pub fn delegate_exceptions_to_s_mode() {
 fn write_medeleg(value: u64) {
     unsafe { asm!("csrw medeleg, {0}", in(reg) value) }
 }
+
+pub fn delegate_interrupts_to_s_mode() {
+    // Some bits are read-only zero so the resulting mideleg is not 0xffff
+    write_mideleg(0xffff)
+}
+
+// Write machine interrupt delegation
+fn write_mideleg(value: u64) {
+    unsafe { asm!("csrw mideleg, {0}", in(reg) value) }
+}
