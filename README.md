@@ -27,7 +27,8 @@ This project is an attempt to implement xv6 using Rust.
 | The Embedonomicon                                       | https://docs.rust-embedded.org/embedonomicon/                                   |
 | Writing an OS in Rust                                   | https://os.phil-opp.com/                                                        |
 | **> Other**                                             |                                                                                 |
+| GDB QUICK REFERENCE                                     | https://web.stanford.edu/class/archive/cs/cs143/cs143.1128/documents/gdbref.pdf |
 | Welcome to QEMU’s documentation!                        | https://www.qemu.org/docs/master/index.html                                     |
 | RISC-V Assembler Cheat Sheet                            | https://projectf.io/posts/riscv-cheat-sheet/                                    |
+| RISC-V Technical Specifications                         | https://lf-riscv.atlassian.net/wiki/x/kYD2                                      |                                      
 | Everything You Never Wanted To Know About Linker Script | https://mcyoung.xyz/2021/06/01/linker-script/                                   |
-| GDB QUICK REFERENCE                                     | https://web.stanford.edu/class/archive/cs/cs143/cs143.1128/documents/gdbref.pdf |
