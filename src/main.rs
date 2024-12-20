@@ -49,6 +49,7 @@ fn start_cpu() {
     machine::enable_s_mode_interrupts();
     machine::allow_s_mode_read_all_physical_memories();
     machine::set_up_timer_interrupts();
+    machine::store_mhartid_to_tp();
     // Switch to supervisor mode and jump to kernel::main
     unsafe { asm!("mret") }
 }
