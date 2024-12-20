@@ -43,6 +43,7 @@ fn start_cpu() {
     machine::store_mhartid_to_tp();
     machine::set_mstatus_to_s_mode();
     machine::write_mepc(kernel::main as *const () as u64);
+    machine::disable_paging();
 }
 
 #[panic_handler]
