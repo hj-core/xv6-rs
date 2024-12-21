@@ -7,7 +7,10 @@
     <cargoProject FILE="$PROJECT_DIR$/Cargo.toml" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="79d91817-cab6-48db-8c64-627b37812669" name="Changes" comment="Config M-mode: disable paging" />
+    <list default="true" id="79d91817-cab6-48db-8c64-627b37812669" name="Changes" comment="Config M-mode: disable paging">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -185,6 +188,7 @@
       <workItem from="1734489920337" duration="607000" />
       <workItem from="1734504012243" duration="20513000" />
       <workItem from="1734531109165" duration="1478000" />
+      <workItem from="1734760388940" duration="1477000" />
     </task>
     <task id="LOCAL-00001" summary="Config M-mode: disable paging">
       <option name="closed" value="true" />
@@ -231,19 +235,7 @@
       <map>
         <entry key="MAIN">
           <value>
-            <State>
-              <option name="FILTERS">
-                <map>
-                  <entry key="branch">
-                    <value>
-                      <list>
-                        <option value="working" />
-                      </list>
-                    </value>
-                  </entry>
-                </map>
-              </option>
-            </State>
+            <State />
           </value>
         </entry>
       </map>
@@ -253,6 +245,10 @@
     <MESSAGE value="Add README.md" />
     <MESSAGE value="Config M-mode: disable paging" />
     <MESSAGE value="Config M-mode: set up timer interrupts" />
-    <option name="LAST_COMMIT_MESSAGE" value="Config M-mode: set up timer interrupts" />
+    <MESSAGE value="Fixup! Config M-mode: remove duplicated call&#10;&#10;machine::store_mhartid_to_tp is called twice.&#10;(cherry picked from commit 22cf34d8e36985f6ea5f725d971d1baec3c6d727)" />
+    <MESSAGE value="Fixup! Config M-mode: remove duplicated call&#10;&#10;machine::store_mhartid_to_tp is called twice.&#10;(cherry picked from commit 22cf34d8e36985f6ea5f725d971d1baec3c6d727)" />
+    <MESSAGE value="Revert &quot;Fixup! Config S-mode: remove duplicated call&quot;&#10;&#10;This reverts commit 22cf34d8e36985f6ea5f725d971d1baec3c6d727.&#10;Reason: wrong commit message." />
+    <MESSAGE value="Revert &quot;Fixup! Config S-mode: remove duplicated call&quot;&#10;&#10;This reverts commit 22cf34d8e36985f6ea5f725d971d1baec3c6d727.&#10;Reason: wrong commit message." />
+    <option name="LAST_COMMIT_MESSAGE" value="Revert &quot;Fixup! Config S-mode: remove duplicated call&quot;&#10;&#10;This reverts commit 22cf34d8e36985f6ea5f725d971d1baec3c6d727.&#10;Reason: wrong commit message." />
   </component>
 </project>
