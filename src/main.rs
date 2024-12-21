@@ -3,21 +3,22 @@
 
 use core::arch::{asm, global_asm};
 use core::panic::PanicInfo;
-use xv6_rs::kernel;
-use xv6_rs::machine;
+use xv6_rs::{kernel, machine};
 
 // Entry point.
 // Must be placed at the address where qemu's -kernel jumps.
 // It just calls the _start.
 global_asm!(".section .text", ".global _entry", "_entry:", "call _start");
 
+const STACK_SIZE_PER_CPU: usize = 4096;
+
 #[repr(C, align(16))]
 struct CpuStack {
-    data: [u8; machine::STACK_SIZE_PER_CPU * machine::MAX_CPUS],
+    data: [u8; STACK_SIZE_PER_CPU * machine::MAX_CPUS],
 }
 
 static CPU_STACK: CpuStack = CpuStack {
-    data: [0; machine::STACK_SIZE_PER_CPU * machine::MAX_CPUS],
+    data: [0; STACK_SIZE_PER_CPU * machine::MAX_CPUS],
 };
 
 #[no_mangle]
@@ -32,7 +33,7 @@ pub extern "C" fn _start() -> ! {
         // jump to start_cpu
         "call start_cpu",
         in("a0") &raw const CPU_STACK.data,
-        in("a1") machine::STACK_SIZE_PER_CPU,
+        in("a1") STACK_SIZE_PER_CPU,
         );
     }
     loop {}
@@ -40,17 +41,75 @@ pub extern "C" fn _start() -> ! {
 
 #[no_mangle]
 fn start_cpu() {
-    machine::store_mhartid_to_tp();
-    machine::set_mstatus_to_s_mode();
+    store_mhartid_to_tp();
+    set_mstatus_to_s_mode();
     machine::write_mepc(kernel::main as *const () as u64);
-    machine::disable_paging();
-    machine::delegate_exceptions_to_s_mode();
-    machine::delegate_interrupts_to_s_mode();
-    machine::enable_s_mode_interrupts();
-    machine::allow_s_mode_read_all_physical_memories();
-    machine::set_up_timer_interrupts();
+    disable_paging();
+    delegate_exceptions_to_s_mode();
+    delegate_interrupts_to_s_mode();
+    enable_s_mode_interrupts();
+    allow_s_mode_read_all_physical_memories();
+    set_up_timer_interrupts();
     // Switch to supervisor mode and jump to kernel::main
     unsafe { asm!("mret") }
+}
+
+fn store_mhartid_to_tp() {
+    unsafe { asm!("csrr tp, mhartid") }
+}
+
+fn set_mstatus_to_s_mode() {
+    const MSTATUS_MPP_MASK: u64 = 3 << 11; // bit mask for mode bits
+    const MSTATUS_MPP_S: u64 = 1 << 11; // bits representing supervisor mode
+
+    let mut status = machine::read_mstatus();
+    status &= !MSTATUS_MPP_MASK;
+    status |= MSTATUS_MPP_S;
+    machine::write_mstatus(status);
+}
+
+fn disable_paging() {
+    machine::write_satp(0)
+}
+
+fn delegate_exceptions_to_s_mode() {
+    // Some bits are read-only zero so the resulting medeleg is not 0xffff
+    machine::write_medeleg(0xffff)
+}
+
+fn delegate_interrupts_to_s_mode() {
+    // Some bits are read-only zero so the resulting mideleg is not 0xffff
+    machine::write_mideleg(0xffff)
+}
+
+fn enable_s_mode_interrupts() {
+    const SIE_SEIE: u64 = 1 << 9; // External interrupts
+    const SIE_STIE: u64 = 1 << 5; // Timer interrupts
+    const SIE_SSIE: u64 = 1 << 1; // Software interrupts
+
+    machine::write_sie(machine::read_sie() | SIE_SEIE | SIE_STIE | SIE_SSIE);
+}
+
+fn allow_s_mode_read_all_physical_memories() {
+    machine::write_pmpaddr0(0x3fffffffffffff);
+    machine::write_pmpcfg0(0xf);
+}
+
+fn set_up_timer_interrupts() {
+    // Enable S-mode timer interrupts in mie
+    const MIE_STIE: u64 = 1 << 5;
+    machine::write_mie(machine::read_mie() | MIE_STIE);
+
+    // Enable the "Sstc" extension for S-mode timer interrupts, i.e., stimecmp
+    const MENVCFG_STCE: u64 = 1 << 63;
+    machine::write_menvcfg(machine::read_menvcfg() | MENVCFG_STCE);
+
+    // Allow S-mode to read time
+    const MCOUNTEREN_TM: u64 = 0x2;
+    machine::write_mcounteren(machine::read_mcounteren() | MCOUNTEREN_TM);
+
+    // Ask for the very first timer interrupt
+    machine::write_stimecmp(machine::read_time() + 1_000_000)
 }
 
 #[panic_handler]
