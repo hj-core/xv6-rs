@@ -9,7 +9,7 @@
   <component name="ChangeListManager">
     <list default="true" id="79d91817-cab6-48db-8c64-627b37812669" name="Changes" comment="Config M-mode: disable paging">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/machine/uart.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/machine/uart.rs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -103,7 +103,7 @@
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "RunOnceActivity.git.unshallow": "true",
     "RunOnceActivity.rust.reset.selective.auto.import": "true",
-    "git-widget-placeholder": "machine",
+    "git-widget-placeholder": "hj-core",
     "ignore.virus.scanning.warn.message": "true",
     "last_opened_file_path": "//wsl$/Debian/home/hj-core/RustProjects/xv6-rs/src",
     "node.js.detected.package.eslint": "true",
@@ -114,7 +114,7 @@
     "org.rust.cargo.project.model.PROJECT_DISCOVERY": "true",
     "org.rust.cargo.project.model.impl.CargoExternalSystemProjectAware.subscribe.first.balloon": "",
     "org.rust.first.attach.projects": "true",
-    "settings.editor.selected.configurable": "settings.sync",
+    "settings.editor.selected.configurable": "language.rust",
     "vue.rearranger.settings.migration": "true"
   }
 }]]></component>
@@ -188,7 +188,8 @@
       <workItem from="1734489920337" duration="607000" />
       <workItem from="1734504012243" duration="20513000" />
       <workItem from="1734531109165" duration="1478000" />
-      <workItem from="1734760388940" duration="1477000" />
+      <workItem from="1734760388940" duration="1688000" />
+      <workItem from="1734763076063" duration="6051000" />
     </task>
     <task id="LOCAL-00001" summary="Config M-mode: disable paging">
       <option name="closed" value="true" />
