@@ -50,8 +50,7 @@ fn start_cpu() {
     enable_s_mode_interrupts();
     allow_s_mode_read_all_physical_memories();
     set_up_timer_interrupts();
-    // Switch to supervisor mode and jump to kernel::main
-    unsafe { asm!("mret") }
+    leave_machine_mode(); // Jump to kernel::main in S-mode
 }
 
 fn store_mhartid_to_tp() {
@@ -114,6 +113,10 @@ fn set_up_timer_interrupts() {
 
     // Ask for the very first timer interrupt
     machine::write_stimecmp(machine::read_time() + 1_000_000)
+}
+
+fn leave_machine_mode() {
+    unsafe { asm!("mret") }
 }
 
 #[panic_handler]
