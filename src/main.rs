@@ -42,14 +42,14 @@ pub extern "C" fn _start() -> ! {
 #[no_mangle]
 fn start_cpu() {
     store_mhartid_to_tp();
-    set_mstatus_to_s_mode();
+    change_mstatus_to_s_mode();
     change_mepc_to_kernel_main();
     disable_paging();
     delegate_exceptions_to_s_mode();
     delegate_interrupts_to_s_mode();
     enable_s_mode_interrupts();
-    allow_s_mode_read_all_physical_memories();
-    set_up_timer_interrupts();
+    allow_s_mode_manage_all_physical_memories();
+    configure_timer_interrupt();
     leave_machine_mode(); // Jump to kernel::main in S-mode
 }
 
@@ -57,7 +57,7 @@ fn store_mhartid_to_tp() {
     unsafe { asm!("csrr tp, mhartid") }
 }
 
-fn set_mstatus_to_s_mode() {
+fn change_mstatus_to_s_mode() {
     const MSTATUS_MPP_MASK: u64 = 3 << 11; // bit mask for mode bits
     const MSTATUS_MPP_S: u64 = 1 << 11; // bits representing supervisor mode
 
@@ -93,12 +93,12 @@ fn enable_s_mode_interrupts() {
     machine::write_sie(machine::read_sie() | SIE_SEIE | SIE_STIE | SIE_SSIE);
 }
 
-fn allow_s_mode_read_all_physical_memories() {
+fn allow_s_mode_manage_all_physical_memories() {
     machine::write_pmpaddr0(0x3fffffffffffff);
     machine::write_pmpcfg0(0xf);
 }
 
-fn set_up_timer_interrupts() {
+fn configure_timer_interrupt() {
     // Enable S-mode timer interrupts in mie
     const MIE_STIE: u64 = 1 << 5;
     machine::write_mie(machine::read_mie() | MIE_STIE);
