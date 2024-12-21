@@ -45,10 +45,10 @@ fn start_cpu() {
     change_mstatus_to_s_mode();
     change_mepc_to_kernel_main();
     disable_paging();
+    allow_s_mode_manage_all_physical_memories();
     delegate_exceptions_to_s_mode();
     delegate_interrupts_to_s_mode();
     enable_s_mode_interrupts();
-    allow_s_mode_manage_all_physical_memories();
     configure_timer_interrupt();
     leave_machine_mode(); // Jump to kernel::main in S-mode
 }
@@ -75,6 +75,11 @@ fn disable_paging() {
     machine::write_satp(0)
 }
 
+fn allow_s_mode_manage_all_physical_memories() {
+    machine::write_pmpaddr0(0x3f_ffff_ffff_ffff);
+    machine::write_pmpcfg0(0xf);
+}
+
 fn delegate_exceptions_to_s_mode() {
     // Some bits are read-only zero so the resulting medeleg is not 0xffff
     machine::write_medeleg(0xffff)
@@ -91,11 +96,6 @@ fn enable_s_mode_interrupts() {
     const SIE_SSIE: u64 = 1 << 1; // Software interrupts
 
     machine::write_sie(machine::read_sie() | SIE_SEIE | SIE_STIE | SIE_SSIE);
-}
-
-fn allow_s_mode_manage_all_physical_memories() {
-    machine::write_pmpaddr0(0x3f_ffff_ffff_ffff);
-    machine::write_pmpcfg0(0xf);
 }
 
 fn configure_timer_interrupt() {
