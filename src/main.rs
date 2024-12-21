@@ -94,7 +94,7 @@ fn enable_s_mode_interrupts() {
 }
 
 fn allow_s_mode_manage_all_physical_memories() {
-    machine::write_pmpaddr0(0x3fffffffffffff);
+    machine::write_pmpaddr0(0x3f_ffff_ffff_ffff);
     machine::write_pmpcfg0(0xf);
 }
 
