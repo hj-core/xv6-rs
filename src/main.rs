@@ -43,7 +43,7 @@ pub extern "C" fn _start() -> ! {
 fn start_cpu() {
     store_mhartid_to_tp();
     set_mstatus_to_s_mode();
-    machine::write_mepc(kernel::main as *const () as u64);
+    change_mepc_to_kernel_main();
     disable_paging();
     delegate_exceptions_to_s_mode();
     delegate_interrupts_to_s_mode();
@@ -66,6 +66,10 @@ fn set_mstatus_to_s_mode() {
     status &= !MSTATUS_MPP_MASK;
     status |= MSTATUS_MPP_S;
     machine::write_mstatus(status);
+}
+
+fn change_mepc_to_kernel_main() {
+    machine::write_mepc(kernel::main as *const () as u64);
 }
 
 fn disable_paging() {
