@@ -7,17 +7,47 @@
     <cargoProject FILE="$PROJECT_DIR$/Cargo.toml" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="79d91817-cab6-48db-8c64-627b37812669" name="Changes" comment="" />
+    <list default="true" id="79d91817-cab6-48db-8c64-627b37812669" name="Changes" comment="Config M-mode: disable paging">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
   <component name="ExecutionTargetManager" SELECTED_TARGET="RsBuildProfile:dev" />
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="Rust File" />
+      </list>
+    </option>
+  </component>
   <component name="FormatOnSaveOptions">
     <option name="myRunOnSave" value="true" />
   </component>
   <component name="Git.Settings">
+    <excluded-from-favorite>
+      <branch-storage>
+        <map>
+          <entry type="LOCAL">
+            <value>
+              <list>
+                <branch-info repo="$PROJECT_DIR$" source="master" />
+              </list>
+            </value>
+          </entry>
+          <entry type="REMOTE">
+            <value>
+              <list>
+                <branch-info repo="$PROJECT_DIR$" source="origin/master" />
+              </list>
+            </value>
+          </entry>
+        </map>
+      </branch-storage>
+    </excluded-from-favorite>
     <option name="RECENT_BRANCH_BY_REPOSITORY">
       <map>
         <entry key="$PROJECT_DIR$" value="master" />
@@ -31,12 +61,27 @@
     &quot;assignee&quot;: &quot;hj-core&quot;
   }
 }</component>
+  <component name="GitRewordedCommitMessages">
+    <option name="commitMessagesMapping">
+      <RewordedCommitMessageMapping>
+        <option name="originalMessage" value="Add README.md" />
+        <option name="rewordedMessage" value="Add README.md" />
+      </RewordedCommitMessageMapping>
+    </option>
+    <option name="currentCommit" value="1" />
+    <option name="onto" value="068a24388b3694e9026a461db64fc60e5bddab71" />
+  </component>
   <component name="GithubPullRequestsUISettings">{
   &quot;selectedUrlAndAccountId&quot;: {
     &quot;url&quot;: &quot;https://github.com/hj-core/xv6-rs.git&quot;,
     &quot;accountId&quot;: &quot;5c7a7eec-58ac-47cc-a66f-0e0a2d58d92a&quot;
   }
 }</component>
+  <component name="JsbtTreeLayoutManager">
+    <layout place="tools.popupGrunt">
+      <scroll-view-position x="0" y="0" />
+    </layout>
+  </component>
   <component name="MacroExpansionManager">
     <option name="directoryName" value="vK8Gpbqi" />
   </component>
@@ -54,23 +99,31 @@
   </component>
   <component name="PropertiesComponent">{
   &quot;keyToString&quot;: {
+    &quot;Cargo.Run xv6-rs.executor&quot;: &quot;Run&quot;,
     &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.rust.reset.selective.auto.import&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;add__readme&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;hj-core&quot;,
     &quot;ignore.virus.scanning.warn.message&quot;: &quot;true&quot;,
-    &quot;last_opened_file_path&quot;: &quot;//wsl$/Debian/home/hj-core/RustProjects/xv6-rs&quot;,
+    &quot;last_opened_file_path&quot;: &quot;//wsl$/Debian/home/hj-core/RustProjects/xv6-rs/src&quot;,
     &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
     &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
     &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
     &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
     &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
     &quot;org.rust.cargo.project.model.PROJECT_DISCOVERY&quot;: &quot;true&quot;,
+    &quot;org.rust.cargo.project.model.impl.CargoExternalSystemProjectAware.subscribe.first.balloon&quot;: &quot;&quot;,
     &quot;org.rust.first.attach.projects&quot;: &quot;true&quot;,
     &quot;settings.editor.selected.configurable&quot;: &quot;settings.sync&quot;,
     &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   }
 }</component>
+  <component name="RecentsManager">
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="\\wsl$\Debian\home\hj-core\RustProjects\xv6-rs" />
+      <recent name="\\wsl$\Debian\home\hj-core\RustProjects\xv6-rs\src" />
+    </key>
+  </component>
   <component name="RsExternalLinterProjectSettings">
     <option name="runOnTheFly" value="true" />
     <option name="tool" value="Clippy" />
@@ -129,13 +182,55 @@
       <workItem from="1734351208397" duration="641000" />
       <workItem from="1734351925311" duration="367000" />
       <workItem from="1734355946626" duration="302000" />
+      <workItem from="1734406627358" duration="1108000" />
+      <workItem from="1734408039681" duration="8379000" />
+      <workItem from="1734486748544" duration="6000" />
+      <workItem from="1734489920337" duration="607000" />
+      <workItem from="1734504012243" duration="20513000" />
+      <workItem from="1734531109165" duration="1478000" />
+      <workItem from="1734760388940" duration="1477000" />
     </task>
+    <task id="LOCAL-00001" summary="Config M-mode: disable paging">
+      <option name="closed" value="true" />
+      <created>1734704355198</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1734704355198</updated>
+    </task>
+    <task id="LOCAL-00002" summary="Config M-mode: set up timer interrupts">
+      <option name="closed" value="true" />
+      <created>1734704559346</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1734704559346</updated>
+    </task>
+    <option name="localTasksCounter" value="3" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
   </component>
+  <component name="UnknownFeatures">
+    <option featureType="com.intellij.fileTypeFactory" implementationName="*.s" />
+  </component>
   <component name="Vcs.Log.Tabs.Properties">
+    <option name="RECENT_FILTERS">
+      <map>
+        <entry key="Branch">
+          <value>
+            <list>
+              <RecentGroup>
+                <option name="FILTER_VALUES">
+                  <option value="stable" />
+                </option>
+              </RecentGroup>
+            </list>
+          </value>
+        </entry>
+      </map>
+    </option>
     <option name="TAB_STATES">
       <map>
         <entry key="MAIN">
@@ -145,5 +240,15 @@
         </entry>
       </map>
     </option>
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="Add README.md" />
+    <MESSAGE value="Config M-mode: disable paging" />
+    <MESSAGE value="Config M-mode: set up timer interrupts" />
+    <MESSAGE value="Fixup! Config M-mode: remove duplicated call&#10;&#10;machine::store_mhartid_to_tp is called twice.&#10;(cherry picked from commit 22cf34d8e36985f6ea5f725d971d1baec3c6d727)" />
+    <MESSAGE value="Fixup! Config M-mode: remove duplicated call&#10;&#10;machine::store_mhartid_to_tp is called twice.&#10;(cherry picked from commit 22cf34d8e36985f6ea5f725d971d1baec3c6d727)" />
+    <MESSAGE value="Revert &quot;Fixup! Config S-mode: remove duplicated call&quot;&#10;&#10;This reverts commit 22cf34d8e36985f6ea5f725d971d1baec3c6d727.&#10;Reason: wrong commit message." />
+    <MESSAGE value="Revert &quot;Fixup! Config S-mode: remove duplicated call&quot;&#10;&#10;This reverts commit 22cf34d8e36985f6ea5f725d971d1baec3c6d727.&#10;Reason: wrong commit message." />
+    <option name="LAST_COMMIT_MESSAGE" value="Revert &quot;Fixup! Config S-mode: remove duplicated call&quot;&#10;&#10;This reverts commit 22cf34d8e36985f6ea5f725d971d1baec3c6d727.&#10;Reason: wrong commit message." />
   </component>
 </project>
