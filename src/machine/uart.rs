@@ -1,7 +1,7 @@
 // The virt machine supports a NS16550 compatible UART.
 // See http://byterunner.com/16550.html for technical data.
 
-// The memory map address and size of UART0
+// The memory map address of UART0
 const VIRT_UART0_MEM_BASE: u64 = 0x1000_0000;
 
 pub struct Register {
@@ -22,7 +22,7 @@ impl Register {
     }
 }
 
-// The relative addresses of UART control registers.
+// The relative addresses of UART accessible registers.
 // Some addresses have different meanings depending on whether they are read or written.
 
 /// \[READ] Receive Holding Register
