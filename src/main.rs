@@ -3,6 +3,7 @@
 
 use core::arch::{asm, global_asm};
 use core::panic::PanicInfo;
+use xv6_rs::machine::riscv64;
 use xv6_rs::{kernel, machine};
 
 // Entry point.
@@ -61,58 +62,57 @@ fn change_mstatus_to_s_mode() {
     const MSTATUS_MPP_MASK: u64 = 3 << 11; // bit mask for mode bits
     const MSTATUS_MPP_S: u64 = 1 << 11; // bits representing supervisor mode
 
-    let mut status = machine::read_mstatus();
+    let mut status = riscv64::read_mstatus();
     status &= !MSTATUS_MPP_MASK;
     status |= MSTATUS_MPP_S;
-    machine::write_mstatus(status);
+    riscv64::write_mstatus(status);
 }
 
 fn change_mepc_to_kernel_main() {
-    machine::write_mepc(kernel::main as *const () as u64);
+    riscv64::write_mepc(kernel::main as *const () as u64);
 }
 
 fn disable_paging() {
-    machine::write_satp(0)
+    riscv64::write_satp(0)
 }
 
 fn allow_s_mode_manage_all_physical_memories() {
-    machine::write_pmpaddr0(0x3f_ffff_ffff_ffff);
-    machine::write_pmpcfg0(0xf);
+    riscv64::write_pmpaddr0(0x3f_ffff_ffff_ffff);
+    riscv64::write_pmpcfg0(0xf);
 }
 
 fn delegate_exceptions_to_s_mode() {
     // Some bits are read-only zero so the resulting medeleg is not 0xffff
-    machine::write_medeleg(0xffff)
+    riscv64::write_medeleg(0xffff)
 }
 
 fn delegate_interrupts_to_s_mode() {
     // Some bits are read-only zero so the resulting mideleg is not 0xffff
-    machine::write_mideleg(0xffff)
+    riscv64::write_mideleg(0xffff)
 }
 
 fn enable_s_mode_interrupts() {
     const SIE_SEIE: u64 = 1 << 9; // External interrupts
     const SIE_STIE: u64 = 1 << 5; // Timer interrupts
     const SIE_SSIE: u64 = 1 << 1; // Software interrupts
-
-    machine::write_sie(machine::read_sie() | SIE_SEIE | SIE_STIE | SIE_SSIE);
+    riscv64::write_sie(riscv64::read_sie() | SIE_SEIE | SIE_STIE | SIE_SSIE);
 }
 
 fn configure_timer_interrupt() {
     // Enable S-mode timer interrupts in mie
     const MIE_STIE: u64 = 1 << 5;
-    machine::write_mie(machine::read_mie() | MIE_STIE);
+    riscv64::write_mie(riscv64::read_mie() | MIE_STIE);
 
     // Enable the "Sstc" extension for S-mode timer interrupts, i.e., stimecmp
     const MENVCFG_STCE: u64 = 1 << 63;
-    machine::write_menvcfg(machine::read_menvcfg() | MENVCFG_STCE);
+    riscv64::write_menvcfg(riscv64::read_menvcfg() | MENVCFG_STCE);
 
     // Allow S-mode to read time
     const MCOUNTEREN_TM: u64 = 0x2;
-    machine::write_mcounteren(machine::read_mcounteren() | MCOUNTEREN_TM);
+    riscv64::write_mcounteren(riscv64::read_mcounteren() | MCOUNTEREN_TM);
 
     // Ask for the very first timer interrupt
-    machine::write_stimecmp(machine::read_time() + 1_000_000)
+    riscv64::write_stimecmp(riscv64::read_time() + 1_000_000)
 }
 
 fn leave_machine_mode() {
