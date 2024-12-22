@@ -61,7 +61,6 @@ fn store_mhartid_to_tp() {
 fn change_mstatus_to_s_mode() {
     const MSTATUS_MPP_MASK: u64 = 3 << 11; // bit mask for mode bits
     const MSTATUS_MPP_S: u64 = 1 << 11; // bits representing supervisor mode
-
     let mut status = riscv64::read_mstatus();
     status &= !MSTATUS_MPP_MASK;
     status |= MSTATUS_MPP_S;
