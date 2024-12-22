@@ -34,3 +34,15 @@ fn enable_transmitter_and_receiver_interrupts_only() {
     const IER_TRANSMITTER_EMPTY_INTERRUPT_ENABLE: u8 = 0x02;
     uart::IER.write(IER_RECEIVER_READY_INTERRUPT_ENABLE | IER_TRANSMITTER_EMPTY_INTERRUPT_ENABLE);
 }
+
+pub fn busy_print(str: &str) {
+    for &byte in str.as_bytes() {
+        while is_thr_full() {}
+        uart::THR.write(byte);
+    }
+}
+
+fn is_thr_full() -> bool {
+    const LSR_TRANSMIT_HOLDING_EMPTY: u8 = 0x20;
+    uart::LSR.read() & LSR_TRANSMIT_HOLDING_EMPTY == 0
+}
