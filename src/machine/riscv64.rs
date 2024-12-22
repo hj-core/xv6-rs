@@ -10,27 +10,27 @@ pub fn read_mstatus() -> u64 {
     result
 }
 
-// Write machine exception program counter
+/// Write machine exception program counter
 pub fn write_mepc(value: u64) {
     unsafe { asm!("csrw mepc, {0}", in(reg) value) }
 }
 
-// Write supervisor address translation and protection
+/// Write supervisor address translation and protection
 pub fn write_satp(value: u64) {
     unsafe { asm!("csrw satp, {0}", in(reg) value) }
 }
 
-// Write machine exception delegation
+/// Write machine exception delegation
 pub fn write_medeleg(value: u64) {
     unsafe { asm!("csrw medeleg, {0}", in(reg) value) }
 }
 
-// Write machine interrupt delegation
+/// Write machine interrupt delegation
 pub fn write_mideleg(value: u64) {
     unsafe { asm!("csrw mideleg, {0}", in(reg) value) }
 }
 
-// Write supervisor interrupt enable
+/// Write supervisor interrupt enable
 pub fn write_sie(value: u64) {
     unsafe { asm!("csrw sie, {0}", in(reg) value) }
 }
@@ -41,17 +41,17 @@ pub fn read_sie() -> u64 {
     result
 }
 
-// Write physical memory protection address 0
+/// Write physical memory protection address 0
 pub fn write_pmpaddr0(value: u64) {
     unsafe { asm!("csrw pmpaddr0, {0}", in(reg) value) }
 }
 
-// Write physical memory protection configuration 0
+/// Write physical memory protection configuration 0
 pub fn write_pmpcfg0(value: u64) {
     unsafe { asm!("csrw pmpcfg0, {0}", in(reg) value) }
 }
 
-// Write machine interrupt enable
+/// Write machine interrupt enable
 pub fn write_mie(value: u64) {
     unsafe { asm!("csrw mie, {0}", in(reg) value) }
 }
@@ -62,7 +62,7 @@ pub fn read_mie() -> u64 {
     result
 }
 
-// Write machine environment configuration
+/// Write machine environment configuration
 pub fn write_menvcfg(value: u64) {
     unsafe { asm!("csrw menvcfg, {0}", in(reg) value) }
 }
@@ -73,7 +73,7 @@ pub fn read_menvcfg() -> u64 {
     result
 }
 
-// Write machine counter-enable
+/// Write machine counter-enable
 pub fn write_mcounteren(value: u64) {
     unsafe { asm!("csrw mcounteren, {0}", in(reg) value) }
 }
@@ -84,12 +84,12 @@ pub fn read_mcounteren() -> u64 {
     result
 }
 
-// Write supervisor timer
+/// Write supervisor timer
 pub fn write_stimecmp(value: u64) {
     unsafe { asm!("csrw stimecmp, {0}", in(reg) value) }
 }
 
-// Read machine(?) timer
+/// Read machine(?) timer
 pub fn read_time() -> u64 {
     let mut result: u64;
     unsafe { asm!("csrr {0}, time", out(reg) result) };
