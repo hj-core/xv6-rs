@@ -1,3 +1,4 @@
+mod spinlock;
 mod uart;
 
 pub fn main() {
