@@ -7,7 +7,13 @@
     <cargoProject FILE="$PROJECT_DIR$/Cargo.toml" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="79d91817-cab6-48db-8c64-627b37812669" name="Changes" comment="comment" />
+    <list default="true" id="79d91817-cab6-48db-8c64-627b37812669" name="Changes" comment="">
+      <change afterPath="$PROJECT_DIR$/src/kernel/spinlock.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/boot4" beforeDir="false" afterPath="$PROJECT_DIR$/boot4" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/kernel.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/kernel.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/kernel/uart.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/kernel/uart.rs" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -59,7 +65,7 @@
   }
 }</component>
   <component name="GitRewordedCommitMessages">
-    <option name="onto" value="76d4337748d6a7313fbc8981d644586493f35246" />
+    <option name="onto" value="512973a38abc6a3a1bb0bf2bd2ee216f376fd03f" />
   </component>
   <component name="GithubPullRequestsUISettings">{
   &quot;selectedUrlAndAccountId&quot;: {

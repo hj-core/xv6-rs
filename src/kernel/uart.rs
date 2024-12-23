@@ -1,4 +1,7 @@
+use crate::kernel::spinlock::Spinlock;
 use crate::machine::uart;
+
+static UART_LOCK: Spinlock = Spinlock::new();
 
 pub fn initialize() {
     disable_all_interrupts();
@@ -36,10 +39,12 @@ fn enable_transmitter_and_receiver_interrupts_only() {
 }
 
 pub fn busy_print(str: &str) {
+    UART_LOCK.lock();
     for &byte in str.as_bytes() {
         while is_thr_full() {}
         uart::THR.write(byte);
     }
+    UART_LOCK.unlock();
 }
 
 fn is_thr_full() -> bool {
