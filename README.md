@@ -20,15 +20,17 @@ This project is an attempt to implement xv6 using Rust.
 | **> Rust**                                              |                                                                                                |
 | core - Rust                                             | https://doc.rust-lang.org/core/index.html                                                      |                       
 | The Rust Programming Language                           | https://doc.rust-lang.org/book/                                                                |                                 
-| Rust by Example                                         | https://doc.rust-lang.org/rust-by-example/index.html                                           |
 | The Rust Reference                                      | https://doc.rust-lang.org/reference/                                                           |
-| Comprehensive Rust                                      | https://google.github.io/comprehensive-rust/index.html                                         |
+| The Rustonomicon                                        | https://doc.rust-lang.org/stable/nomicon/                                                      |
+| Rust by Example                                         | https://doc.rust-lang.org/rust-by-example/index.html                                           |
 | The Embedded Rust Book                                  | https://doc.rust-lang.org/stable/embedded-book/intro/index.html                                |
 | The Embedonomicon                                       | https://docs.rust-embedded.org/embedonomicon/                                                  |
+| Rust Atomics and Locks by Mara Bos                      | https://marabos.nl/atomics/                                                                    |
+| Comprehensive Rust                                      | https://google.github.io/comprehensive-rust/index.html                                         |
 | Writing an OS in Rust                                   | https://os.phil-opp.com/                                                                       |
 | **> RISC-V**                                            |                                                                                                |
-| RISC-V Assembler Cheat Sheet                            | https://projectf.io/posts/riscv-cheat-sheet/                                                   |
 | RISC-V Technical Specifications                         | https://lf-riscv.atlassian.net/wiki/x/kYD2                                                     |                                      
+| RISC-V Assembler Cheat Sheet                            | https://projectf.io/posts/riscv-cheat-sheet/                                                   |
 | **> QEMU**                                              |                                                                                                |
 | Welcome to QEMU’s documentation!                        | https://www.qemu.org/docs/master/index.html                                                    |
 | GDB usage                                               | https://www.qemu.org/docs/master/system/gdb.html                                               |
