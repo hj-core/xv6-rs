@@ -4,6 +4,10 @@
 use core::arch::{asm, global_asm};
 use core::panic::PanicInfo;
 use xv6_rs::machine::riscv64;
+use xv6_rs::machine::riscv64::{
+    MCOUNTEREN_TM, MENVCFG_STCE, MIE_STIE, MSTATUS_MPP_MASK, MSTATUS_MPP_S, SIE_SEIE, SIE_SSIE,
+    SIE_STIE,
+};
 use xv6_rs::{kernel, machine};
 
 // Entry point.
@@ -59,8 +63,6 @@ fn store_mhartid_to_tp() {
 }
 
 fn change_mstatus_to_s_mode() {
-    const MSTATUS_MPP_MASK: u64 = 3 << 11; // bit mask for mode bits
-    const MSTATUS_MPP_S: u64 = 1 << 11; // bits representing supervisor mode
     let mut status = riscv64::read_mstatus();
     status &= !MSTATUS_MPP_MASK;
     status |= MSTATUS_MPP_S;
@@ -91,23 +93,17 @@ fn delegate_interrupts_to_s_mode() {
 }
 
 fn enable_s_mode_interrupts() {
-    const SIE_SEIE: u64 = 1 << 9; // External interrupts
-    const SIE_STIE: u64 = 1 << 5; // Timer interrupts
-    const SIE_SSIE: u64 = 1 << 1; // Software interrupts
     riscv64::write_sie(riscv64::read_sie() | SIE_SEIE | SIE_STIE | SIE_SSIE);
 }
 
 fn configure_timer_interrupt() {
     // Enable S-mode timer interrupts in mie
-    const MIE_STIE: u64 = 1 << 5;
     riscv64::write_mie(riscv64::read_mie() | MIE_STIE);
 
     // Enable the "Sstc" extension for S-mode timer interrupts, i.e., stimecmp
-    const MENVCFG_STCE: u64 = 1 << 63;
     riscv64::write_menvcfg(riscv64::read_menvcfg() | MENVCFG_STCE);
 
     // Allow S-mode to read time
-    const MCOUNTEREN_TM: u64 = 0x2;
     riscv64::write_mcounteren(riscv64::read_mcounteren() | MCOUNTEREN_TM);
 
     // Ask for the very first timer interrupt

@@ -10,14 +10,12 @@ pub fn read_mstatus() -> u64 {
     result
 }
 
+pub const MSTATUS_MPP_MASK: u64 = 3 << 11; // bit mask for mode bits
+pub const MSTATUS_MPP_S: u64 = 1 << 11; // bits representing supervisor mode
+
 /// Write machine exception program counter
 pub fn write_mepc(value: u64) {
     unsafe { asm!("csrw mepc, {0}", in(reg) value) }
-}
-
-/// Write supervisor address translation and protection
-pub fn write_satp(value: u64) {
-    unsafe { asm!("csrw satp, {0}", in(reg) value) }
 }
 
 /// Write machine exception delegation
@@ -28,17 +26,6 @@ pub fn write_medeleg(value: u64) {
 /// Write machine interrupt delegation
 pub fn write_mideleg(value: u64) {
     unsafe { asm!("csrw mideleg, {0}", in(reg) value) }
-}
-
-/// Write supervisor interrupt enable
-pub fn write_sie(value: u64) {
-    unsafe { asm!("csrw sie, {0}", in(reg) value) }
-}
-
-pub fn read_sie() -> u64 {
-    let mut result: u64;
-    unsafe { asm!("csrr {0}, sie", out(reg) result) };
-    result
 }
 
 /// Write physical memory protection address 0
@@ -62,6 +49,8 @@ pub fn read_mie() -> u64 {
     result
 }
 
+pub const MIE_STIE: u64 = 1 << 5;
+
 /// Write machine environment configuration
 pub fn write_menvcfg(value: u64) {
     unsafe { asm!("csrw menvcfg, {0}", in(reg) value) }
@@ -72,6 +61,8 @@ pub fn read_menvcfg() -> u64 {
     unsafe { asm!("csrr {0}, menvcfg", out(reg) result) };
     result
 }
+
+pub const MENVCFG_STCE: u64 = 1 << 63;
 
 /// Write machine counter-enable
 pub fn write_mcounteren(value: u64) {
@@ -84,12 +75,34 @@ pub fn read_mcounteren() -> u64 {
     result
 }
 
+pub const MCOUNTEREN_TM: u64 = 0x2;
+
+/// Write supervisor address translation and protection
+pub fn write_satp(value: u64) {
+    unsafe { asm!("csrw satp, {0}", in(reg) value) }
+}
+
+/// Write supervisor interrupt enable
+pub fn write_sie(value: u64) {
+    unsafe { asm!("csrw sie, {0}", in(reg) value) }
+}
+
+pub fn read_sie() -> u64 {
+    let mut result: u64;
+    unsafe { asm!("csrr {0}, sie", out(reg) result) };
+    result
+}
+
+pub const SIE_SEIE: u64 = 1 << 9; // External interrupts
+pub const SIE_STIE: u64 = 1 << 5; // Timer interrupts
+pub const SIE_SSIE: u64 = 1 << 1; // Software interrupts
+
 /// Write supervisor timer
 pub fn write_stimecmp(value: u64) {
     unsafe { asm!("csrw stimecmp, {0}", in(reg) value) }
 }
 
-/// Read machine(?) timer
+/// Read real-time counter
 pub fn read_time() -> u64 {
     let mut result: u64;
     unsafe { asm!("csrr {0}, time", out(reg) result) };
