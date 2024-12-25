@@ -1,3 +1,5 @@
+#![cfg(target_arch = "riscv64")]
+
 use core::arch::asm;
 
 pub fn write_mstatus(value: u64) {
