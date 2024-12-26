@@ -6,8 +6,7 @@ use core::arch::{asm, global_asm};
 use core::panic::PanicInfo;
 use xv6_rs::machine::riscv64;
 use xv6_rs::machine::riscv64::{
-    MCOUNTEREN_TM, MENVCFG_STCE, MIE_STIE, MSTATUS_MPP_MASK, MSTATUS_MPP_S, SIE_SEIE, SIE_SSIE,
-    SIE_STIE,
+    MCOUNTEREN_TM, MENVCFG_STCE, MIE_STIE, MSTATUS_MPP_MASK, MSTATUS_MPP_S,
 };
 use xv6_rs::{kernel, machine};
 
@@ -36,13 +35,13 @@ static CPU_STACK: CpuStack = CpuStack {
 pub extern "C" fn _start() -> ! {
     unsafe {
         asm!(
-        // set up stack for each CPU.
+        // Set up stack for each CPU.
         "csrr a2, mhartid",
         "addi a2, a2, 1",
         "mul a2, a2, a1",
         "add sp, a0, a2",
-        // jump to start_cpu
-        "call start_cpu",
+        // Jump to m_mode_initialize
+        "call m_mode_initialize",
         in("a0") &raw const CPU_STACK.data,
         in("a1") STACK_SIZE_PER_CPU,
         );
@@ -51,36 +50,19 @@ pub extern "C" fn _start() -> ! {
 }
 
 #[no_mangle]
-fn start_cpu() {
+fn m_mode_initialize() {
     store_mhartid_to_tp();
-    change_mstatus_to_s_mode();
-    change_mepc_to_kernel_main();
-    disable_paging();
     allow_s_mode_manage_all_physical_memories();
     delegate_exceptions_to_s_mode();
     delegate_interrupts_to_s_mode();
-    enable_s_mode_interrupts();
     configure_timer_interrupt();
-    leave_machine_mode(); // Jump to kernel::main in S-mode
+    set_mpp_to_s_mode();
+    set_mepc_to_s_mode_initialize();
+    jump_to_s_mode();
 }
 
 fn store_mhartid_to_tp() {
     unsafe { asm!("csrr tp, mhartid") }
-}
-
-fn change_mstatus_to_s_mode() {
-    let mut status = riscv64::read_mstatus();
-    status &= !MSTATUS_MPP_MASK;
-    status |= MSTATUS_MPP_S;
-    riscv64::write_mstatus(status);
-}
-
-fn change_mepc_to_kernel_main() {
-    riscv64::write_mepc(kernel::main as *const () as u64);
-}
-
-fn disable_paging() {
-    riscv64::write_satp(0)
 }
 
 fn allow_s_mode_manage_all_physical_memories() {
@@ -98,25 +80,29 @@ fn delegate_interrupts_to_s_mode() {
     riscv64::write_mideleg(0xffff)
 }
 
-fn enable_s_mode_interrupts() {
-    riscv64::write_sie(riscv64::read_sie() | SIE_SEIE | SIE_STIE | SIE_SSIE);
-}
-
 fn configure_timer_interrupt() {
-    // Enable S-mode timer interrupts in mie
+    // Enable S-mode timer interrupt
     riscv64::write_mie(riscv64::read_mie() | MIE_STIE);
 
-    // Enable the "Sstc" extension for S-mode timer interrupts, i.e., stimecmp
+    // Enable the "Sstc" extension for S-mode timer interrupt, i.e., stimecmp
     riscv64::write_menvcfg(riscv64::read_menvcfg() | MENVCFG_STCE);
 
     // Allow S-mode to read time
     riscv64::write_mcounteren(riscv64::read_mcounteren() | MCOUNTEREN_TM);
-
-    // Ask for the very first timer interrupt
-    riscv64::write_stimecmp(riscv64::read_time() + 1_000_000)
 }
 
-fn leave_machine_mode() {
+fn set_mpp_to_s_mode() {
+    let mut status = riscv64::read_mstatus();
+    status &= !MSTATUS_MPP_MASK;
+    status |= MSTATUS_MPP_S;
+    riscv64::write_mstatus(status);
+}
+
+fn set_mepc_to_s_mode_initialize() {
+    riscv64::write_mepc(kernel::s_mode_initialize as *const () as u64);
+}
+
+fn jump_to_s_mode() {
     unsafe { asm!("mret") }
 }
 
