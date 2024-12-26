@@ -5,13 +5,17 @@ use {
 };
 
 mod spinlock;
+mod trap;
 mod uart;
 
 #[cfg(target_arch = "riscv64")]
 pub fn s_mode_initialize() {
     enable_interrupt();
     start_timer_interrupt();
+    trap::initialize();
     uart::initialize();
+    // Issue an illegal instruction
+    riscv64::read_mstatus();
     uart::busy_print("Hello World!\n");
 }
 

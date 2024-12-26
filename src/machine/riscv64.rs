@@ -99,6 +99,11 @@ pub const SIE_SEIE: u64 = 1 << 9; // External interrupts
 pub const SIE_STIE: u64 = 1 << 5; // Timer interrupts
 pub const SIE_SSIE: u64 = 1 << 1; // Software interrupts
 
+/// Write supervisor trap vector base address
+pub fn write_stvec(value: u64) {
+    unsafe { asm!("csrw stvec, {0}", in(reg) value) }
+}
+
 /// Write supervisor timer
 pub fn write_stimecmp(value: u64) {
     unsafe { asm!("csrw stimecmp, {0}", in(reg) value) }
