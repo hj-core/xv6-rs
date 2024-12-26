@@ -4,6 +4,7 @@ SECTIONS {
   . = 0x80000000; /* Address where qemu's -kernel jumps. */
 
   .text : {
+    *(.text.entry.must_at_0x80000000)
     *(.text .text.*)
     . = ALIGN(0x1000);
   }

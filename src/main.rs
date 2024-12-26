@@ -14,7 +14,12 @@ use xv6_rs::{kernel, machine};
 // Entry point.
 // Must be placed at the address where qemu's -kernel jumps.
 // It just calls the _start.
-global_asm!(".section .text", ".global _entry", "_entry:", "call _start");
+global_asm!(
+    ".section .text.entry.must_at_0x80000000",
+    ".global _entry",
+    "_entry:",
+    "call _start"
+);
 
 const STACK_SIZE_PER_CPU: usize = 4096;
 
