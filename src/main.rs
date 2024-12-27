@@ -56,7 +56,7 @@ fn m_mode_initialize() {
     delegate_exceptions_to_s_mode();
     delegate_interrupts_to_s_mode();
     configure_timer_interrupt();
-    set_mpp_to_s_mode();
+    set_return_mode_to_s_mode();
     set_mepc_to_s_mode_initialize();
     jump_to_s_mode();
 }
@@ -91,7 +91,7 @@ fn configure_timer_interrupt() {
     riscv64::write_mcounteren(riscv64::read_mcounteren() | MCOUNTEREN_TM);
 }
 
-fn set_mpp_to_s_mode() {
+fn set_return_mode_to_s_mode() {
     let mut status = riscv64::read_mstatus();
     status &= !MSTATUS_MPP_MASK;
     status |= MSTATUS_MPP_S;
