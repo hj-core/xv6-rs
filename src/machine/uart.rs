@@ -9,7 +9,10 @@ pub struct Register {
 
 impl Register {
     pub fn read(&self) -> u8 {
-        unsafe { *self.raw_ptr() }
+        // Require read_volatile.
+        // Otherwise, the compiler may optimize away some instructions,
+        // losing the side effect of reading.
+        unsafe { self.raw_ptr().read_volatile() }
     }
 
     fn raw_ptr(&self) -> *mut u8 {
@@ -17,7 +20,10 @@ impl Register {
     }
 
     pub fn write(&self, value: u8) {
-        unsafe { *self.raw_ptr() = value }
+        // Require read_volatile.
+        // Otherwise, the compiler may optimize away some instructions,
+        // losing the side effect of reading.
+        unsafe { self.raw_ptr().write_volatile(value) }
     }
 }
 
