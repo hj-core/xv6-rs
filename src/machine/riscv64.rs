@@ -115,3 +115,10 @@ pub fn read_time() -> u64 {
     unsafe { asm!("csrr {0}, time", out(reg) result) };
     result
 }
+
+/// Read thread pointer
+pub fn read_tp() -> u64 {
+    let mut result: u64;
+    unsafe { asm!("mv {0}, tp", out(reg) result) };
+    result
+}

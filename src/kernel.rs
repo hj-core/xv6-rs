@@ -4,6 +4,7 @@ use {
     crate::machine::riscv64::{SIE_SEIE, SIE_SSIE, SIE_STIE},
 };
 
+mod plic;
 mod spinlock;
 mod trap;
 mod uart;
@@ -13,9 +14,9 @@ pub fn s_mode_initialize() {
     configure_interrupt_enables();
     schedule_timer_interrupt();
     trap::initialize();
+    plic::initialize();
+    plic::configure_cpu();
     uart::initialize();
-    // Issue an illegal instruction
-    riscv64::read_mstatus();
     uart::busy_print("Hello World!\n");
 }
 

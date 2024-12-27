@@ -1,3 +1,4 @@
+pub mod plic;
 pub mod riscv64;
 pub mod uart;
 
