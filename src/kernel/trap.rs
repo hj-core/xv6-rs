@@ -1,6 +1,5 @@
 #![cfg(target_arch = "riscv64")]
 
-use crate::kernel::uart;
 use crate::machine::riscv64;
 use core::arch::global_asm;
 
@@ -16,6 +15,7 @@ extern "C" {
     fn kernel_trap_vec();
 }
 
+// Risc-v will disable interrupt before entering the trap
 global_asm!(
     ".global kernel_trap_vec",
     ".align 4", // implicit set the stvec to direct mode
@@ -44,7 +44,7 @@ global_asm!(
     // Call trap handler
     "call kernel_trap_handler",
     // Restore caller-saved registers.
-    // Not including tp as we may have moved to another cpu.
+    // No tp as we may return to another cpu.
     "ld ra, 0(sp)",
     "ld sp, 8(sp)",
     "ld gp, 16(sp)",
@@ -63,13 +63,23 @@ global_asm!(
     "ld t4, 224(sp)",
     "ld t5, 232(sp)",
     "ld t6, 240(sp)",
-    // Adjust sp and return from trap
     "addi sp, sp, 256",
+    // Return from the trap
     "sret"
 );
 
 #[no_mangle]
 fn kernel_trap_handler() {
-    uart::busy_print("Caught one!\n");
-    panic!();
+    let scause = riscv64::read_scause();
+
+    if scause & riscv64::SCAUSE_INTERRUPT == 0 {
+        panic!("Caught an exception.");
+    } else {
+        match scause {
+            riscv64::SCAUSE_SSI => panic!("Caught a supervisor software interrupt."),
+            riscv64::SCAUSE_STI => panic!("Caught a supervisor timer interrupt."),
+            riscv64::SCAUSE_SEI => panic!("Caught a supervisor external interrupt."),
+            _ => panic!("Caught a unexpected supervisor interrupt."),
+        }
+    }
 }

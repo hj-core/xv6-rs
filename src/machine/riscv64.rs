@@ -95,9 +95,21 @@ pub fn read_sie() -> u64 {
     result
 }
 
-pub const SIE_SEIE: u64 = 1 << 9; // External interrupts
-pub const SIE_STIE: u64 = 1 << 5; // Timer interrupts
-pub const SIE_SSIE: u64 = 1 << 1; // Software interrupts
+pub const SIE_SSIE: u64 = 1 << 1; // Supervisor software interrupts enable
+pub const SIE_STIE: u64 = 1 << 5; // Supervisor timer interrupts enable
+pub const SIE_SEIE: u64 = 1 << 9; // Supervisor external interrupts enable
+
+/// Read supervisor cause
+pub fn read_scause() -> u64 {
+    let mut result: u64;
+    unsafe { asm!("csrr {0}, scause", out(reg) result) };
+    result
+}
+
+pub const SCAUSE_INTERRUPT: u64 = 1 << 63;
+pub const SCAUSE_SSI: u64 = SCAUSE_INTERRUPT | 1; // Supervisor software interrupt
+pub const SCAUSE_STI: u64 = SCAUSE_INTERRUPT | 5; // Supervisor timer interrupt
+pub const SCAUSE_SEI: u64 = SCAUSE_INTERRUPT | 9; // Supervisor external interrupt
 
 /// Write supervisor trap vector base address
 pub fn write_stvec(value: u64) {

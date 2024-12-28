@@ -8,15 +8,16 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="79d91817-cab6-48db-8c64-627b37812669" name="Changes" comment="Install kernel trap vector">
-      <change afterPath="$PROJECT_DIR$/ss" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/kernel/trap.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/kernel/trap.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/machine/riscv64.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/machine/riscv64.rs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
-  <component name="ExecutionTargetManager" SELECTED_TARGET="RsBuildProfile:test" />
+  <component name="ExecutionTargetManager" SELECTED_TARGET="RsBuildProfile:dev" />
   <component name="FileTemplateManagerImpl">
     <option name="RECENT_TEMPLATES">
       <list>
@@ -50,7 +51,7 @@
     </excluded-from-favorite>
     <option name="RECENT_BRANCH_BY_REPOSITORY">
       <map>
-        <entry key="$PROJECT_DIR$" value="beta" />
+        <entry key="$PROJECT_DIR$" value="master" />
       </map>
     </option>
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
@@ -62,14 +63,7 @@
   }
 }</component>
   <component name="GitRewordedCommitMessages">
-    <option name="commitMessagesMapping">
-      <RewordedCommitMessageMapping>
-        <option name="originalMessage" value="Add README.md" />
-        <option name="rewordedMessage" value="Add README.md" />
-      </RewordedCommitMessageMapping>
-    </option>
-    <option name="currentCommit" value="1" />
-    <option name="onto" value="068a24388b3694e9026a461db64fc60e5bddab71" />
+    <option name="onto" value="f0ca9672560d43dabcf3333bc2bfbe074aa27e84" />
   </component>
   <component name="GithubPullRequestsUISettings">{
   &quot;selectedUrlAndAccountId&quot;: {
@@ -129,7 +123,7 @@
     <option name="runOnTheFly" value="true" />
     <option name="tool" value="Clippy" />
   </component>
-  <component name="RunManager">
+  <component name="RunManager" selected="Cargo.Run xv6-rs">
     <configuration name="Run xv6-rs" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
       <option name="buildProfileId" value="dev" />
       <option name="command" value="run --package xv6-rs --bin xv6-rs" />
@@ -183,6 +177,12 @@
         <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
       </method>
     </configuration>
+    <recent_temporary>
+      <list>
+        <item itemvalue="Cargo.Test plic::tests" />
+        <item itemvalue="Cargo.Test plic::tests" />
+      </list>
+    </recent_temporary>
   </component>
   <component name="RustProjectSettings">
     <option name="toolchainHomeDirectory" value="$PROJECT_DIR$/../../.cargo/bin" />
@@ -219,6 +219,7 @@
       <workItem from="1735097820197" duration="2453000" />
       <workItem from="1735117879993" duration="57000" />
       <workItem from="1735117945402" duration="5000" />
+      <workItem from="1735373627560" duration="1219000" />
     </task>
     <task id="LOCAL-00001" summary="Config M-mode: disable paging">
       <option name="closed" value="true" />
@@ -236,7 +237,15 @@
       <option name="project" value="LOCAL" />
       <updated>1734704559346</updated>
     </task>
-    <option name="localTasksCounter" value="3" />
+    <task id="LOCAL-00003" summary="Improve function name">
+      <option name="closed" value="true" />
+      <created>1735307615461</created>
+      <option name="number" value="00003" />
+      <option name="presentableId" value="LOCAL-00003" />
+      <option name="project" value="LOCAL" />
+      <updated>1735307615461</updated>
+    </task>
+    <option name="localTasksCounter" value="4" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -275,6 +284,7 @@
     <MESSAGE value="Add README.md" />
     <MESSAGE value="Config M-mode: disable paging" />
     <MESSAGE value="Config M-mode: set up timer interrupts" />
-    <option name="LAST_COMMIT_MESSAGE" value="Config M-mode: set up timer interrupts" />
+    <MESSAGE value="Improve function name" />
+    <option name="LAST_COMMIT_MESSAGE" value="Improve function name" />
   </component>
 </project>
