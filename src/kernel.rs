@@ -1,5 +1,5 @@
 use core::arch::asm;
-mod spinlock;
+mod lock;
 
 #[cfg(target_arch = "riscv64")]
 pub fn main() {
