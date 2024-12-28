@@ -1,4 +1,4 @@
-use crate::kernel::spinlock::Spinlock;
+use crate::kernel::lock::Spinlock;
 use crate::machine::uart;
 use crate::machine::uart::{
     FCR_FIFO_ENABLE, FCR_RECEIVE_FIFO_RESET, FCR_TRANSMIT_FIFO_RESET,

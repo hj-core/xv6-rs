@@ -5,8 +5,8 @@ use {
     crate::machine::riscv64::{SIE_SEIE, SIE_SSIE, SIE_STIE},
 };
 
+mod lock;
 mod plic;
-mod spinlock;
 mod trap;
 mod uart;
 
