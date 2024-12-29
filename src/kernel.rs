@@ -17,7 +17,7 @@ pub fn s_mode_initialize() {
     if riscv64::read_tp() == 0 {
         plic::initialize();
         uart::initialize();
-        uart::busy_print("Hello Xv6-rs!\n");
+        uart::busy_print_str("Hello Xv6-rs!\n");
         GLOBAL_ENVIRONMENT_INITIALIZED.store(true, Ordering::Release)
     }
 

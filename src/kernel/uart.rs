@@ -36,15 +36,25 @@ fn enable_transmitter_and_receiver_interrupts_only() {
     uart::IER.write(IER_RECEIVER_READY_INTERRUPT_ENABLE | IER_TRANSMITTER_EMPTY_INTERRUPT_ENABLE);
 }
 
-pub fn busy_print(str: &str) {
-    UART_LOCK.lock();
-    for &byte in str.as_bytes() {
-        while is_thr_full() {}
-        uart::THR.write(byte);
-    }
-    UART_LOCK.unlock();
+fn print_byte(byte: u8) {
+    while is_thr_full() {}
+    uart::THR.write(byte);
 }
 
 fn is_thr_full() -> bool {
     uart::LSR.read() & LSR_TRANSMIT_HOLDING_EMPTY == 0
+}
+
+pub fn busy_print_byte(byte: u8) {
+    UART_LOCK.lock();
+    print_byte(byte);
+    UART_LOCK.unlock();
+}
+
+pub fn busy_print_str(str: &str) {
+    UART_LOCK.lock();
+    for &byte in str.as_bytes() {
+        print_byte(byte);
+    }
+    UART_LOCK.unlock();
 }
