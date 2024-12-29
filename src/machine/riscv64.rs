@@ -99,6 +99,19 @@ pub const SIE_SSIE: u64 = 1 << 1; // Supervisor software interrupts enable
 pub const SIE_STIE: u64 = 1 << 5; // Supervisor timer interrupts enable
 pub const SIE_SEIE: u64 = 1 << 9; // Supervisor external interrupts enable
 
+/// Write supervisor status
+pub fn write_sstatus(value: u64) {
+    unsafe { asm!("csrw sstatus, {0}", in(reg) value) }
+}
+
+pub fn read_sstatus() -> u64 {
+    let mut result: u64;
+    unsafe { asm!("csrr {0}, sstatus", out(reg) result) };
+    result
+}
+
+pub const SSTATUS_SIE: u64 = 1 << 1; // Supervisor interrupt enable (global control)
+
 /// Read supervisor cause
 pub fn read_scause() -> u64 {
     let mut result: u64;

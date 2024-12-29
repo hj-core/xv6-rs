@@ -44,3 +44,28 @@ fn schedule_timer_interrupt() {
 }
 
 const TIMER_INTERRUPT_INTERVAL: u64 = 1_000_000; // Tenth of a second
+
+#[cfg(target_arch = "riscv64")]
+fn enable_interrupts() {
+    riscv64::write_sstatus(riscv64::read_sstatus() | riscv64::SSTATUS_SIE)
+}
+
+#[cfg(target_arch = "riscv64")]
+fn disable_interrupts(hart_id: u64) {
+    riscv64::write_sstatus(riscv64::read_sstatus() & !riscv64::SSTATUS_SIE);
+    assert_eq!(
+        hart_id,
+        riscv64::read_tp(),
+        "Disabled interrupts for a different cpu."
+    )
+}
+
+#[cfg(target_arch = "riscv64")]
+fn interrupt_enabled() -> bool {
+    !interrupt_disabled()
+}
+
+#[cfg(target_arch = "riscv64")]
+fn interrupt_disabled() -> bool {
+    riscv64::read_sstatus() & riscv64::SSTATUS_SIE == 0
+}
