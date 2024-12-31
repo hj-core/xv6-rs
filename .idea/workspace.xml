@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
+  <component name="AnalysisUIOptions">
+    <option name="ANALYZE_INJECTED_CODE" value="false" />
+  </component>
   <component name="AutoImportSettings">
     <option name="autoReloadType" value="ALL" />
   </component>
@@ -7,11 +10,7 @@
     <cargoProject FILE="$PROJECT_DIR$/Cargo.toml" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="79d91817-cab6-48db-8c64-627b37812669" name="Changes" comment="Install kernel trap vector">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/kernel/trap.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/kernel/trap.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/machine/riscv64.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/machine/riscv64.rs" afterDir="false" />
-    </list>
+    <list default="true" id="79d91817-cab6-48db-8c64-627b37812669" name="Changes" comment="Implement mod/cpu" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -63,7 +62,13 @@
   }
 }</component>
   <component name="GitRewordedCommitMessages">
-    <option name="onto" value="f0ca9672560d43dabcf3333bc2bfbe074aa27e84" />
+    <option name="commitMessagesMapping">
+      <RewordedCommitMessageMapping>
+        <option name="originalMessage" value="Add fun/read the start of allocatable dram" />
+        <option name="rewordedMessage" value="Set up initial free pages" />
+      </RewordedCommitMessageMapping>
+    </option>
+    <option name="onto" value="c602227b22c0d18aa2c87822298ddcaf75dbc9bf" />
   </component>
   <component name="GithubPullRequestsUISettings">{
   &quot;selectedUrlAndAccountId&quot;: {
@@ -98,7 +103,7 @@
     &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.rust.reset.selective.auto.import&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;hj-core&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;____memory&quot;,
     &quot;ignore.virus.scanning.warn.message&quot;: &quot;true&quot;,
     &quot;last_opened_file_path&quot;: &quot;//wsl$/Debian/home/hj-core/RustProjects/xv6-rs/src&quot;,
     &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
@@ -109,7 +114,8 @@
     &quot;org.rust.cargo.project.model.PROJECT_DISCOVERY&quot;: &quot;true&quot;,
     &quot;org.rust.cargo.project.model.impl.CargoExternalSystemProjectAware.subscribe.first.balloon&quot;: &quot;&quot;,
     &quot;org.rust.first.attach.projects&quot;: &quot;true&quot;,
-    &quot;settings.editor.selected.configurable&quot;: &quot;settings.sync&quot;,
+    &quot;run.code.analysis.last.selected.profile&quot;: &quot;pProject Default&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;language.rust.cargo.check&quot;,
     &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   }
 }</component>
@@ -120,6 +126,7 @@
     </key>
   </component>
   <component name="RsExternalLinterProjectSettings">
+    <option name="additionalArguments" value="--all-targets=false" />
     <option name="runOnTheFly" value="true" />
     <option name="tool" value="Clippy" />
   </component>
@@ -220,6 +227,10 @@
       <workItem from="1735117879993" duration="57000" />
       <workItem from="1735117945402" duration="5000" />
       <workItem from="1735373627560" duration="1219000" />
+      <workItem from="1735617456269" duration="16983000" />
+      <workItem from="1735639758039" duration="3575000" />
+      <workItem from="1735646714369" duration="31000" />
+      <workItem from="1735646753180" duration="7272000" />
     </task>
     <task id="LOCAL-00001" summary="Config M-mode: disable paging">
       <option name="closed" value="true" />
@@ -285,6 +296,11 @@
     <MESSAGE value="Config M-mode: disable paging" />
     <MESSAGE value="Config M-mode: set up timer interrupts" />
     <MESSAGE value="Improve function name" />
-    <option name="LAST_COMMIT_MESSAGE" value="Improve function name" />
+    <MESSAGE value="Set up initial free pages" />
+    <option name="LAST_COMMIT_MESSAGE" value="Set up initial free pages" />
+  </component>
+  <component name="XSLT-Support.FileAssociations.UIState">
+    <expand />
+    <select />
   </component>
 </project>

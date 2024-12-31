@@ -29,4 +29,6 @@ SECTIONS {
     . = ALIGN(16);
     *(.bss .bss.*)
   }
+
+  link_end = .;
 }
