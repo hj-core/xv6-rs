@@ -1,11 +1,10 @@
-use crate::kernel::lock::Spinlock;
+use crate::kernel::lock::GuardLock;
 use crate::machine::{DRAM_SIZE_IN_MB, DRAM_START};
 use core::ptr::null;
 
 const DRAM_END_EXCLUSIVE: u64 = DRAM_START + ((DRAM_SIZE_IN_MB as u64) << 20);
 const PAGE_SIZE_IN_BYTE: usize = 4096;
-static mut FREE_PAGES: Page = Page { next: null() };
-static FREE_PAGES_LOCK: Spinlock = Spinlock::new();
+static mut FREE_PAGES: GuardLock<Page> = GuardLock::new(Page { next: null() });
 
 struct Page {
     pub next: *const Page,
@@ -50,10 +49,9 @@ fn free_page(page: *const Page) {
     memset(page.cast(), 0xf0, PAGE_SIZE_IN_BYTE);
 
     unsafe {
-        FREE_PAGES_LOCK.lock();
-        (*page.cast_mut()).next = FREE_PAGES.next;
-        FREE_PAGES.next = page;
-        FREE_PAGES_LOCK.unlock();
+        let mut head = FREE_PAGES.lock();
+        (*page.cast_mut()).next = head.next;
+        head.next = page;
     }
 }
 
