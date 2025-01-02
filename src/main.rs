@@ -4,32 +4,29 @@
 
 use core::arch::{asm, global_asm};
 use core::panic::PanicInfo;
-use xv6_rs::machine::riscv64;
+use xv6_rs::kernel;
 use xv6_rs::machine::riscv64::{
     MCOUNTEREN_TM, MENVCFG_STCE, MIE_STIE, MSTATUS_MPP_MASK, MSTATUS_MPP_S,
 };
-use xv6_rs::{kernel, machine};
+use xv6_rs::machine::{riscv64, MAX_CPUS};
+use xv6_rs::wrapper::Bytes;
 
 // Entry point.
 // Must be placed at the address where qemu's -kernel jumps.
 // It just calls the _start.
 global_asm!(
-    ".section .text.entry.must_at_0x80000000",
+    ".section .text.entry.must_at_0x8000_0000",
     ".global _entry",
     "_entry:",
     "call _start"
 );
 
-const STACK_SIZE_PER_CPU: usize = 4096;
+const STACK_SIZE_PER_CPU: Bytes = Bytes(4096);
 
 #[repr(C, align(16))]
-struct CpuStack {
-    data: [u8; STACK_SIZE_PER_CPU * machine::MAX_CPUS],
-}
+struct CpuStacks([u8; STACK_SIZE_PER_CPU.0 * MAX_CPUS]);
 
-static CPU_STACK: CpuStack = CpuStack {
-    data: [0; STACK_SIZE_PER_CPU * machine::MAX_CPUS],
-};
+static CPU_STACKS: CpuStacks = CpuStacks([0; STACK_SIZE_PER_CPU.0 * MAX_CPUS]);
 
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
@@ -42,8 +39,8 @@ pub extern "C" fn _start() -> ! {
         "add sp, a0, a2",
         // Jump to m_mode_initialize
         "call m_mode_initialize",
-        in("a0") &raw const CPU_STACK.data,
-        in("a1") STACK_SIZE_PER_CPU,
+        in("a0") &raw const CPU_STACKS.0,
+        in("a1") STACK_SIZE_PER_CPU.0,
         );
     }
     loop {}

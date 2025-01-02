@@ -1,3 +1,9 @@
+mod lock;
+mod mem;
+mod plic;
+mod trap;
+mod uart;
+
 use core::sync::atomic::{AtomicBool, Ordering};
 #[cfg(target_arch = "riscv64")]
 use {
@@ -5,21 +11,15 @@ use {
     crate::machine::riscv64::{SIE_SEIE, SIE_SSIE, SIE_STIE},
 };
 
-mod lock;
-mod mem;
-mod plic;
-mod trap;
-mod uart;
-
 static GLOBAL_ENVIRONMENT_INITIALIZED: AtomicBool = AtomicBool::new(false);
 
 #[cfg(target_arch = "riscv64")]
 pub fn s_mode_initialize() {
     if riscv64::read_tp() == 0 {
-        mem::initialize();
-        plic::initialize();
         uart::initialize();
-        uart::busy_print_str("Hello Xv6-rs!\n");
+        uart::busy_print_str("Hello xv6-rs!\n");
+        plic::initialize();
+        mem::initialize();
         GLOBAL_ENVIRONMENT_INITIALIZED.store(true, Ordering::Release)
     }
 

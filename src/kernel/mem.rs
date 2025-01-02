@@ -1,64 +1,78 @@
 use crate::kernel::lock::GuardLock;
-use crate::machine::{DRAM_SIZE_IN_MB, DRAM_START};
+use crate::kernel::mem::Error::InvalidPagePointer;
+use crate::kernel::uart;
+use crate::machine::{DRAM_SIZE, DRAM_START};
+use crate::wrapper::{Address, Bytes};
+use core::convert::Into;
 use core::ptr::null;
 
-const DRAM_END_EXCLUSIVE: u64 = DRAM_START + ((DRAM_SIZE_IN_MB as u64) << 20);
-const PAGE_SIZE_IN_BYTE: usize = 4096;
 static mut FREE_PAGES: GuardLock<Page> = GuardLock::new(Page { next: null() });
+
+const DRAM_END_EXCLUSIVE: Address = Address(DRAM_START.0 + (DRAM_SIZE.0 << 20) as u64);
+const PAGE_SIZE: Bytes = Bytes(4096);
 
 struct Page {
     pub next: *const Page,
 }
 
 pub fn initialize() {
+    uart::busy_print_str("- Configuring physical memories... ");
     initialize_free_pages();
+    uart::busy_print_str("Done!\n");
 }
 
 fn initialize_free_pages() {
-    unsafe {
-        let mut page = first_valid_page();
-        while is_valid_page(page) {
-            free_page(page);
-            page = page.byte_add(PAGE_SIZE_IN_BYTE);
-        }
-    };
+    let mut page = first_valid_page();
+    while free_page(page).is_ok() {
+        page = unsafe { page.byte_add(PAGE_SIZE.0) };
+    }
 }
 
 fn first_valid_page() -> *const Page {
-    let start = allocatable_start() as *const u8;
-    unsafe { start.byte_add(start.align_offset(PAGE_SIZE_IN_BYTE)).cast() }
+    let start: *const u8 = allocatable_start().into();
+    let align_offset = start.align_offset(PAGE_SIZE.0);
+    unsafe { start.byte_add(align_offset).cast() }
 }
 
-fn allocatable_start() -> u64 {
+fn allocatable_start() -> Address {
     extern "C" {
         #[link_name = "link_end"]
         static indirect_addr: u8;
     }
-    &raw const indirect_addr as u64
-}
-
-fn is_valid_page(page: *const Page) -> bool {
-    let addr = page as u64;
-    addr % PAGE_SIZE_IN_BYTE as u64 == 0 && allocatable_start() <= addr && addr < DRAM_END_EXCLUSIVE
+    Address(&raw const indirect_addr as u64)
 }
 
 #[allow(static_mut_refs)]
-fn free_page(page: *const Page) {
-    assert!(is_valid_page(page));
+fn free_page(page: *const Page) -> Result<bool, Error> {
+    if !is_allocatable(page.into()) || !is_valid_page_start(page.into()) {
+        return Err(InvalidPagePointer);
+    }
     // Fill page with junk to catch dangling refs
-    memset(page.cast(), 0xf0, PAGE_SIZE_IN_BYTE);
+    memset(page.into(), 0xf0, PAGE_SIZE);
 
-    unsafe {
-        let mut head = FREE_PAGES.lock();
-        (*page.cast_mut()).next = head.next;
-        head.next = page;
+    let result = unsafe { &mut *page.cast_mut() };
+    let mut head = unsafe { FREE_PAGES.lock() };
+    result.next = head.next;
+    head.next = result;
+    Ok(true)
+}
+
+fn is_allocatable(addr: Address) -> bool {
+    allocatable_start().0 <= addr.0 && addr.0 < DRAM_END_EXCLUSIVE.0
+}
+
+fn is_valid_page_start(addr: Address) -> bool {
+    addr.0 % (PAGE_SIZE.0 as u64) == 0 && addr.0 < DRAM_END_EXCLUSIVE.0
+}
+
+fn memset(start: Address, value: u8, size: Bytes) {
+    let start: *const u8 = start.into();
+    for i in 0..size.0 {
+        unsafe { *start.add(i).cast_mut() = value };
     }
 }
 
-fn memset(start: *const u8, x: u8, size: usize) {
-    unsafe {
-        for i in 0..size {
-            *start.add(i).cast_mut() = x;
-        }
-    }
+#[derive(Debug)]
+enum Error {
+    InvalidPagePointer,
 }
