@@ -62,7 +62,7 @@ fn is_allocatable(addr: Address) -> bool {
 }
 
 fn is_valid_page_start(addr: Address) -> bool {
-    addr.0 % (PAGE_SIZE.0 as u64) == 0 && addr.0 < DRAM_END_EXCLUSIVE.0
+    addr.0 % (PAGE_SIZE.0 as u64) == 0 && (addr + PAGE_SIZE).0 <= DRAM_END_EXCLUSIVE.0
 }
 
 fn memset(start: Address, value: u8, size: Bytes) {
