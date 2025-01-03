@@ -1,7 +1,22 @@
-use core::ops::Add;
+use core::ops::{Add, Mul};
 
 #[derive(Copy, Clone)]
 pub struct Bytes(pub usize);
+
+impl Add<Bytes> for Bytes {
+    type Output = Self;
+
+    fn add(self, rhs: Bytes) -> Self::Output {
+        Self(self.0 + rhs.0)
+    }
+}
+
+impl Mul<usize> for Bytes {
+    type Output = Self;
+    fn mul(self, rhs: usize) -> Self::Output {
+        Bytes(self.0 * rhs)
+    }
+}
 
 impl From<MiB> for Bytes {
     fn from(value: MiB) -> Self {

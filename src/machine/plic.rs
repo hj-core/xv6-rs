@@ -5,14 +5,17 @@
 use crate::wrapper::{Address, Bytes};
 
 // The memory map address of PLIC
-const PLIC_BASE: Address = Address(0xc00_0000);
+// Source:
+// https://github.com/qemu/qemu/blob/master/hw/riscv/virt.c#L81
+pub const PLIC_MMIO_BASE: Address = Address(0xc00_0000);
+pub const PLIC_MMIO_SIZE: Bytes = Bytes(0x400_0000);
 
 const MAX_SOURCES: u32 = 1024;
 const MAX_CONTEXTS: u32 = 15872;
 
 // Source:
 // https://github.com/qemu/qemu/blob/master/include/hw/riscv/virt.h#L92
-pub const VIRT_UART0_SOURCE_NUMBER: u32 = 10;
+pub const UART0_SOURCE_NUMBER: u32 = 10;
 
 pub fn set_priority(source_no: u32, priority: u32) {
     check_source_number(source_no);
@@ -29,7 +32,7 @@ fn check_source_number(value: u32) {
 
 fn priority_addr(source_no: u32) -> Address {
     let count = source_no << 2;
-    PLIC_BASE + Bytes(count as usize)
+    PLIC_MMIO_BASE + Bytes(count as usize)
 }
 
 pub fn enable_interrupt(context_no: u32, source_no: u32) {
@@ -49,7 +52,7 @@ fn check_context_number(value: u32) {
 
 fn interrupt_enable_addr(context_no: u32, source_no: u32) -> Address {
     let count = 0x00_2000 + (context_no << 7) + ((source_no >> 5) << 2);
-    PLIC_BASE + Bytes(count as usize)
+    PLIC_MMIO_BASE + Bytes(count as usize)
 }
 
 fn interrupt_enable_bit(source_no: u32) -> u32 {
@@ -64,7 +67,7 @@ pub fn set_priority_threshold(context_no: u32, threshold: u32) {
 
 fn priority_threshold_addr(context_no: u32) -> Address {
     let count = 0x20_0000 + (context_no << 12);
-    PLIC_BASE + Bytes(count as usize)
+    PLIC_MMIO_BASE + Bytes(count as usize)
 }
 
 pub fn claim_interrupt(context_no: u32) -> u32 {
@@ -75,7 +78,7 @@ pub fn claim_interrupt(context_no: u32) -> u32 {
 
 fn claim_complete_addr(context_no: u32) -> Address {
     let count = 0x20_0004 + (context_no << 12);
-    PLIC_BASE + Bytes(count as usize)
+    PLIC_MMIO_BASE + Bytes(count as usize)
 }
 
 pub fn complete_interrupt(context_no: u32, source_no: u32) {
@@ -89,7 +92,7 @@ pub fn complete_interrupt(context_no: u32, source_no: u32) {
 mod tests {
     use super::{
         claim_complete_addr, interrupt_enable_addr, interrupt_enable_bit, priority_addr,
-        priority_threshold_addr, PLIC_BASE as BASE,
+        priority_threshold_addr, PLIC_MMIO_BASE as BASE,
     };
     use crate::wrapper::{Address, Bytes};
 

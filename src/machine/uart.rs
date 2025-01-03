@@ -2,7 +2,10 @@
 
 use crate::wrapper::{Address, Bytes};
 
-pub const UART0_BASE: Address = Address(0x1000_0000);
+// The memory map address of UART0
+// Source:
+// https://github.com/qemu/qemu/blob/master/hw/riscv/virt.c#L81
+pub const UART0_MMIO_BASE: Address = Address(0x1000_0000);
 
 pub struct Register {
     offset: Bytes, // offset relative to base
@@ -17,7 +20,7 @@ impl Register {
     }
 
     fn raw_ptr(&self) -> *mut u8 {
-        (UART0_BASE + self.offset).into()
+        (UART0_MMIO_BASE + self.offset).into()
     }
 
     pub fn write(&self, value: u8) {

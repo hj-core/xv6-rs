@@ -1,20 +1,20 @@
 #![cfg(target_arch = "riscv64")]
 
 use crate::machine::{plic, riscv64};
-use plic::VIRT_UART0_SOURCE_NUMBER;
+use plic::UART0_SOURCE_NUMBER;
 
 pub fn initialize() {
-    plic::set_priority(VIRT_UART0_SOURCE_NUMBER, 1);
+    plic::set_priority(UART0_SOURCE_NUMBER, 1);
 }
 
 pub fn configure_cpu() {
-    let context = context(riscv64::read_tp());
-    plic::enable_interrupt(context, VIRT_UART0_SOURCE_NUMBER);
-    plic::set_priority_threshold(context, 0);
+    let context_no = context_no(riscv64::read_tp());
+    plic::enable_interrupt(context_no, UART0_SOURCE_NUMBER);
+    plic::set_priority_threshold(context_no, 0);
 }
 
 // Learned from the xv6-riscv repository.
-// This setting may exist in the hw/riscv/virt.c of qemu repository.
-fn context(hart_id: u64) -> u32 {
+// Possible relevant information in hw/riscv/virt.c.
+fn context_no(hart_id: u64) -> u32 {
     1 + (hart_id as u32) * 2
 }

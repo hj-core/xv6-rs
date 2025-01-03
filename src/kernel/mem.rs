@@ -1,5 +1,7 @@
+pub mod virt;
+
 use crate::kernel::lock::GuardLock;
-use crate::kernel::mem::Error::InvalidPagePointer;
+use crate::kernel::mem::Error::{InvalidPagePointer, NonAllocatablePage};
 use crate::kernel::uart;
 use crate::machine::{DRAM_SIZE, DRAM_START};
 use crate::wrapper::{Address, Bytes};
@@ -16,7 +18,7 @@ struct Page {
 }
 
 pub fn initialize() {
-    uart::busy_print_str("- Configuring physical memories... ");
+    uart::busy_print_str("-> Initializing physical memories... ");
     initialize_free_pages();
     uart::busy_print_str("Done!\n");
 }
@@ -44,8 +46,11 @@ fn allocatable_start() -> Address {
 
 #[allow(static_mut_refs)]
 fn free_page(page: *const Page) -> Result<bool, Error> {
-    if !is_allocatable(page.into()) || !is_valid_page_start(page.into()) {
+    if !is_valid_page_start(page.into()) {
         return Err(InvalidPagePointer);
+    }
+    if !is_allocatable(page.into()) {
+        return Err(NonAllocatablePage);
     }
     // Fill page with junk to catch dangling refs
     memset(page.into(), 0xf0, PAGE_SIZE);
@@ -72,7 +77,22 @@ fn memset(start: Address, value: u8, size: Bytes) {
     }
 }
 
+#[allow(static_mut_refs)]
+fn allocate_page() -> Result<*const Page, Error> {
+    let mut head = unsafe { FREE_PAGES.lock() };
+    if head.next.is_null() {
+        return Err(Error::NoAllocatablePage);
+    }
+
+    let result = unsafe { &mut *head.next.cast_mut() };
+    head.next = result.next;
+    result.next = null();
+    Ok(result)
+}
+
 #[derive(Debug)]
 enum Error {
     InvalidPagePointer,
+    NonAllocatablePage,
+    NoAllocatablePage,
 }

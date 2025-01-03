@@ -20,6 +20,7 @@ pub fn s_mode_initialize() {
         uart::busy_print_str("Hello xv6-rs!\n");
         plic::initialize();
         mem::initialize();
+        mem::virt::initialize();
         GLOBAL_ENVIRONMENT_INITIALIZED.store(true, Ordering::Release)
     }
 
@@ -30,8 +31,14 @@ pub fn s_mode_initialize() {
     plic::configure_cpu();
     configure_interrupt_enables();
     schedule_timer_interrupt();
+    mem::virt::configure_cpu();
 
-    loop {}
+    let hart_id = riscv64::read_tp().to_le_bytes()[0] + 48;
+    uart::busy_print_str("hart ");
+    uart::busy_print_byte(hart_id);
+    uart::busy_print_str(" reported duty.\n");
+
+    loop {} // <----------------------------------------------------------------------------------------
 }
 
 #[cfg(target_arch = "riscv64")]
@@ -42,11 +49,13 @@ fn configure_interrupt_enables() {
 
 #[cfg(target_arch = "riscv64")]
 fn schedule_timer_interrupt() {
-    // Ask for the very first timer interrupt
-    riscv64::write_stimecmp(riscv64::read_time() + TIMER_INTERRUPT_INTERVAL)
+    // Schedule the next timer interrupt
+    riscv64::write_stimecmp(riscv64::read_time() + TIMER_INTERRUPT_INTERVAL.0)
 }
 
-const TIMER_INTERRUPT_INTERVAL: u64 = 1_000_000; // Tenth of a second
+const TIMER_INTERRUPT_INTERVAL: Ticks = Ticks(1_000_000);
+
+struct Ticks(u64);
 
 #[cfg(target_arch = "riscv64")]
 fn enable_interrupts() {

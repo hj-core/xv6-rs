@@ -84,6 +84,15 @@ pub fn write_satp(value: u64) {
     unsafe { asm!("csrw satp, {0}", in(reg) value) }
 }
 
+pub fn read_satp() -> u64 {
+    let mut result: u64;
+    unsafe { asm!("csrr {0}, satp", out(reg) result) };
+    result
+}
+
+pub const SATP_MODE_BITS: u64 = 0xf << 60;
+pub const SATP_MODE_SV39: u64 = 0x8 << 60;
+
 /// Write supervisor interrupt enable
 pub fn write_sie(value: u64) {
     unsafe { asm!("csrw sie, {0}", in(reg) value) }
