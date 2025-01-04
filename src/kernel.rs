@@ -38,7 +38,7 @@ pub fn s_mode_initialize() {
     uart::busy_print_byte(hart_id);
     uart::busy_print_str(" reported duty.\n");
 
-    loop {} // <----------------------------------------------------------------------------------------
+    loop {}
 }
 
 #[cfg(target_arch = "riscv64")]

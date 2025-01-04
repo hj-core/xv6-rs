@@ -1,6 +1,6 @@
 // Use the Sv39 scheme (3-level 512-entry page table).
 
-use crate::kernel::mem::{is_valid_page_start, memset, DRAM_END_EXCLUSIVE, PAGE_SIZE};
+use crate::kernel::mem::{is_valid_page, memset, DRAM_END_EXCLUSIVE, PAGE_SIZE};
 use crate::kernel::{mem, uart};
 use crate::machine;
 use crate::machine::plic::PLIC_MMIO_SIZE;
@@ -9,20 +9,161 @@ use crate::machine::riscv64;
 use crate::machine::DRAM_START;
 use crate::wrapper::{Address, Bytes};
 use core::ops::Add;
-use core::ptr::null;
+use core::ptr::null_mut;
+use core::sync::atomic::AtomicPtr;
+use core::sync::atomic::Ordering::{Acquire, Release};
 use machine::plic::PLIC_MMIO_BASE;
 use machine::uart::UART0_MMIO_BASE;
 
-static mut KERNEL_ROOT_TABLE: *const PageTable = null();
+static KERNEL_ROOT_TABLE: AtomicPtr<PageTable> = AtomicPtr::new(null_mut());
 const TABLE_SIZE: usize = 2 << 9;
+
+#[cfg(target_arch = "riscv64")]
+pub fn initialize() {
+    uart::busy_print_str("-> Initializing virtual memories... ");
+    configure_kernel_page_table();
+    uart::busy_print_str("Done!\n");
+}
+
+#[cfg(target_arch = "riscv64")]
+fn configure_kernel_page_table() {
+    initialize_kernel_root_table();
+    kernel_map_uart_pages();
+    kernel_map_plic_pages();
+    kernel_map_text_pages();
+    kernel_map_data_pages();
+}
+
+fn initialize_kernel_root_table() {
+    let ptr = PageTable::new().unwrap();
+    KERNEL_ROOT_TABLE.store(ptr, Release);
+}
+
+/// Direct map the uart0 page.
+fn kernel_map_uart_pages() {
+    kernel_direct_map_pages(UART0_MMIO_BASE, 1, PTE::BIT_R | PTE::BIT_W).unwrap();
+}
+
+/// Direct map the plic pages.
+fn kernel_map_plic_pages() {
+    assert_eq!(0, PLIC_MMIO_SIZE.0 % PAGE_SIZE.0);
+    kernel_direct_map_pages(
+        PLIC_MMIO_BASE,
+        PLIC_MMIO_SIZE.0 / PAGE_SIZE.0,
+        PTE::BIT_R | PTE::BIT_W,
+    )
+    .unwrap();
+}
+
+/// Direct map the kernel text pages.
+fn kernel_map_text_pages() {
+    let size = kernel_text_size();
+    assert_eq!(0, size.0 % PAGE_SIZE.0);
+    kernel_direct_map_pages(DRAM_START, size.0 / PAGE_SIZE.0, PTE::BIT_R | PTE::BIT_X).unwrap();
+}
+
+fn kernel_text_size() -> Bytes {
+    let end_exclusive = kernel_text_end_exclusive();
+    assert!(DRAM_START.0 <= end_exclusive.0);
+    Bytes((end_exclusive.0 - DRAM_START.0) as usize)
+}
+
+fn kernel_text_end_exclusive() -> Address {
+    extern "C" {
+        #[link_name = "link_text_end"]
+        static indirect_addr: u8;
+    }
+    Address(&raw const indirect_addr as u64)
+}
+
+/// Direct Map all pages after kernel text.
+fn kernel_map_data_pages() {
+    let page0 = kernel_text_end_exclusive();
+    let size = Bytes((DRAM_END_EXCLUSIVE.0 - page0.0) as usize);
+    assert_eq!(0, size.0 % PAGE_SIZE.0);
+    kernel_direct_map_pages(page0, size.0 / PAGE_SIZE.0, PTE::BIT_R | PTE::BIT_W).unwrap();
+}
+
+fn kernel_direct_map_pages(
+    page0: Address,
+    pages: usize,
+    permissions: u64,
+) -> Result<bool, mem::Error> {
+    map_pages(
+        KERNEL_ROOT_TABLE.load(Acquire),
+        page0.into(),
+        page0.into(),
+        pages,
+        permissions,
+    )
+}
+
+/// Map continuous pages starting from page0_va and page0_pa.
+fn map_pages(
+    root_table: *mut PageTable,
+    page0_va: VirtualAddress,
+    page0_pa: PhysicalAddress,
+    pages: usize,
+    permissions: u64,
+) -> Result<bool, mem::Error> {
+    for i in 0..pages {
+        map_page(
+            root_table,
+            page0_va + PAGE_SIZE * i,
+            page0_pa + PAGE_SIZE * i,
+            permissions,
+        )?;
+    }
+    Ok(true)
+}
+
+/// Map page_va to page_pa.
+fn map_page(
+    root_table: *mut PageTable,
+    page_va: VirtualAddress,
+    page_pa: PhysicalAddress,
+    permissions: u64,
+) -> Result<bool, mem::Error> {
+    if !is_valid_page(page_pa.into()) || !is_valid_page(page_va.into()) {
+        return Err(mem::InvalidPagePointer);
+    }
+
+    let root_table = unsafe { root_table.as_mut().unwrap() };
+    let root_pte = root_table.read_allocate(page_va.vpn2() as usize)?;
+
+    let inter_table: *mut PageTable = root_pte.get_table_start().into();
+    let inter_table: &mut PageTable = unsafe { inter_table.as_mut().unwrap() };
+    let inter_pte = inter_table.read_allocate(page_va.vpn1() as usize)?;
+
+    let leaf_table: *mut PageTable = inter_pte.get_table_start().into();
+    let leaf_table: &mut PageTable = unsafe { leaf_table.as_mut().unwrap() };
+
+    let mut leaf_pte = PTE(0);
+    leaf_pte.set_ppns(page_pa);
+    leaf_pte.set_permissions(permissions & PTE::MASK_PERMISSIONS);
+    leaf_pte.mark_valid();
+    leaf_table.0[page_va.vpn0() as usize] = leaf_pte;
+
+    Ok(true)
+}
+
+#[cfg(target_arch = "riscv64")]
+pub fn configure_cpu() {
+    enable_paging(KERNEL_ROOT_TABLE.load(Acquire).into());
+}
+
+#[cfg(target_arch = "riscv64")]
+fn enable_paging(root_table: PhysicalAddress) {
+    riscv64::write_satp(riscv64::SATP_MODE_SV39 | root_table.ppns());
+}
 
 struct PageTable([PTE; TABLE_SIZE]);
 
 impl PageTable {
-    fn new() -> Result<*const Self, mem::Error> {
+    fn new() -> Result<*mut PageTable, mem::Error> {
         let page = mem::allocate_page()?;
-        memset(page.into(), 0, PAGE_SIZE);
-        Ok(page.cast())
+        memset(page, 0, PAGE_SIZE);
+        Ok(page.into())
     }
 
     /// Returns the entry at index, allocating one if necessary.
@@ -137,6 +278,12 @@ impl<T> From<*const T> for PhysicalAddress {
     }
 }
 
+impl<T> From<*mut T> for PhysicalAddress {
+    fn from(ptr: *mut T) -> Self {
+        PhysicalAddress(ptr as u64)
+    }
+}
+
 #[derive(Copy, Clone, Debug)]
 struct VirtualAddress(u64);
 
@@ -153,6 +300,7 @@ impl VirtualAddress {
     fn vpn1(&self) -> u64 {
         (self.0 & Self::MASK_VPN1) >> 21
     }
+
     fn vpn2(&self) -> u64 {
         (self.0 & Self::MASK_VPN2) >> 30
     }
@@ -182,161 +330,9 @@ impl From<VirtualAddress> for Address {
     }
 }
 
-#[cfg(target_arch = "riscv64")]
-pub fn initialize() {
-    uart::busy_print_str("-> Initializing virtual memories... ");
-    configure_kernel_page_table();
-    uart::busy_print_str("Done!\n");
-}
-
-#[cfg(target_arch = "riscv64")]
-fn configure_kernel_page_table() {
-    initialize_kernel_root_table();
-    kernel_map_uart_pages();
-    kernel_map_plic_pages();
-    kernel_map_text_pages();
-    kernel_map_data_pages();
-}
-
-fn initialize_kernel_root_table() {
-    unsafe { KERNEL_ROOT_TABLE = PageTable::new().unwrap() }
-}
-
-/// Direct map the uart0 page.
-fn kernel_map_uart_pages() {
-    direct_map_pages(
-        unsafe { KERNEL_ROOT_TABLE },
-        UART0_MMIO_BASE,
-        1,
-        PTE::BIT_R | PTE::BIT_W,
-    )
-    .unwrap();
-}
-
-/// Direct map the plic pages.
-fn kernel_map_plic_pages() {
-    assert_eq!(0, PLIC_MMIO_SIZE.0 % PAGE_SIZE.0);
-    direct_map_pages(
-        unsafe { KERNEL_ROOT_TABLE },
-        PLIC_MMIO_BASE,
-        PLIC_MMIO_SIZE.0 / PAGE_SIZE.0,
-        PTE::BIT_R | PTE::BIT_W,
-    )
-    .unwrap();
-}
-
-/// Direct map the kernel text pages.
-fn kernel_map_text_pages() {
-    let size = kernel_text_size();
-    assert_eq!(0, size.0 % PAGE_SIZE.0);
-    direct_map_pages(
-        unsafe { KERNEL_ROOT_TABLE },
-        DRAM_START,
-        size.0 / PAGE_SIZE.0,
-        PTE::BIT_R | PTE::BIT_X,
-    )
-    .unwrap();
-}
-
-fn kernel_text_size() -> Bytes {
-    let end_exclusive = kernel_text_end_exclusive();
-    assert!(DRAM_START.0 <= end_exclusive.0);
-    Bytes((end_exclusive.0 - DRAM_START.0) as usize)
-}
-
-fn kernel_text_end_exclusive() -> Address {
-    extern "C" {
-        #[link_name = "link_text_end"]
-        static indirect_addr: u8;
-    }
-    Address(&raw const indirect_addr as u64)
-}
-
-/// Direct Map all pages after kernel text.
-fn kernel_map_data_pages() {
-    let page0 = kernel_text_end_exclusive();
-    let size = Bytes((DRAM_END_EXCLUSIVE.0 - page0.0) as usize);
-    assert_eq!(0, size.0 % PAGE_SIZE.0);
-    direct_map_pages(
-        unsafe { KERNEL_ROOT_TABLE },
-        page0,
-        size.0 / PAGE_SIZE.0,
-        PTE::BIT_R | PTE::BIT_W,
-    )
-    .unwrap();
-}
-
-fn direct_map_pages(
-    root_table: *const PageTable,
-    page0: Address,
-    pages: usize,
-    permissions: u64,
-) -> Result<bool, mem::Error> {
-    map_pages(root_table, page0.into(), page0.into(), pages, permissions)
-}
-
-/// Map continuous pages starting from page0_va and page0_pa.
-fn map_pages(
-    root_table: *const PageTable,
-    page0_va: VirtualAddress,
-    page0_pa: PhysicalAddress,
-    pages: usize,
-    permissions: u64,
-) -> Result<bool, mem::Error> {
-    for i in 0..pages {
-        map_page(
-            root_table,
-            page0_va + PAGE_SIZE * i,
-            page0_pa + PAGE_SIZE * i,
-            permissions,
-        )?;
-    }
-    Ok(true)
-}
-
-/// Map page_va to page_pa.
-fn map_page(
-    root_table: *const PageTable,
-    page_va: VirtualAddress,
-    page_pa: PhysicalAddress,
-    permissions: u64,
-) -> Result<bool, mem::Error> {
-    if !is_valid_page_start(page_pa.into()) || !is_valid_page_start(page_va.into()) {
-        return Err(mem::InvalidPagePointer);
-    }
-
-    let root_table = unsafe { &mut *root_table.cast_mut() };
-    let root_pte = root_table.read_allocate(page_va.vpn2() as usize)?;
-
-    let inter_table: *mut PageTable = root_pte.get_table_start().into();
-    let inter_table: &mut PageTable = unsafe { &mut *inter_table };
-    let inter_pte = inter_table.read_allocate(page_va.vpn1() as usize)?;
-
-    let leaf_table: *mut PageTable = inter_pte.get_table_start().into();
-    let leaf_table: &mut PageTable = unsafe { &mut *leaf_table };
-
-    let mut leaf_pte = PTE(0);
-    leaf_pte.set_ppns(page_pa);
-    leaf_pte.set_permissions(permissions & PTE::MASK_PERMISSIONS);
-    leaf_pte.mark_valid();
-    leaf_table.0[page_va.vpn0() as usize] = leaf_pte;
-
-    Ok(true)
-}
-
-#[cfg(target_arch = "riscv64")]
-pub fn configure_cpu() {
-    enable_paging(unsafe { KERNEL_ROOT_TABLE.into() });
-}
-
-#[cfg(target_arch = "riscv64")]
-fn enable_paging(root_table: PhysicalAddress) {
-    riscv64::write_satp(riscv64::SATP_MODE_SV39 | root_table.ppns());
-}
-
 #[cfg(test)]
 mod pte_tests {
-    use crate::kernel::mem::virt::{PhysicalAddress, PTE};
+    use super::{PhysicalAddress, PTE};
     use crate::wrapper::Address;
 
     #[test]
@@ -429,7 +425,7 @@ mod pte_tests {
 
 #[cfg(test)]
 mod physical_address_tests {
-    use crate::kernel::mem::virt::PhysicalAddress as PA;
+    use super::PhysicalAddress as PA;
 
     #[test]
     fn test_ppns() {

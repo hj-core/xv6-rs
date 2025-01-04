@@ -6,15 +6,19 @@ use crate::kernel::uart;
 use crate::machine::{DRAM_SIZE, DRAM_START};
 use crate::wrapper::{Address, Bytes};
 use core::convert::Into;
-use core::ptr::null;
+use core::ptr::null_mut;
+use core::sync::atomic::AtomicPtr;
+use core::sync::atomic::Ordering::{Relaxed, Release};
 
-static mut FREE_PAGES: GuardLock<Page> = GuardLock::new(Page { next: null() });
+static FREE_PAGES: GuardLock<Page> = GuardLock::new(Page {
+    next: AtomicPtr::new(null_mut()),
+});
 
 const DRAM_END_EXCLUSIVE: Address = Address(DRAM_START.0 + (DRAM_SIZE.0 << 20) as u64);
 const PAGE_SIZE: Bytes = Bytes(4096);
 
 struct Page {
-    pub next: *const Page,
+    pub next: AtomicPtr<Page>,
 }
 
 pub fn initialize() {
@@ -24,16 +28,13 @@ pub fn initialize() {
 }
 
 fn initialize_free_pages() {
-    let mut page = first_valid_page();
-    while free_page(page).is_ok() {
-        page = unsafe { page.byte_add(PAGE_SIZE.0) };
-    }
-}
+    let alloc_start = allocatable_start();
+    let align_offset = (alloc_start.0 as *const u8).align_offset(PAGE_SIZE.0);
 
-fn first_valid_page() -> *const Page {
-    let start: *const u8 = allocatable_start().into();
-    let align_offset = start.align_offset(PAGE_SIZE.0);
-    unsafe { start.byte_add(align_offset).cast() }
+    let mut page_start = alloc_start + Bytes(align_offset);
+    while free_page(page_start).is_ok() {
+        page_start = page_start + PAGE_SIZE;
+    }
 }
 
 fn allocatable_start() -> Address {
@@ -44,50 +45,54 @@ fn allocatable_start() -> Address {
     Address(&raw const indirect_addr as u64)
 }
 
-#[allow(static_mut_refs)]
-fn free_page(page: *const Page) -> Result<bool, Error> {
-    if !is_valid_page_start(page.into()) {
+fn free_page(start: Address) -> Result<bool, Error> {
+    if !is_valid_page(start) {
         return Err(InvalidPagePointer);
     }
-    if !is_allocatable(page.into()) {
+    if !is_allocatable(start) {
         return Err(NonAllocatablePage);
     }
     // Fill page with junk to catch dangling refs
-    memset(page.into(), 0xf0, PAGE_SIZE);
+    memset(start.into(), 0xf0, PAGE_SIZE);
 
-    let result = unsafe { &mut *page.cast_mut() };
-    let mut head = unsafe { FREE_PAGES.lock() };
-    result.next = head.next;
-    head.next = result;
+    let head = FREE_PAGES.lock();
+    let old_next = head.next.load(Relaxed);
+    let new_next = unsafe {
+        let page: *mut Page = start.into();
+        page.as_mut().unwrap().next.store(old_next, Relaxed);
+        page
+    };
+    head.next.store(new_next, Relaxed);
     Ok(true)
+}
+
+fn is_valid_page(start: Address) -> bool {
+    start.0 % (PAGE_SIZE.0 as u64) == 0 && (start + PAGE_SIZE).0 <= DRAM_END_EXCLUSIVE.0
 }
 
 fn is_allocatable(addr: Address) -> bool {
     allocatable_start().0 <= addr.0 && addr.0 < DRAM_END_EXCLUSIVE.0
 }
 
-fn is_valid_page_start(addr: Address) -> bool {
-    addr.0 % (PAGE_SIZE.0 as u64) == 0 && (addr + PAGE_SIZE).0 <= DRAM_END_EXCLUSIVE.0
-}
-
 fn memset(start: Address, value: u8, size: Bytes) {
-    let start: *const u8 = start.into();
+    let start: *mut u8 = start.into();
     for i in 0..size.0 {
-        unsafe { *start.add(i).cast_mut() = value };
+        unsafe { *start.add(i) = value };
     }
 }
 
-#[allow(static_mut_refs)]
-fn allocate_page() -> Result<*const Page, Error> {
-    let mut head = unsafe { FREE_PAGES.lock() };
-    if head.next.is_null() {
+fn allocate_page() -> Result<Address, Error> {
+    let head = FREE_PAGES.lock();
+    if head.next.load(Relaxed).is_null() {
         return Err(Error::NoAllocatablePage);
     }
 
-    let result = unsafe { &mut *head.next.cast_mut() };
-    head.next = result.next;
-    result.next = null();
-    Ok(result)
+    let old_next = head.next.load(Relaxed);
+    let old_page = unsafe { old_next.as_mut().unwrap() };
+    let new_next = old_page.next.load(Relaxed);
+    old_page.next.store(null_mut(), Relaxed);
+    head.next.store(new_next, Release);
+    Ok(old_next.into())
 }
 
 #[derive(Debug)]
