@@ -140,7 +140,7 @@ fn map_page(
 
     let mut leaf_pte = PTE(0);
     leaf_pte.set_ppns(page_pa);
-    leaf_pte.set_permissions(permissions & PTE::MASK_PERMISSIONS);
+    leaf_pte.set_permissions(permissions);
     leaf_pte.mark_valid();
     leaf_table.0[page_va.vpn0() as usize] = leaf_pte;
 
