@@ -1,6 +1,8 @@
 mod lock;
 mod mem;
 mod plic;
+mod proc;
+mod sched;
 mod trap;
 mod uart;
 
@@ -32,13 +34,8 @@ pub fn s_mode_initialize() {
     configure_interrupt_enables();
     schedule_timer_interrupt();
     mem::virt::configure_cpu();
-
-    let hart_id = riscv64::read_tp().to_le_bytes()[0] + 48;
-    uart::busy_print_str("hart ");
-    uart::busy_print_byte(hart_id);
-    uart::busy_print_str(" reported duty.\n");
-
-    loop {}
+    proc::initialize();
+    sched::start();
 }
 
 #[cfg(target_arch = "riscv64")]

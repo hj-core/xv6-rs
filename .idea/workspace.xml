@@ -10,12 +10,11 @@
     <cargoProject FILE="$PROJECT_DIR$/Cargo.toml" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="79d91817-cab6-48db-8c64-627b37812669" name="Changes" comment="Configure page table for kernel">
-      <change afterPath="$PROJECT_DIR$/src/kernel/mem/virt/wrapper.rs" afterDir="false" />
+    <list default="true" id="79d91817-cab6-48db-8c64-627b37812669" name="Changes" comment="Set up CPU table">
+      <change afterPath="$PROJECT_DIR$/src/kernel/proc.rs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/kernel/sched.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/kernel/mem.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/kernel/mem.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/kernel/mem/virt.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/kernel/mem/virt.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/wrapper.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/wrapper.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/kernel.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/kernel.rs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -56,10 +55,11 @@
     </excluded-from-favorite>
     <option name="RECENT_BRANCH_BY_REPOSITORY">
       <map>
-        <entry key="$PROJECT_DIR$" value="master" />
+        <entry key="$PROJECT_DIR$" value="__scheduler_2" />
       </map>
     </option>
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+    <option name="RESET_MODE" value="MIXED" />
   </component>
   <component name="GitHubPullRequestSearchHistory">{
   &quot;lastFilter&quot;: {
@@ -68,13 +68,7 @@
   }
 }</component>
   <component name="GitRewordedCommitMessages">
-    <option name="commitMessagesMapping">
-      <RewordedCommitMessageMapping>
-        <option name="originalMessage" value="Add fun/read the start of allocatable dram" />
-        <option name="rewordedMessage" value="Set up initial free pages" />
-      </RewordedCommitMessageMapping>
-    </option>
-    <option name="onto" value="c602227b22c0d18aa2c87822298ddcaf75dbc9bf" />
+    <option name="onto" value="88348a2d9cd55fc292d7a47d65adbd6da192e121" />
   </component>
   <component name="GithubPullRequestsUISettings">{
   &quot;selectedUrlAndAccountId&quot;: {
@@ -102,29 +96,29 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "Cargo.Run xv6-rs.executor": "Run",
-    "Cargo.Test plic::tests.executor": "Run",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.git.unshallow": "true",
-    "RunOnceActivity.rust.reset.selective.auto.import": "true",
-    "git-widget-placeholder": "static-mut",
-    "ignore.virus.scanning.warn.message": "true",
-    "last_opened_file_path": "//wsl$/Debian/home/hj-core/RustProjects/xv6-rs/src",
-    "node.js.detected.package.eslint": "true",
-    "node.js.detected.package.tslint": "true",
-    "node.js.selected.package.eslint": "(autodetect)",
-    "node.js.selected.package.tslint": "(autodetect)",
-    "nodejs_package_manager_path": "npm",
-    "org.rust.cargo.project.model.PROJECT_DISCOVERY": "true",
-    "org.rust.cargo.project.model.impl.CargoExternalSystemProjectAware.subscribe.first.balloon": "",
-    "org.rust.first.attach.projects": "true",
-    "run.code.analysis.last.selected.profile": "pProject Default",
-    "settings.editor.selected.configurable": "language.rust.cargo.check",
-    "vue.rearranger.settings.migration": "true"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;Cargo.Run xv6-rs.executor&quot;: &quot;Run&quot;,
+    &quot;Cargo.Test plic::tests.executor&quot;: &quot;Run&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.rust.reset.selective.auto.import&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;____scheduler&quot;,
+    &quot;ignore.virus.scanning.warn.message&quot;: &quot;true&quot;,
+    &quot;last_opened_file_path&quot;: &quot;//wsl$/Debian/home/hj-core/RustProjects/xv6-rs/src&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;org.rust.cargo.project.model.PROJECT_DISCOVERY&quot;: &quot;true&quot;,
+    &quot;org.rust.cargo.project.model.impl.CargoExternalSystemProjectAware.subscribe.first.balloon&quot;: &quot;&quot;,
+    &quot;org.rust.first.attach.projects&quot;: &quot;true&quot;,
+    &quot;run.code.analysis.last.selected.profile&quot;: &quot;pProject Default&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;vcs.Git&quot;,
+    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   }
-}]]></component>
+}</component>
   <component name="RecentsManager">
     <key name="MoveFile.RECENT_KEYS">
       <recent name="\\wsl$\Debian\home\hj-core\RustProjects\xv6-rs" />
@@ -195,6 +189,8 @@
         <item itemvalue="Cargo.Test plic::tests" />
         <item itemvalue="Cargo.Test plic::tests" />
         <item itemvalue="Cargo.Test plic::tests" />
+        <item itemvalue="Cargo.Test plic::tests" />
+        <item itemvalue="Cargo.Test plic::tests" />
       </list>
     </recent_temporary>
   </component>
@@ -242,6 +238,10 @@
       <workItem from="1735829058626" duration="843000" />
       <workItem from="1735882596213" duration="12948000" />
       <workItem from="1735897819892" duration="5368000" />
+      <workItem from="1735988943674" duration="525000" />
+      <workItem from="1736045566642" duration="10943000" />
+      <workItem from="1736057926326" duration="1158000" />
+      <workItem from="1736061837397" duration="1399000" />
     </task>
     <task id="LOCAL-00001" summary="Config M-mode: disable paging">
       <option name="closed" value="true" />
@@ -387,7 +387,31 @@
       <option name="project" value="LOCAL" />
       <updated>1735903203507</updated>
     </task>
-    <option name="localTasksCounter" value="19" />
+    <task id="LOCAL-00019" summary="Refactor away the static mut">
+      <option name="closed" value="true" />
+      <created>1735983937383</created>
+      <option name="number" value="00019" />
+      <option name="presentableId" value="LOCAL-00019" />
+      <option name="project" value="LOCAL" />
+      <updated>1735983937383</updated>
+    </task>
+    <task id="LOCAL-00020" summary="Set up CPU table">
+      <option name="closed" value="true" />
+      <created>1735984671258</created>
+      <option name="number" value="00020" />
+      <option name="presentableId" value="LOCAL-00020" />
+      <option name="project" value="LOCAL" />
+      <updated>1735984671258</updated>
+    </task>
+    <task id="LOCAL-00021" summary="Set up CPU table">
+      <option name="closed" value="true" />
+      <created>1735992888160</created>
+      <option name="number" value="00021" />
+      <option name="presentableId" value="LOCAL-00021" />
+      <option name="project" value="LOCAL" />
+      <updated>1735992888160</updated>
+    </task>
+    <option name="localTasksCounter" value="22" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -416,7 +440,19 @@
       <map>
         <entry key="MAIN">
           <value>
-            <State />
+            <State>
+              <option name="FILTERS">
+                <map>
+                  <entry key="branch">
+                    <value>
+                      <list>
+                        <option value="master" />
+                      </list>
+                    </value>
+                  </entry>
+                </map>
+              </option>
+            </State>
           </value>
         </entry>
       </map>
@@ -433,7 +469,10 @@
     <MESSAGE value="Implement mod/cpu" />
     <MESSAGE value="Implement fun/allocate_page" />
     <MESSAGE value="Configure page table for kernel" />
-    <option name="LAST_COMMIT_MESSAGE" value="Configure page table for kernel" />
+    <MESSAGE value="Refactor away the static mut" />
+    <MESSAGE value="Save point" />
+    <MESSAGE value="Set up CPU table" />
+    <option name="LAST_COMMIT_MESSAGE" value="Set up CPU table" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />
