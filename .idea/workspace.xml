@@ -10,11 +10,9 @@
     <cargoProject FILE="$PROJECT_DIR$/Cargo.toml" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="79d91817-cab6-48db-8c64-627b37812669" name="Changes" comment="Set up CPU table">
-      <change afterPath="$PROJECT_DIR$/src/kernel/proc.rs" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/kernel/sched.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/kernel.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/kernel.rs" afterDir="false" />
+    <list default="true" id="79d91817-cab6-48db-8c64-627b37812669" name="Changes" comment="Set up cpu table">
+      <change beforePath="$PROJECT_DIR$/src/kernel/proc.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/kernel/proc.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/kernel/sched.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/kernel/sched.rs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -55,7 +53,7 @@
     </excluded-from-favorite>
     <option name="RECENT_BRANCH_BY_REPOSITORY">
       <map>
-        <entry key="$PROJECT_DIR$" value="__scheduler_2" />
+        <entry key="$PROJECT_DIR$" value="__scheduler2" />
       </map>
     </option>
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
@@ -68,7 +66,7 @@
   }
 }</component>
   <component name="GitRewordedCommitMessages">
-    <option name="onto" value="88348a2d9cd55fc292d7a47d65adbd6da192e121" />
+    <option name="onto" value="4782e184a9db58754bee0894825a908eaeb340b8" />
   </component>
   <component name="GithubPullRequestsUISettings">{
   &quot;selectedUrlAndAccountId&quot;: {
@@ -241,7 +239,8 @@
       <workItem from="1735988943674" duration="525000" />
       <workItem from="1736045566642" duration="10943000" />
       <workItem from="1736057926326" duration="1158000" />
-      <workItem from="1736061837397" duration="1399000" />
+      <workItem from="1736061837397" duration="2706000" />
+      <workItem from="1736077030854" duration="1734000" />
     </task>
     <task id="LOCAL-00001" summary="Config M-mode: disable paging">
       <option name="closed" value="true" />
@@ -440,19 +439,7 @@
       <map>
         <entry key="MAIN">
           <value>
-            <State>
-              <option name="FILTERS">
-                <map>
-                  <entry key="branch">
-                    <value>
-                      <list>
-                        <option value="master" />
-                      </list>
-                    </value>
-                  </entry>
-                </map>
-              </option>
-            </State>
+            <State />
           </value>
         </entry>
       </map>
