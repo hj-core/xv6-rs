@@ -26,7 +26,7 @@ impl Register {
     pub fn write(&self, value: u8) {
         // Require read_volatile.
         // Otherwise, the compiler may optimize away some instructions,
-        // losing the side effect of reading.
+        // losing the side effect of writing.
         unsafe { self.raw_ptr().write_volatile(value) }
     }
 }

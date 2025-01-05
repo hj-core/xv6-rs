@@ -40,9 +40,9 @@ fn initialize_free_pages() {
 fn allocatable_start() -> Address {
     extern "C" {
         #[link_name = "link_end"]
-        static indirect_addr: u8;
+        static addr_as_value: u8;
     }
-    Address(&raw const indirect_addr as u64)
+    Address(&raw const addr_as_value as u64)
 }
 
 fn free_page(start: Address) -> Result<bool, Error> {
