@@ -382,6 +382,11 @@ mod pte_tests {
         let pte = PTE(0xffff_ff1e);
         let permission = 0;
         assert_set_permissions(expected, pte, permission);
+
+        let expected = PTE(0xffff_ff00);
+        let pte = PTE(0xffff_ff1e);
+        let permission = 0xffff_ff00;
+        assert_set_permissions(expected, pte, permission);
     }
 
     fn assert_set_permissions(expected: PTE, mut pte: PTE, permission: u64) {
