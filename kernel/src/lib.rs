@@ -1,3 +1,7 @@
+#![cfg_attr(not(target_arch = "riscv64"), allow(dead_code), allow(unused_imports))]
+#![no_std]
+#![allow(dead_code)]
+
 mod lock;
 mod mem;
 mod plic;
@@ -9,8 +13,8 @@ mod uart;
 use core::sync::atomic::{AtomicBool, Ordering};
 #[cfg(target_arch = "riscv64")]
 use {
-    crate::machine::riscv64,
-    crate::machine::riscv64::{SIE_SEIE, SIE_SSIE, SIE_STIE},
+    hw::riscv64,
+    hw::riscv64::{SIE_SEIE, SIE_SSIE, SIE_STIE},
 };
 
 static GLOBAL_ENVIRONMENT_INITIALIZED: AtomicBool = AtomicBool::new(false);

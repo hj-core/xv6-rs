@@ -1,6 +1,6 @@
-use crate::kernel::lock::Spinlock;
-use crate::machine::uart;
-use crate::machine::uart::{
+use crate::lock::Spinlock;
+use hw::uart;
+use hw::uart::{
     FCR_FIFO_ENABLE, FCR_RECEIVE_FIFO_RESET, FCR_TRANSMIT_FIFO_RESET,
     IER_RECEIVER_READY_INTERRUPT_ENABLE, IER_TRANSMITTER_EMPTY_INTERRUPT_ENABLE,
     LCR_8BIT_WORD_LENGTH, LCR_DIVISOR_LATCH_ENABLE, LSR_TRANSMIT_HOLDING_EMPTY,

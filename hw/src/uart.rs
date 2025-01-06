@@ -1,6 +1,6 @@
 // 'virt' machine supports a NS16550 compatible UART.
 
-use crate::wrapper::{Address, Bytes};
+use wrapper::{Address, Bytes};
 
 // The memory map address of UART0
 // Source:

@@ -76,7 +76,7 @@ def cargo_test() -> int:
 
 
 def qemu_gdb_boot(profile: str = "debug", smp: int = 1, mem_in_mb: int = 128) -> int:
-    cmd = f"qemu-system-riscv64 -s -S -machine virt -bios none -kernel target/riscv64gc-unknown-none-elf/{profile}/xv6-rs -m {mem_in_mb}M -smp {smp} -nographic -global virtio-mmio.force-legacy=false"
+    cmd = f"qemu-system-riscv64 -s -S -machine virt -bios none -kernel target/riscv64gc-unknown-none-elf/{profile}/kernel -m {mem_in_mb}M -smp {smp} -nographic -global virtio-mmio.force-legacy=false"
     echo_cmd(cmd)
     return subprocess.run(cmd, shell=True).returncode
 

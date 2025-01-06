@@ -1,3 +1,5 @@
+#![no_std]
+
 use core::ops::{Add, Mul};
 
 #[derive(Copy, Clone)]

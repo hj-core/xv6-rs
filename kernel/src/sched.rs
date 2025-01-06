@@ -1,12 +1,11 @@
 #![cfg(target_arch = "riscv64")]
 
-use crate::kernel;
-use crate::kernel::proc::{Context, Cpu};
-use crate::kernel::uart;
-use crate::machine::riscv64;
+use crate::proc::{Context, Cpu};
+use crate::{interrupt_disabled, uart};
+use hw::riscv64;
 
 pub fn start() {
-    assert!(kernel::interrupt_disabled());
+    assert!(interrupt_disabled());
     let cpu = Cpu::this();
     let hart_id = riscv64::read_tp();
     assert_eq!(hart_id, cpu.hart_id());

@@ -3,5 +3,20 @@
 version = 4
 
 [[package]]
-name = "xv6-rs"
+name = "hw"
+version = "0.1.0"
+dependencies = [
+ "wrapper",
+]
+
+[[package]]
+name = "kernel"
+version = "0.1.0"
+dependencies = [
+ "hw",
+ "wrapper",
+]
+
+[[package]]
+name = "wrapper"
 version = "0.1.0"

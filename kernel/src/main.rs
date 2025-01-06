@@ -4,12 +4,9 @@
 
 use core::arch::{asm, global_asm};
 use core::panic::PanicInfo;
-use xv6_rs::kernel;
-use xv6_rs::machine::riscv64::{
-    MCOUNTEREN_TM, MENVCFG_STCE, MIE_STIE, MSTATUS_MPP_MASK, MSTATUS_MPP_S,
-};
-use xv6_rs::machine::{riscv64, MAX_CPUS};
-use xv6_rs::wrapper::Bytes;
+use hw::riscv64::{MCOUNTEREN_TM, MENVCFG_STCE, MIE_STIE, MSTATUS_MPP_MASK, MSTATUS_MPP_S};
+use hw::{riscv64, MAX_CPUS};
+use wrapper::Bytes;
 
 // Entry point.
 // Must be placed at the address where qemu's -kernel jumps.

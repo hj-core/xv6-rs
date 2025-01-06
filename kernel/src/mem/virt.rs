@@ -1,19 +1,19 @@
 // Use the Sv39 scheme (3-level 512-entry page table).
 
-use crate::kernel::mem::{is_valid_page, memset, DRAM_END_EXCLUSIVE, PAGE_SIZE};
-use crate::kernel::{mem, uart};
-use crate::machine;
-use crate::machine::plic::PLIC_MMIO_SIZE;
-#[cfg(target_arch = "riscv64")]
-use crate::machine::riscv64;
-use crate::machine::DRAM_START;
-use crate::wrapper::{Address, Bytes};
+use crate::mem::{is_valid_page, memset, DRAM_END_EXCLUSIVE, PAGE_SIZE};
+use crate::{mem, uart};
 use core::ops::Add;
 use core::ptr::null_mut;
 use core::sync::atomic::AtomicPtr;
 use core::sync::atomic::Ordering::{Acquire, Release};
-use machine::plic::PLIC_MMIO_BASE;
-use machine::uart::UART0_MMIO_BASE;
+use hw;
+use hw::plic::PLIC_MMIO_BASE;
+use hw::plic::PLIC_MMIO_SIZE;
+#[cfg(target_arch = "riscv64")]
+use hw::riscv64;
+use hw::uart::UART0_MMIO_BASE;
+use hw::DRAM_START;
+use wrapper::{Address, Bytes};
 
 static KERNEL_ROOT_TABLE: AtomicPtr<PageTable> = AtomicPtr::new(null_mut());
 const TABLE_SIZE: usize = 2 << 9;
@@ -333,7 +333,7 @@ impl From<VirtualAddress> for Address {
 #[cfg(test)]
 mod pte_tests {
     use super::{PhysicalAddress, PTE};
-    use crate::wrapper::Address;
+    use wrapper::Address;
 
     #[test]
     fn test_valid() {

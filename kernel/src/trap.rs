@@ -1,7 +1,7 @@
 #![cfg(target_arch = "riscv64")]
 
-use crate::machine::riscv64;
 use core::arch::global_asm;
+use hw::riscv64;
 
 pub fn initialize() {
     install_kernel_trap_vec();

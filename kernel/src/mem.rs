@@ -1,14 +1,14 @@
 pub mod virt;
 
-use crate::kernel::lock::GuardLock;
-use crate::kernel::mem::Error::{InvalidPagePointer, NonAllocatablePage};
-use crate::kernel::uart;
-use crate::machine::{DRAM_SIZE, DRAM_START};
-use crate::wrapper::{Address, Bytes};
+use crate::lock::GuardLock;
+use crate::mem::Error::{InvalidPagePointer, NonAllocatablePage};
+use crate::uart;
 use core::convert::Into;
 use core::ptr::null_mut;
 use core::sync::atomic::AtomicPtr;
 use core::sync::atomic::Ordering::{Relaxed, Release};
+use hw::{DRAM_SIZE, DRAM_START};
+use wrapper::{Address, Bytes};
 
 static FREE_PAGES: GuardLock<Page> = GuardLock::new(Page {
     next: AtomicPtr::new(null_mut()),

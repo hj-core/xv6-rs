@@ -1,6 +1,6 @@
 #![cfg(target_arch = "riscv64")]
 
-use crate::machine::{plic, riscv64};
+use hw::{plic, riscv64};
 use plic::UART0_SOURCE_NUMBER;
 
 pub fn initialize() {

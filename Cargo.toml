@@ -1,12 +1,10 @@
-[package]
-name = "xv6-rs"
-version = "0.1.0"
-edition = "2021"
+[workspace]
+resolver = "2"
+members = ["kernel", "hw", "wrapper"]
+
 
 [profile.dev]
 panic = "abort"
 
 [profile.release]
 panic = "abort"
-
-[dependencies]

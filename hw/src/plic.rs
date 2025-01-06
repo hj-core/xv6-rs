@@ -2,7 +2,7 @@
 // RISC-V Platform-Level Interrupt Controller Specification
 // https://github.com/riscv/riscv-plic-spec/blob/master/riscv-plic.adoc
 
-use crate::wrapper::{Address, Bytes};
+use wrapper::{Address, Bytes};
 
 // The memory map address of PLIC
 // Source:
@@ -94,7 +94,7 @@ mod tests {
         claim_complete_addr, interrupt_enable_addr, interrupt_enable_bit, priority_addr,
         priority_threshold_addr, PLIC_MMIO_BASE as BASE,
     };
-    use crate::wrapper::{Address, Bytes};
+    use wrapper::{Address, Bytes};
 
     #[test]
     fn test_priority_addr() {

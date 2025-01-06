@@ -1,9 +1,9 @@
 #![cfg(target_arch = "riscv64")]
 
-use crate::kernel::interrupt_disabled;
-use crate::machine::{riscv64, MAX_CPUS};
+use crate::interrupt_disabled;
 use core::arch::asm;
 use core::mem::MaybeUninit;
+use hw::{riscv64, MAX_CPUS};
 
 // Consider using AtomicPtr if a kernel heap allocator is available.
 static mut CPUS: [MaybeUninit<Cpu>; MAX_CPUS] = [const { MaybeUninit::uninit() }; MAX_CPUS];
