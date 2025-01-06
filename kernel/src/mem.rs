@@ -1,7 +1,7 @@
 pub mod virt;
 
 use crate::lock::GuardLock;
-use crate::mem::Error::{InvalidPagePointer, NonAllocatablePage};
+use crate::mem::Error::{InvalidPagePointer, PageNotAllocatable};
 use crate::uart;
 use core::convert::Into;
 use core::ptr::null_mut;
@@ -50,7 +50,7 @@ fn free_page(start: Address) -> Result<bool, Error> {
         return Err(InvalidPagePointer);
     }
     if !is_allocatable(start) {
-        return Err(NonAllocatablePage);
+        return Err(PageNotAllocatable);
     }
     // Fill page with junk to catch dangling refs
     memset(start.into(), 0xf0, PAGE_SIZE);
@@ -98,6 +98,6 @@ fn allocate_page() -> Result<Address, Error> {
 #[derive(Debug)]
 enum Error {
     InvalidPagePointer,
-    NonAllocatablePage,
+    PageNotAllocatable,
     NoAllocatablePage,
 }
