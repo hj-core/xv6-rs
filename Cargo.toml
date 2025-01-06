@@ -2,7 +2,6 @@
 resolver = "2"
 members = ["kernel", "hw", "wrapper"]
 
-
 [profile.dev]
 panic = "abort"
 
