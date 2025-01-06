@@ -1,3 +1,4 @@
+pub mod slab;
 pub mod virt;
 
 use crate::lock::GuardLock;
