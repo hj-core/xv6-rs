@@ -28,6 +28,9 @@ This project is an attempt to implement xv6 using Rust.
 | Rust Atomics and Locks by Mara Bos                       | https://marabos.nl/atomics/                                                     |
 | Comprehensive Rust                                       | https://google.github.io/comprehensive-rust/index.html                          |
 | Writing an OS in Rust                                    | https://os.phil-opp.com/                                                        |
+| **> Linux**                                              |                                                                                 |
+| The Linux Kernel documentation                           | https://docs.kernel.org/                                                        |
+| Understanding the Linux® Virtual Memory Manager          | https://pdos.csail.mit.edu/~sbw/links/gorman_book.pdf                           |
 | **> RISC-V**                                             |                                                                                 |
 | RISC-V Technical Specifications                          | https://lf-riscv.atlassian.net/wiki/x/kYD2                                      |                                      
 | RISC-V Platform-Level Interrupt Controller Specification | https://github.com/riscv/riscv-plic-spec/blob/master/riscv-plic.adoc            |
