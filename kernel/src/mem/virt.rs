@@ -125,7 +125,7 @@ fn map_page(
     permissions: u64,
 ) -> Result<bool, mem::Error> {
     if !is_valid_page(page_pa.into()) || !is_valid_page(page_va.into()) {
-        return Err(mem::InvalidPagePointer);
+        return Err(mem::InvalidPageStart);
     }
 
     let root_table = unsafe { root_table.as_mut().unwrap() };
