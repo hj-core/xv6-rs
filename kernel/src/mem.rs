@@ -15,7 +15,7 @@ static FREE_PAGES: GuardLock<Page> = GuardLock::new(Page {
     next: AtomicPtr::new(null_mut()),
 });
 
-const DRAM_END_EXCLUSIVE: Address = Address(DRAM_START.0 + (DRAM_SIZE.0 << 20) as u64);
+const DRAM_END_EXCLUSIVE: Address = Address(DRAM_START.0 + DRAM_SIZE.0 as u64);
 const PAGE_SIZE: Bytes = Bytes(4096);
 
 struct Page {

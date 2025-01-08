@@ -4,8 +4,8 @@ pub mod plic;
 pub mod riscv64;
 pub mod uart;
 
-use wrapper::{Address, MiB};
+use wrapper::{Address, Bytes};
 
 pub const MAX_CPUS: usize = 8;
 pub const DRAM_START: Address = Address(0x8000_0000);
-pub const DRAM_SIZE: MiB = MiB(128);
+pub const DRAM_SIZE: Bytes = Bytes(128 << 20);
