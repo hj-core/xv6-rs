@@ -139,7 +139,7 @@ fn map_page(
     let leaf_table: &mut PageTable = unsafe { leaf_table.as_mut().unwrap() };
 
     let mut leaf_pte = PTE(0);
-    leaf_pte.set_ppns(page_pa);
+    leaf_pte.set_ppn(page_pa);
     leaf_pte.set_permissions(permissions);
     leaf_pte.mark_valid();
     leaf_table.0[page_va.vpn0() as usize] = leaf_pte;
@@ -154,7 +154,7 @@ pub fn configure_cpu() {
 
 #[cfg(target_arch = "riscv64")]
 fn enable_paging(root_table: PhysicalAddress) {
-    riscv64::write_satp(riscv64::SATP_MODE_SV39 | root_table.ppns());
+    riscv64::write_satp(riscv64::SATP_MODE_SV39 | root_table.ppn());
 }
 
 struct PageTable([PTE; TABLE_SIZE]);
@@ -175,7 +175,7 @@ impl PageTable {
         let new_table = PageTable::new()?;
         let mut pte = PTE(0);
         pte.mark_valid();
-        pte.set_ppns(PhysicalAddress(new_table as u64));
+        pte.set_ppn(PhysicalAddress(new_table as u64));
 
         self.0[index] = pte;
         Ok(&mut self.0[index])
@@ -196,7 +196,7 @@ impl PTE {
     const BIT_D: u64 = 1 << 7; // Dirty. Used In left PET.
     const BIT_RSW: u64 = 0b11 << 8; // Reserved for supervisor software.
     const MASK_PERMISSIONS: u64 = 0b11110;
-    const MASK_PPNS: u64 = 0xfff_ffff_ffff << 10;
+    const MASK_PPN: u64 = 0xfff_ffff_ffff << 10;
 
     fn is_valid(&self) -> bool {
         self.0 & Self::BIT_V != 0
@@ -211,13 +211,13 @@ impl PTE {
         self.0 |= permissions & Self::MASK_PERMISSIONS;
     }
 
-    fn set_ppns(&mut self, pa: PhysicalAddress) {
-        self.0 &= !Self::MASK_PPNS;
-        self.0 |= pa.ppns() << 10;
+    fn set_ppn(&mut self, pa: PhysicalAddress) {
+        self.0 &= !Self::MASK_PPN;
+        self.0 |= pa.ppn() << 10;
     }
 
     fn get_table_start(&self) -> Address {
-        Address((self.0 & Self::MASK_PPNS) << 2)
+        Address((self.0 & Self::MASK_PPN) << 2)
     }
 }
 
@@ -228,11 +228,11 @@ impl PhysicalAddress {
     const MASK_PPN0: u64 = 0x1ff << 12;
     const MASK_PPN1: u64 = 0x1ff << 21;
     const MASK_PPN2: u64 = 0x3ff_ffff << 30;
-    const MASK_PPNS: u64 = 0xfff_ffff_ffff << 12;
+    const MASK_PPN: u64 = 0xfff_ffff_ffff << 12;
     const MASK_OFFSET: u64 = 0xfff;
 
-    fn ppns(&self) -> u64 {
-        (self.0 & Self::MASK_PPNS) >> 12
+    fn ppn(&self) -> u64 {
+        (self.0 & Self::MASK_PPN) >> 12
     }
 
     fn ppn0(&self) -> u64 {
@@ -413,7 +413,7 @@ mod pte_tests {
     }
 
     fn assert_set_ppn(expected: PTE, mut pte: PTE, pa: PhysicalAddress) {
-        pte.set_ppns(pa);
+        pte.set_ppn(pa);
         assert_eq!(expected, pte, "{pte:?}");
     }
 
@@ -433,16 +433,16 @@ mod physical_address_tests {
     use super::PhysicalAddress as PA;
 
     #[test]
-    fn test_ppns() {
-        assert_ppns(0xa88e0658617, PA(0x76a88e0658617ceb));
-        assert_ppns(0x99a852786a1, PA(0x0d99a852786a1154));
-        assert_ppns(0xaaf67234ede, PA(0xa7aaf67234ede1a7));
-        assert_ppns(0x87a89912421, PA(0x1687a89912421da8));
-        assert_ppns(0xbab73216ece, PA(0xc5bab73216ece2d3));
+    fn test_ppn() {
+        assert_ppn(0xa88e0658617, PA(0x76a88e0658617ceb));
+        assert_ppn(0x99a852786a1, PA(0x0d99a852786a1154));
+        assert_ppn(0xaaf67234ede, PA(0xa7aaf67234ede1a7));
+        assert_ppn(0x87a89912421, PA(0x1687a89912421da8));
+        assert_ppn(0xbab73216ece, PA(0xc5bab73216ece2d3));
     }
 
-    fn assert_ppns(expected: u64, pa: PA) {
-        assert_eq!(expected, pa.ppns(), "{pa:?}");
+    fn assert_ppn(expected: u64, pa: PA) {
+        assert_eq!(expected, pa.ppn(), "{pa:?}");
     }
 
     #[test]
