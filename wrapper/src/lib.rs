@@ -20,15 +20,6 @@ impl Mul<usize> for Bytes {
     }
 }
 
-impl From<MiB> for Bytes {
-    fn from(value: MiB) -> Self {
-        Self(value.0 << 20)
-    }
-}
-
-#[derive(Copy, Clone)]
-pub struct MiB(pub usize);
-
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct Address(pub u64);
 
