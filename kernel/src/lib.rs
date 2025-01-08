@@ -2,6 +2,7 @@
 #![no_std]
 #![allow(dead_code)]
 
+mod dsa;
 mod lock;
 mod mem;
 mod plic;
