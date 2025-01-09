@@ -12,9 +12,9 @@ This project is an attempt to implement xv6 using Rust.
 
 | Description                                              | Link                                                                            |
 |----------------------------------------------------------|---------------------------------------------------------------------------------| 
-| **> xv6**                                                |                                                                                 |
-| xv6 Repository                                           | https://github.com/mit-pdos/xv6-riscv                                           |
-| xv6 Book                                                 | https://pdos.csail.mit.edu/6.828/2024/xv6/book-riscv-rev4.pdf                   |                  
+| **> xv6-riscv**                                          |                                                                                 |
+| xv6-riscv Repository                                     | https://github.com/mit-pdos/xv6-riscv                                           |
+| xv6-riscv Book                                           | https://pdos.csail.mit.edu/6.828/2024/xv6/book-riscv-rev4.pdf                   |                  
 | 6.1810 / Fall 2024                                       | https://pdos.csail.mit.edu/6.828/2024/schedule.html                             |
 | 6.S081 / Fall 2021                                       | https://pdos.csail.mit.edu/6.828/2021/schedule.html                             |
 | **> Rust**                                               |                                                                                 |
@@ -29,6 +29,7 @@ This project is an attempt to implement xv6 using Rust.
 | Comprehensive Rust                                       | https://google.github.io/comprehensive-rust/index.html                          |
 | Writing an OS in Rust                                    | https://os.phil-opp.com/                                                        |
 | **> Linux**                                              |                                                                                 |
+| linux Repository                                         | https://github.com/torvalds/linux                                               |
 | The Linux Kernel documentation                           | https://docs.kernel.org/                                                        |
 | Understanding the Linux® Virtual Memory Manager          | https://pdos.csail.mit.edu/~sbw/links/gorman_book.pdf                           |
 | **> RISC-V**                                             |                                                                                 |
