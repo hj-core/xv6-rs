@@ -85,9 +85,9 @@ fn interrupt_disabled() -> bool {
     riscv64::read_sstatus() & riscv64::SSTATUS_SIE == 0
 }
 
-/// This trait indicates that a type has a hole at its beginning.  
-/// This hole can be linked to other holes
-/// or used as an anchor point to get the object's starting address.
+/// This trait indicates that a type has a hole (i.e., a [ListNode]) as its first field.  
+/// The hole may be linked to other holes.
+/// Besides, it can act as an anchor to get the object's starting address.
 trait HasHole {
     fn hole(&mut self) -> &mut ListNode;
 }

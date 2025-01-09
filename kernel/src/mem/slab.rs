@@ -29,7 +29,7 @@ impl HasHole for Cache {
 
 #[repr(C)]
 struct Slab {
-    /// The hole's [prev] is linked to the [hole] of the [Cache] this [Slab] belongs to,
+    /// The hole's [prev] is linked to the [hole] of the [Cache] owning this [Slab],
     /// and the hole's [next] is linked to the hole of the next [Slab] in the [Slab] list.
     hole: ListNode,
     /// Each bit indicates whether an object is used;
@@ -37,8 +37,8 @@ struct Slab {
     /// bit 0 of the second u64 is object 64, bit 1 is object 65, and so on.
     used_bitmap: [u64; SLAB_USED_BITMAP_SIZE],
     used_count: usize,
-    total_objects: usize,
     object0: Address,
+    total_objects: usize,
 }
 
 impl HasHole for Slab {
