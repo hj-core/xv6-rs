@@ -10,7 +10,7 @@
     <cargoProject FILE="$PROJECT_DIR$/Cargo.toml" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="79d91817-cab6-48db-8c64-627b37812669" name="Changes" comment="Update useful links" />
+    <list default="true" id="79d91817-cab6-48db-8c64-627b37812669" name="Changes" comment="sss" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -50,7 +50,7 @@
     </excluded-from-favorite>
     <option name="RECENT_BRANCH_BY_REPOSITORY">
       <map>
-        <entry key="$PROJECT_DIR$" value="master" />
+        <entry key="$PROJECT_DIR$" value="__slab__" />
       </map>
     </option>
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
@@ -63,7 +63,7 @@
   }
 }</component>
   <component name="GitRewordedCommitMessages">
-    <option name="onto" value="4782e184a9db58754bee0894825a908eaeb340b8" />
+    <option name="onto" value="3c6f983fe9f71d87d15421262d0ac2f76f3a18a9" />
   </component>
   <component name="GithubPullRequestsUISettings">{
   &quot;selectedUrlAndAccountId&quot;: {
@@ -81,6 +81,9 @@
   </component>
   <component name="OptimizeOnSaveOptions">
     <option name="myRunOnSave" value="true" />
+  </component>
+  <component name="ProblemsViewState">
+    <option name="selectedTabId" value="CurrentFile" />
   </component>
   <component name="ProjectColorInfo">{
   &quot;associatedIndex&quot;: 2
@@ -242,6 +245,10 @@
       <workItem from="1736061837397" duration="2706000" />
       <workItem from="1736077030854" duration="1734000" />
       <workItem from="1736167954348" duration="3143000" />
+      <workItem from="1736338994996" duration="9628000" />
+      <workItem from="1736409927854" duration="638000" />
+      <workItem from="1736415849870" duration="8450000" />
+      <workItem from="1736428674563" duration="2650000" />
     </task>
     <task id="LOCAL-00001" summary="Config M-mode: disable paging">
       <option name="closed" value="true" />
@@ -419,7 +426,79 @@
       <option name="project" value="LOCAL" />
       <updated>1736160682411</updated>
     </task>
-    <option name="localTasksCounter" value="23" />
+    <task id="LOCAL-00023" summary="Add const WORD_SIZE">
+      <option name="closed" value="true" />
+      <created>1736342050152</created>
+      <option name="number" value="00023" />
+      <option name="presentableId" value="LOCAL-00023" />
+      <option name="project" value="LOCAL" />
+      <updated>1736342050152</updated>
+    </task>
+    <task id="LOCAL-00024" summary="Rename ListHead to ListNode">
+      <option name="closed" value="true" />
+      <created>1736346713498</created>
+      <option name="number" value="00024" />
+      <option name="presentableId" value="LOCAL-00024" />
+      <option name="project" value="LOCAL" />
+      <updated>1736346713498</updated>
+    </task>
+    <task id="LOCAL-00025" summary="Rename ListHead to ListNode">
+      <option name="closed" value="true" />
+      <created>1736347954112</created>
+      <option name="number" value="00025" />
+      <option name="presentableId" value="LOCAL-00025" />
+      <option name="project" value="LOCAL" />
+      <updated>1736347954112</updated>
+    </task>
+    <task id="LOCAL-00026" summary="amend ppns">
+      <option name="closed" value="true" />
+      <created>1736348120478</created>
+      <option name="number" value="00026" />
+      <option name="presentableId" value="LOCAL-00026" />
+      <option name="project" value="LOCAL" />
+      <updated>1736348120478</updated>
+    </task>
+    <task id="LOCAL-00027" summary="Implement new for ListNode">
+      <option name="closed" value="true" />
+      <created>1736419423542</created>
+      <option name="number" value="00027" />
+      <option name="presentableId" value="LOCAL-00027" />
+      <option name="project" value="LOCAL" />
+      <updated>1736419423542</updated>
+    </task>
+    <task id="LOCAL-00028" summary="Add struct Cache and Slab">
+      <option name="closed" value="true" />
+      <created>1736419464389</created>
+      <option name="number" value="00028" />
+      <option name="presentableId" value="LOCAL-00028" />
+      <option name="project" value="LOCAL" />
+      <updated>1736419464389</updated>
+    </task>
+    <task id="LOCAL-00029" summary="Refactor Page to use ListNode">
+      <option name="closed" value="true" />
+      <created>1736421148169</created>
+      <option name="number" value="00029" />
+      <option name="presentableId" value="LOCAL-00029" />
+      <option name="project" value="LOCAL" />
+      <updated>1736421148169</updated>
+    </task>
+    <task id="LOCAL-00030" summary="sss">
+      <option name="closed" value="true" />
+      <created>1736421716335</created>
+      <option name="number" value="00030" />
+      <option name="presentableId" value="LOCAL-00030" />
+      <option name="project" value="LOCAL" />
+      <updated>1736421716335</updated>
+    </task>
+    <task id="LOCAL-00031" summary="sss">
+      <option name="closed" value="true" />
+      <created>1736421741722</created>
+      <option name="number" value="00031" />
+      <option name="presentableId" value="LOCAL-00031" />
+      <option name="project" value="LOCAL" />
+      <updated>1736421741722</updated>
+    </task>
+    <option name="localTasksCounter" value="32" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -469,7 +548,16 @@
     <MESSAGE value="Save point" />
     <MESSAGE value="Set up CPU table" />
     <MESSAGE value="Update useful links" />
-    <option name="LAST_COMMIT_MESSAGE" value="Update useful links" />
+    <MESSAGE value="Add const WORD_SIZE" />
+    <MESSAGE value="Introduce ListNode" />
+    <MESSAGE value="Introduce ListNode" />
+    <MESSAGE value="Rename ListHead to ListNode" />
+    <MESSAGE value="amend ppns" />
+    <MESSAGE value="Implement new for ListNode" />
+    <MESSAGE value="Add struct Cache and Slab" />
+    <MESSAGE value="Refactor Page to use ListNode" />
+    <MESSAGE value="sss" />
+    <option name="LAST_COMMIT_MESSAGE" value="sss" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />
