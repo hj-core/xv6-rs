@@ -11,6 +11,7 @@ mod sched;
 mod trap;
 mod uart;
 
+use crate::dsa::ListNode;
 use core::sync::atomic::{AtomicBool, Ordering};
 #[cfg(target_arch = "riscv64")]
 use {
@@ -82,4 +83,11 @@ fn interrupt_enabled() -> bool {
 #[cfg(target_arch = "riscv64")]
 fn interrupt_disabled() -> bool {
     riscv64::read_sstatus() & riscv64::SSTATUS_SIE == 0
+}
+
+/// This trait indicates that a type has a hole at its beginning.  
+/// This hole can be linked to other holes
+/// or used as an anchor point to get the object's starting address.
+trait HasHole {
+    fn hole(&mut self) -> &mut ListNode;
 }
