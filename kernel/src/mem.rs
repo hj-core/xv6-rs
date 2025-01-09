@@ -1,26 +1,23 @@
 pub mod slab;
 pub mod virt;
 
+use crate::dsa::ListNode;
 use crate::lock::GuardLock;
 use crate::mem::Error::{InvalidPageStart, PageNotAllocatable};
-use crate::uart;
+use crate::{uart, HasHole};
 use core::convert::Into;
 use core::ptr::null_mut;
-use core::sync::atomic::AtomicPtr;
-use core::sync::atomic::Ordering::{Relaxed, Release};
+use core::sync::atomic::Ordering::Relaxed;
 use hw::{DRAM_SIZE, DRAM_START};
 use wrapper::{Address, Bytes};
 
+/// The collection of current free pages that their holes are circularly linked.
 static FREE_PAGES: GuardLock<Page> = GuardLock::new(Page {
-    next: AtomicPtr::new(null_mut()),
+    hole: ListNode::new(),
 });
 
 const DRAM_END_EXCLUSIVE: Address = Address(DRAM_START.0 + DRAM_SIZE.0 as u64);
 const PAGE_SIZE: Bytes = Bytes(4096);
-
-struct Page {
-    pub next: AtomicPtr<Page>,
-}
 
 pub fn initialize() {
     uart::busy_print_str("-> Initializing physical memories... ");
@@ -29,12 +26,20 @@ pub fn initialize() {
 }
 
 fn initialize_free_pages() {
+    // Link the head circularly
+    let mut head_page = FREE_PAGES.lock();
+    let head = head_page.hole();
+    let head_ptr: *mut ListNode = head;
+    head.prev.store(head_ptr, Relaxed);
+    head.next.store(head_ptr, Relaxed);
+    drop(head_page); // Release the lock
+
     let alloc_start = allocatable_start();
     let align_offset = (alloc_start.0 as *const u8).align_offset(PAGE_SIZE.0);
 
-    let mut page_start = alloc_start + Bytes(align_offset);
-    while free_page(page_start).is_ok() {
-        page_start = page_start + PAGE_SIZE;
+    let mut start = alloc_start + Bytes(align_offset);
+    while free_page(start).is_ok() {
+        start = start + PAGE_SIZE;
     }
 }
 
@@ -56,14 +61,21 @@ fn free_page(start: Address) -> Result<bool, Error> {
     // Fill page with junk to catch dangling refs
     memset(start.into(), 0xf0, PAGE_SIZE);
 
-    let head = FREE_PAGES.lock();
-    let old_next = head.next.load(Relaxed);
-    let new_next = unsafe {
-        let page: *mut Page = start.into();
-        page.as_mut().unwrap().next.store(old_next, Relaxed);
-        page
+    let mut head_page = FREE_PAGES.lock();
+    let head = head_page.hole();
+    let next = unsafe {
+        let ptr = head.next.load(Relaxed);
+        ptr.as_mut().unwrap()
     };
-    head.next.store(new_next, Relaxed);
+    let new = unsafe {
+        let ptr: *mut ListNode = start.into();
+        ptr.as_mut().unwrap()
+    };
+
+    new.next.store(next, Relaxed);
+    new.prev.store(head, Relaxed);
+    next.prev.store(new, Relaxed);
+    head.next.store(new, Relaxed);
     Ok(true)
 }
 
@@ -83,17 +95,37 @@ fn memset(start: Address, value: u8, size: Bytes) {
 }
 
 fn allocate_page() -> Result<Address, Error> {
-    let head = FREE_PAGES.lock();
-    if head.next.load(Relaxed).is_null() {
+    let mut head_page = FREE_PAGES.lock();
+    let head = head_page.hole();
+    if head.next.load(Relaxed) == head {
         return Err(Error::NoAllocatablePage);
     }
 
-    let old_next = head.next.load(Relaxed);
-    let old_page = unsafe { old_next.as_mut().unwrap() };
-    let new_next = old_page.next.load(Relaxed);
-    old_page.next.store(null_mut(), Relaxed);
-    head.next.store(new_next, Release);
-    Ok(old_next.into())
+    let result = unsafe {
+        let ptr = head.next.load(Relaxed);
+        ptr.as_mut().unwrap()
+    };
+    let next_next = unsafe {
+        let ptr = result.next.load(Relaxed);
+        ptr.as_mut().unwrap()
+    };
+    head.next.store(next_next, Relaxed);
+    next_next.prev.store(head, Relaxed);
+
+    result.prev.store(null_mut(), Relaxed);
+    result.next.store(null_mut(), Relaxed);
+    Ok((result as *mut ListNode).into())
+}
+
+#[repr(C)]
+struct Page {
+    hole: ListNode,
+}
+
+impl HasHole for Page {
+    fn hole(&mut self) -> &mut ListNode {
+        &mut self.hole
+    }
 }
 
 #[derive(Debug)]
