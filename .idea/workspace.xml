@@ -10,7 +10,10 @@
     <cargoProject FILE="$PROJECT_DIR$/Cargo.toml" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="79d91817-cab6-48db-8c64-627b37812669" name="Changes" comment="sss" />
+    <list default="true" id="79d91817-cab6-48db-8c64-627b37812669" name="Changes" comment="Revise fields of Cache&#10;&#10;Add lock to Cache.&#10;Increase the name length to 16.">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/kernel/src/mem/slab.rs" beforeDir="false" afterPath="$PROJECT_DIR$/kernel/src/mem/slab.rs" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -50,7 +53,7 @@
     </excluded-from-favorite>
     <option name="RECENT_BRANCH_BY_REPOSITORY">
       <map>
-        <entry key="$PROJECT_DIR$" value="__slab__" />
+        <entry key="$PROJECT_DIR$" value="master" />
       </map>
     </option>
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
@@ -63,7 +66,7 @@
   }
 }</component>
   <component name="GitRewordedCommitMessages">
-    <option name="onto" value="3c6f983fe9f71d87d15421262d0ac2f76f3a18a9" />
+    <option name="onto" value="989aab31ee00f21cf76f8dd7c6559acc44cec856" />
   </component>
   <component name="GithubPullRequestsUISettings">{
   &quot;selectedUrlAndAccountId&quot;: {
@@ -249,6 +252,9 @@
       <workItem from="1736409927854" duration="638000" />
       <workItem from="1736415849870" duration="8450000" />
       <workItem from="1736428674563" duration="2650000" />
+      <workItem from="1736435150145" duration="86000" />
+      <workItem from="1736499345914" duration="4632000" />
+      <workItem from="1736513955435" duration="306000" />
     </task>
     <task id="LOCAL-00001" summary="Config M-mode: disable paging">
       <option name="closed" value="true" />
@@ -498,7 +504,39 @@
       <option name="project" value="LOCAL" />
       <updated>1736421741722</updated>
     </task>
-    <option name="localTasksCounter" value="32" />
+    <task id="LOCAL-00032" summary="Add struct Cache and Slab">
+      <option name="closed" value="true" />
+      <created>1736433297275</created>
+      <option name="number" value="00032" />
+      <option name="presentableId" value="LOCAL-00032" />
+      <option name="project" value="LOCAL" />
+      <updated>1736433297275</updated>
+    </task>
+    <task id="LOCAL-00033" summary="XYZ">
+      <option name="closed" value="true" />
+      <created>1736435174725</created>
+      <option name="number" value="00033" />
+      <option name="presentableId" value="LOCAL-00033" />
+      <option name="project" value="LOCAL" />
+      <updated>1736435174725</updated>
+    </task>
+    <task id="LOCAL-00034" summary="General cleanup">
+      <option name="closed" value="true" />
+      <created>1736502637887</created>
+      <option name="number" value="00034" />
+      <option name="presentableId" value="LOCAL-00034" />
+      <option name="project" value="LOCAL" />
+      <updated>1736502637887</updated>
+    </task>
+    <task id="LOCAL-00035" summary="Revise fields of Cache&#10;&#10;Add lock to Cache.&#10;Increase the name length to 16.">
+      <option name="closed" value="true" />
+      <created>1736515499432</created>
+      <option name="number" value="00035" />
+      <option name="presentableId" value="LOCAL-00035" />
+      <option name="project" value="LOCAL" />
+      <updated>1736515499432</updated>
+    </task>
+    <option name="localTasksCounter" value="36" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -534,13 +572,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="Add README.md" />
-    <MESSAGE value="Config M-mode: disable paging" />
-    <MESSAGE value="Config M-mode: set up timer interrupts" />
-    <MESSAGE value="Improve function name" />
-    <MESSAGE value="Set up initial free pages" />
-    <MESSAGE value="Introduce semantic wrappers, e.g. MiB, Address" />
-    <MESSAGE value="Introduce wrappers" />
     <MESSAGE value="Implement mod/cpu" />
     <MESSAGE value="Implement fun/allocate_page" />
     <MESSAGE value="Configure page table for kernel" />
@@ -554,10 +585,19 @@
     <MESSAGE value="Rename ListHead to ListNode" />
     <MESSAGE value="amend ppns" />
     <MESSAGE value="Implement new for ListNode" />
-    <MESSAGE value="Add struct Cache and Slab" />
     <MESSAGE value="Refactor Page to use ListNode" />
+    <MESSAGE value="Add struct Cache and Slab" />
+    <MESSAGE value="General i" />
+    <MESSAGE value="XYZ" />
+    <MESSAGE value="General cleanup" />
+    <MESSAGE value="Rename and add fields of Slab&#10;&#10;Each slot contains an object, and the size of the slot can be larger than the owning object." />
+    <MESSAGE value="Rename and add fields of Slab" />
+    <MESSAGE value="Rename and add fields of Slab&#10;&#10;Each slot contains one object, and the size of a slot can be larger than the object it contains." />
+    <MESSAGE value="Rename and add fields of Slab&#10;&#10;Each slot contains an object, and the size of the slot can be larger than the owning object." />
     <MESSAGE value="sss" />
-    <option name="LAST_COMMIT_MESSAGE" value="sss" />
+    <MESSAGE value="Revise fields of Cache&#10;&#10;Add lock to Cache." />
+    <MESSAGE value="Revise fields of Cache&#10;&#10;Add lock to Cache.&#10;Increase the name length to 16." />
+    <option name="LAST_COMMIT_MESSAGE" value="Revise fields of Cache&#10;&#10;Add lock to Cache.&#10;Increase the name length to 16." />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />
