@@ -98,7 +98,7 @@ fn allocate_page() -> Result<Address, Error> {
     let mut head_page = FREE_PAGES.lock();
     let head = head_page.hole();
     if head.next.load(Relaxed) == head {
-        return Err(Error::NoAllocatablePage);
+        return Err(Error::OutOfMemory);
     }
 
     let result = unsafe {
@@ -132,5 +132,5 @@ impl HasHole for Page {
 enum Error {
     InvalidPageStart,
     PageNotAllocatable,
-    NoAllocatablePage,
+    OutOfMemory,
 }
