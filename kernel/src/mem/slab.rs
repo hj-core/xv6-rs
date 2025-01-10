@@ -3,22 +3,26 @@
 // https://pdos.csail.mit.edu/~sbw/links/gorman_book.pdf
 
 use crate::dsa::ListNode;
+use crate::lock::Spinlock;
 use crate::HasHole;
 use wrapper::{Address, Bytes};
 
-const CACHE_NAME_LENGTH: usize = 8;
+const CACHE_NAME_LENGTH: usize = 16;
 const SLAB_USED_BITMAP_SIZE: usize = 4;
-const MAX_OBJECTS_PER_SLAB: usize = SLAB_USED_BITMAP_SIZE * 64;
+const MAX_SLOTS_PER_SLAB: usize = SLAB_USED_BITMAP_SIZE * 64;
 
 #[repr(C)]
 struct Cache {
-    /// The hole and other holes in the [Cache] chain are circularly linked.
+    /// [Cache] holes within the same [Cache] chain are circularly linked.
     hole: ListNode,
+    /// Protect [Cache] from concurrent access.
+    lock: Spinlock,
+    name: [char; CACHE_NAME_LENGTH],
+    slab_size: Bytes,
+    /// slabs_* is the sentinel head of the circularly linked [Slab] holes.
     slabs_full: ListNode,
     slabs_partial: ListNode,
     slabs_empty: ListNode,
-    slab_size: Bytes,
-    name: [char; CACHE_NAME_LENGTH],
 }
 
 impl HasHole for Cache {
@@ -29,16 +33,16 @@ impl HasHole for Cache {
 
 #[repr(C)]
 struct Slab {
-    /// The hole's [prev] is linked to the [hole] of the [Cache] owning this [Slab],
-    /// and the hole's [next] is linked to the hole of the next [Slab] in the [Slab] list.
+    /// [Slab] holes within the same [Cache].slabs_* are circularly linked.
     hole: ListNode,
-    /// Each bit indicates whether an object is used;
-    /// bit 0 of the first u64 is object 0, bit 1 is object 1,
-    /// bit 0 of the second u64 is object 64, bit 1 is object 65, and so on.
+    /// Each bit represents slot usage (0: unused, 1: used).  
+    /// The bits are packed: the first u64 represents slots 0-63,
+    /// the second u64 represents slots 64-127, and so on.
     used_bitmap: [u64; SLAB_USED_BITMAP_SIZE],
     used_count: usize,
-    object0: Address,
-    total_objects: usize,
+    slot0: Address,
+    slot_size: Bytes,
+    total_slots: usize,
 }
 
 impl HasHole for Slab {
