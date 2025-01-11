@@ -62,6 +62,7 @@ impl HasHole for Cache {
 }
 
 #[repr(C)]
+#[derive(Debug)]
 struct Slab {
     /// [Slab] holes within the same [Cache].slabs_* are circularly linked.
     hole: ListNode,
