@@ -2,7 +2,7 @@
 
 use core::ops::{Add, Mul};
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct Bytes(pub usize);
 
 impl Add<Bytes> for Bytes {
