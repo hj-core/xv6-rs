@@ -10,7 +10,7 @@
     <cargoProject FILE="$PROJECT_DIR$/Cargo.toml" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="79d91817-cab6-48db-8c64-627b37812669" name="Changes" comment="Revise fields of Cache&#10;&#10;Add lock to Cache.&#10;Increase the name length to 16.">
+    <list default="true" id="79d91817-cab6-48db-8c64-627b37812669" name="Changes" comment="Implement Cache::grow">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/kernel/src/mem/slab.rs" beforeDir="false" afterPath="$PROJECT_DIR$/kernel/src/mem/slab.rs" afterDir="false" />
     </list>
@@ -104,7 +104,7 @@
     &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.rust.reset.selective.auto.import&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;master&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;____slab&quot;,
     &quot;ignore.virus.scanning.warn.message&quot;: &quot;true&quot;,
     &quot;last_opened_file_path&quot;: &quot;//wsl$/Debian/home/hj-core/RustProjects/xv6-rs/hw/src&quot;,
     &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
@@ -255,6 +255,8 @@
       <workItem from="1736435150145" duration="86000" />
       <workItem from="1736499345914" duration="4632000" />
       <workItem from="1736513955435" duration="306000" />
+      <workItem from="1736561988960" duration="10000" />
+      <workItem from="1736563774047" duration="450000" />
     </task>
     <task id="LOCAL-00001" summary="Config M-mode: disable paging">
       <option name="closed" value="true" />
@@ -565,19 +567,7 @@
       <map>
         <entry key="MAIN">
           <value>
-            <State>
-              <option name="FILTERS">
-                <map>
-                  <entry key="branch">
-                    <value>
-                      <list>
-                        <option value="master" />
-                      </list>
-                    </value>
-                  </entry>
-                </map>
-              </option>
-            </State>
+            <State />
           </value>
         </entry>
       </map>

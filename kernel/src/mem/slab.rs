@@ -83,6 +83,10 @@ impl Slab {
         // Offset from the first slot's address to this slab's address.
         let slot0_offset = Bytes(size_of::<Self>());
         let slot_size = Bytes(size_of::<T>());
+        assert!(
+            slot0_offset.0 + slot_size.0 <= cache.slab_size.0,
+            "Slab size is too small."
+        );
 
         self.unlink_hole();
         self.reset_used_bitmap_and_count();
