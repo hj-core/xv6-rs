@@ -6,6 +6,7 @@ use crate::dsa::ListNode;
 use crate::lock::Spinlock;
 use crate::mem::slab::Error::AllocateFromFullSlab;
 use crate::HasHole;
+use core::ptr;
 use core::ptr::null_mut;
 use core::sync::atomic::Ordering::Relaxed;
 use wrapper::{Address, Bytes};
@@ -82,17 +83,9 @@ impl Slab {
     where
         T: Default + HasHole,
     {
-        // Offset from the first slot's address to this slab's address.
-        let slot0_offset = Bytes(size_of::<Self>());
-        let slot_size = Bytes(size_of::<T>());
-        assert!(
-            slot0_offset.0 + slot_size.0 <= slab_size.0,
-            "Slab size is too small."
-        );
-
         self.unlink_hole();
         self.reset_used_bitmap_and_count();
-        self.set_slot0_and_total_slots(slot0_offset, slab_size, slot_size);
+        self.set_slot0_size_and_total::<T>(slab_size);
     }
 
     fn unlink_hole(&mut self) {
@@ -107,17 +100,25 @@ impl Slab {
         self.used_count = 0;
     }
 
-    fn set_slot0_and_total_slots(
-        &mut self,
-        slot0_offset: Bytes,
-        slab_size: Bytes,
-        slot_size: Bytes,
-    ) {
-        let base_addr = Address::from(self as *mut Slab);
-        self.slot0 = base_addr + slot0_offset;
+    fn set_slot0_size_and_total<T>(&mut self, slab_size: Bytes) {
+        let slot0_offset = self.compute_slot0_offset::<T>();
+        self.slot0 = Address::from(ptr::from_ref(self)) + slot0_offset;
+        self.slot_size = Bytes(size_of::<T>());
 
-        let slot_space = Bytes(slab_size.0 - slot0_offset.0);
-        self.total_slots = (slot_space.0 / slot_size.0).max(MAX_SLOTS_PER_SLAB);
+        assert!(
+            slot0_offset.0 + self.slot_size.0 <= slab_size.0,
+            "Slab size is too small."
+        );
+        self.total_slots = (slab_size.0 - slot0_offset.0) % self.slot_size.0
+    }
+
+    /// Offset to slot0 from the address of [Slab].
+    fn compute_slot0_offset<T>(&self) -> Bytes {
+        let base: *const u8 = ptr::from_ref(self).cast();
+        let header_size = size_of::<Slab>();
+        let header_end = unsafe { base.byte_add(header_size) };
+        let padding = header_end.align_offset(align_of::<T>());
+        Bytes(header_size + padding)
     }
 
     /// Returns a reference to the object if allocation succeeds;
