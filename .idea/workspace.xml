@@ -10,10 +10,7 @@
     <cargoProject FILE="$PROJECT_DIR$/Cargo.toml" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="79d91817-cab6-48db-8c64-627b37812669" name="Changes" comment="Implement Cache::grow">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/kernel/src/mem/slab.rs" beforeDir="false" afterPath="$PROJECT_DIR$/kernel/src/mem/slab.rs" afterDir="false" />
-    </list>
+    <list default="true" id="79d91817-cab6-48db-8c64-627b37812669" name="Changes" comment="Implement Cache::grow" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -256,7 +253,7 @@
       <workItem from="1736499345914" duration="4632000" />
       <workItem from="1736513955435" duration="306000" />
       <workItem from="1736561988960" duration="10000" />
-      <workItem from="1736563774047" duration="450000" />
+      <workItem from="1736563774047" duration="805000" />
     </task>
     <task id="LOCAL-00001" summary="Config M-mode: disable paging">
       <option name="closed" value="true" />

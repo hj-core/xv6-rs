@@ -37,7 +37,7 @@ impl Cache {
             let ptr: *mut Slab = addr0.into();
             ptr.as_mut().unwrap()
         };
-        slab.initialize::<T>(self);
+        slab.initialize::<T>(self.slab_size);
 
         let head = &mut self.slabs_empty;
         let next = unsafe { head.next.load(Relaxed).as_mut().unwrap() };
@@ -76,7 +76,7 @@ struct Slab {
 }
 
 impl Slab {
-    fn initialize<T>(&mut self, cache: &mut Cache)
+    fn initialize<T>(&mut self, slab_size: Bytes)
     where
         T: Default + HasHole,
     {
@@ -84,14 +84,13 @@ impl Slab {
         let slot0_offset = Bytes(size_of::<Self>());
         let slot_size = Bytes(size_of::<T>());
         assert!(
-            slot0_offset.0 + slot_size.0 <= cache.slab_size.0,
+            slot0_offset.0 + slot_size.0 <= slab_size.0,
             "Slab size is too small."
         );
 
         self.unlink_hole();
         self.reset_used_bitmap_and_count();
-        self.set_slot0_and_total_slots(slot0_offset, cache.slab_size, slot_size);
-        self.install_objects::<T>(cache.hole(), slot_size);
+        self.set_slot0_and_total_slots(slot0_offset, slab_size, slot_size);
     }
 
     fn unlink_hole(&mut self) {
@@ -117,25 +116,6 @@ impl Slab {
 
         let slot_space = Bytes(slab_size.0 - slot0_offset.0);
         self.total_slots = (slot_space.0 / slot_size.0).max(MAX_SLOTS_PER_SLAB);
-    }
-
-    /// For each slot, install the default value of struct [T];
-    /// Then, link its hole.[prev] to the [Cache] and its hole.[next] to this [Slab].
-    fn install_objects<T>(&mut self, cache_hole: &mut ListNode, slot_size: Bytes)
-    where
-        T: Default + HasHole,
-    {
-        let mut start = self.slot0;
-        for _ in 0..self.total_slots {
-            let mut object = T::default();
-            object.hole().prev.store(cache_hole, Relaxed);
-            object.hole().next.store(self.hole(), Relaxed);
-
-            unsafe {
-                (start.0 as *mut T).write(object);
-            }
-            start = start + slot_size;
-        }
     }
 }
 
