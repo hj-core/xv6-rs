@@ -10,7 +10,9 @@
     <cargoProject FILE="$PROJECT_DIR$/Cargo.toml" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="79d91817-cab6-48db-8c64-627b37812669" name="Changes" comment="Implement Cache::grow" />
+    <list default="true" id="79d91817-cab6-48db-8c64-627b37812669" name="Changes" comment="Implement Cache::grow">
+      <change beforePath="$PROJECT_DIR$/kernel/src/mem/slab.rs" beforeDir="false" afterPath="$PROJECT_DIR$/kernel/src/mem/slab.rs" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -253,7 +255,8 @@
       <workItem from="1736499345914" duration="4632000" />
       <workItem from="1736513955435" duration="306000" />
       <workItem from="1736561988960" duration="10000" />
-      <workItem from="1736563774047" duration="805000" />
+      <workItem from="1736563774047" duration="2237000" />
+      <workItem from="1736573575737" duration="1682000" />
     </task>
     <task id="LOCAL-00001" summary="Config M-mode: disable paging">
       <option name="closed" value="true" />
@@ -571,8 +574,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="Implement mod/cpu" />
-    <MESSAGE value="Implement fun/allocate_page" />
     <MESSAGE value="Configure page table for kernel" />
     <MESSAGE value="Refactor away the static mut" />
     <MESSAGE value="Save point" />
@@ -596,7 +597,9 @@
     <MESSAGE value="sss" />
     <MESSAGE value="Revise fields of Cache&#10;&#10;Add lock to Cache." />
     <MESSAGE value="Revise fields of Cache&#10;&#10;Add lock to Cache.&#10;Increase the name length to 16." />
-    <option name="LAST_COMMIT_MESSAGE" value="Revise fields of Cache&#10;&#10;Add lock to Cache.&#10;Increase the name length to 16." />
+    <MESSAGE value="Derive debug for slab::Error" />
+    <MESSAGE value="Derive debug for slab::Error" />
+    <option name="LAST_COMMIT_MESSAGE" value="Derive debug for slab::Error" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />
