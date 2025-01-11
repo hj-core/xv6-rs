@@ -1,6 +1,7 @@
 use core::ptr::null_mut;
 use core::sync::atomic::AtomicPtr;
 
+#[derive(Debug)]
 pub struct ListNode {
     pub prev: AtomicPtr<ListNode>,
     pub next: AtomicPtr<ListNode>,
