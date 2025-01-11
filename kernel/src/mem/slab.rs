@@ -4,7 +4,7 @@
 
 use crate::dsa::ListNode;
 use crate::lock::Spinlock;
-use crate::{mem, HasHole};
+use crate::HasHole;
 use core::ptr::null_mut;
 use core::sync::atomic::Ordering::Relaxed;
 use wrapper::{Address, Bytes};
@@ -28,7 +28,7 @@ struct Cache {
 }
 
 impl Cache {
-    fn grow<T>(&mut self) -> Result<bool, mem::Error>
+    fn grow<T>(&mut self) -> Result<bool, Error>
     where
         T: Default + HasHole,
     {
@@ -50,7 +50,7 @@ impl Cache {
         Ok(true)
     }
 
-    fn request_contiguous_space(_size: Bytes) -> Result<Address, mem::Error> {
+    fn request_contiguous_space(_size: Bytes) -> Result<Address, Error> {
         todo!()
     }
 }
@@ -123,4 +123,9 @@ impl HasHole for Slab {
     fn hole(&mut self) -> &mut ListNode {
         &mut self.hole
     }
+}
+
+#[derive(Debug)]
+enum Error {
+    RequestMemoryFailed,
 }
