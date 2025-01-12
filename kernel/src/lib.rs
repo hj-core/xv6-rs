@@ -91,3 +91,6 @@ fn interrupt_disabled() -> bool {
 trait HasHole {
     fn hole(&mut self) -> &mut ListNode;
 }
+
+/// A marker trait indicating that the type uses C representation.
+trait ReprC {}
