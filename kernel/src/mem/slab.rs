@@ -5,7 +5,7 @@
 use crate::dsa::ListNode;
 use crate::lock::Spinlock;
 use crate::mem::slab::Error::AllocateFromFullSlab;
-use crate::HasHole;
+use crate::{HasHole, ReprC};
 use core::ptr;
 use core::ptr::null_mut;
 use core::sync::atomic::Ordering::Relaxed;
@@ -28,6 +28,8 @@ struct Cache {
     slabs_partial: ListNode,
     slabs_empty: ListNode,
 }
+
+impl ReprC for Cache {}
 
 impl Cache {
     fn grow<T>(&mut self) -> Result<bool, Error>
@@ -77,6 +79,8 @@ struct Slab {
     slot_size: Bytes,
     total_slots: usize,
 }
+
+impl ReprC for Slab {}
 
 impl Slab {
     fn initialize<T>(&mut self, slab_size: Bytes)

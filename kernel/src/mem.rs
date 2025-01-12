@@ -4,7 +4,7 @@ pub mod virt;
 use crate::dsa::ListNode;
 use crate::lock::GuardLock;
 use crate::mem::Error::{InvalidPageStart, PageNotAllocatable};
-use crate::{uart, HasHole};
+use crate::{uart, HasHole, ReprC};
 use core::convert::Into;
 use core::ptr::null_mut;
 use core::sync::atomic::Ordering::Relaxed;
@@ -121,6 +121,8 @@ fn allocate_page() -> Result<Address, Error> {
 struct Page {
     hole: ListNode,
 }
+
+impl ReprC for Page {}
 
 impl HasHole for Page {
     fn hole(&mut self) -> &mut ListNode {
