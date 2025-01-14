@@ -1,7 +1,7 @@
 pub mod slab;
 pub mod virt;
 
-use crate::dsa::{HasHole, ListNode, ReprC};
+use crate::dsa::{HasPinpoint, Pinpoint, ReprC};
 use crate::lock::GuardLock;
 use crate::mem::Error::{InvalidPageStart, PageNotAllocatable};
 use crate::uart;
@@ -11,9 +11,9 @@ use core::sync::atomic::Ordering::Relaxed;
 use hw::{DRAM_SIZE, DRAM_START};
 use wrapper::{Address, Bytes};
 
-/// The collection of current free pages that their holes are circularly linked.
+/// The collection of current free pages that their [Pinpoint]s are circularly linked.
 static FREE_PAGES: GuardLock<Page> = GuardLock::new(Page {
-    hole: ListNode::new(),
+    pinpoint: Pinpoint::new(),
 });
 
 const DRAM_END_EXCLUSIVE: Address = Address(DRAM_START.0 + DRAM_SIZE.0 as u64);
@@ -28,10 +28,10 @@ pub fn initialize() {
 fn initialize_free_pages() {
     // Link the head circularly
     let mut head_page = FREE_PAGES.lock();
-    let head = head_page.hole();
-    let head_ptr: *mut ListNode = head;
-    head.prev.store(head_ptr, Relaxed);
-    head.next.store(head_ptr, Relaxed);
+    let head = head_page.pinpoint();
+    let head_ptr: *mut Pinpoint = head;
+    head.link1.store(head_ptr, Relaxed);
+    head.link2.store(head_ptr, Relaxed);
     drop(head_page); // Release the lock
 
     let alloc_start = allocatable_start();
@@ -62,20 +62,20 @@ fn free_page(start: Address) -> Result<bool, Error> {
     memset(start.into(), 0xf0, PAGE_SIZE);
 
     let mut head_page = FREE_PAGES.lock();
-    let head = head_page.hole();
+    let head = head_page.pinpoint();
     let next = unsafe {
-        let ptr = head.next.load(Relaxed);
+        let ptr = head.link2.load(Relaxed);
         ptr.as_mut().unwrap()
     };
     let new = unsafe {
-        let ptr: *mut ListNode = start.into();
+        let ptr: *mut Pinpoint = start.into();
         ptr.as_mut().unwrap()
     };
 
-    new.next.store(next, Relaxed);
-    new.prev.store(head, Relaxed);
-    next.prev.store(new, Relaxed);
-    head.next.store(new, Relaxed);
+    new.link2.store(next, Relaxed);
+    new.link1.store(head, Relaxed);
+    next.link1.store(new, Relaxed);
+    head.link2.store(new, Relaxed);
     Ok(true)
 }
 
@@ -96,37 +96,37 @@ fn memset(start: Address, value: u8, size: Bytes) {
 
 fn allocate_page() -> Result<Address, Error> {
     let mut head_page = FREE_PAGES.lock();
-    let head = head_page.hole();
-    if head.next.load(Relaxed) == head {
+    let head = head_page.pinpoint();
+    if head.link2.load(Relaxed) == head {
         return Err(Error::OutOfMemory);
     }
 
     let result = unsafe {
-        let ptr = head.next.load(Relaxed);
+        let ptr = head.link2.load(Relaxed);
         ptr.as_mut().unwrap()
     };
     let next_next = unsafe {
-        let ptr = result.next.load(Relaxed);
+        let ptr = result.link2.load(Relaxed);
         ptr.as_mut().unwrap()
     };
-    head.next.store(next_next, Relaxed);
-    next_next.prev.store(head, Relaxed);
+    head.link2.store(next_next, Relaxed);
+    next_next.link1.store(head, Relaxed);
 
-    result.prev.store(null_mut(), Relaxed);
-    result.next.store(null_mut(), Relaxed);
-    Ok((result as *mut ListNode).into())
+    result.link1.store(null_mut(), Relaxed);
+    result.link2.store(null_mut(), Relaxed);
+    Ok((result as *mut Pinpoint).into())
 }
 
 #[repr(C)]
 struct Page {
-    hole: ListNode,
+    pinpoint: Pinpoint,
 }
 
 impl ReprC for Page {}
 
-impl HasHole for Page {
-    fn hole(&mut self) -> &mut ListNode {
-        &mut self.hole
+impl HasPinpoint for Page {
+    fn pinpoint(&mut self) -> &mut Pinpoint {
+        &mut self.pinpoint
     }
 }
 

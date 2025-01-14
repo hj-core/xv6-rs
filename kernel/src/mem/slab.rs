@@ -2,7 +2,7 @@
 // Understanding the Linux Virtual Memory Manager by Mel Gorman, Chapter 8
 // https://pdos.csail.mit.edu/~sbw/links/gorman_book.pdf
 
-use crate::dsa::{HasHole, ListNode, ReprC};
+use crate::dsa::{HasPinpoint, Pinpoint, ReprC};
 use crate::lock::Spinlock;
 use crate::mem::slab::Error::AllocateFromFullSlab;
 use core::ptr;
@@ -16,16 +16,16 @@ const MAX_SLOTS_PER_SLAB: usize = SLAB_USED_BITMAP_SIZE * 64;
 
 #[repr(C)]
 struct Cache {
-    /// [Cache] holes within the same [Cache] chain are circularly linked.
-    hole: ListNode,
+    /// [Cache] pinpoints within the same [Cache] chain are circularly linked.
+    pinpoint: Pinpoint,
     /// Protect [Cache] from concurrent access.
     lock: Spinlock,
     name: [char; CACHE_NAME_LENGTH],
     slab_size: Bytes,
-    /// slabs_* is the sentinel head of the circularly linked [Slab] holes.
-    slabs_full: ListNode,
-    slabs_partial: ListNode,
-    slabs_empty: ListNode,
+    /// slabs_* is the sentinel head of the circularly linked [Slab] pinpoints.
+    slabs_full: Pinpoint,
+    slabs_partial: Pinpoint,
+    slabs_empty: Pinpoint,
 }
 
 impl ReprC for Cache {}
@@ -33,7 +33,7 @@ impl ReprC for Cache {}
 impl Cache {
     fn grow<T>(&mut self) -> Result<bool, Error>
     where
-        T: Default + HasHole,
+        T: Default + HasPinpoint,
     {
         let addr0 = Self::request_contiguous_space(self.slab_size)?;
         let slab = unsafe {
@@ -43,12 +43,12 @@ impl Cache {
         slab.initialize::<T>(self.slab_size);
 
         let head = &mut self.slabs_empty;
-        let next = unsafe { head.next.load(Relaxed).as_mut().unwrap() };
-        let new = slab.hole();
-        new.prev.store(head, Relaxed);
-        new.next.store(next, Relaxed);
-        head.next.store(new, Relaxed);
-        next.prev.store(new, Relaxed);
+        let next = unsafe { head.link2.load(Relaxed).as_mut().unwrap() };
+        let new = slab.pinpoint();
+        new.link1.store(head, Relaxed);
+        new.link2.store(next, Relaxed);
+        head.link2.store(new, Relaxed);
+        next.link1.store(new, Relaxed);
 
         Ok(true)
     }
@@ -58,17 +58,17 @@ impl Cache {
     }
 }
 
-impl HasHole for Cache {
-    fn hole(&mut self) -> &mut ListNode {
-        &mut self.hole
+impl HasPinpoint for Cache {
+    fn pinpoint(&mut self) -> &mut Pinpoint {
+        &mut self.pinpoint
     }
 }
 
 #[repr(C)]
 #[derive(Debug)]
 struct Slab {
-    /// [Slab] holes within the same [Cache].slabs_* are circularly linked.
-    hole: ListNode,
+    /// [Slab] pinpoints within the same [Cache].slabs_* are circularly linked.
+    pinpoint: Pinpoint,
     /// Each bit represents slot usage (0: unused, 1: used).  
     /// The bits are packed: the first u64 represents slots 0-63,
     /// the second u64 represents slots 64-127, and so on.
@@ -84,16 +84,16 @@ impl ReprC for Slab {}
 impl Slab {
     fn initialize<T>(&mut self, slab_size: Bytes)
     where
-        T: Default + HasHole,
+        T: Default + HasPinpoint,
     {
-        self.unlink_hole();
+        self.unlink_pinpoint();
         self.reset_used_bitmap_and_count();
         self.set_slot0_size_and_total::<T>(slab_size);
     }
 
-    fn unlink_hole(&mut self) {
-        self.hole().prev.store(null_mut(), Relaxed);
-        self.hole().next.store(null_mut(), Relaxed);
+    fn unlink_pinpoint(&mut self) {
+        self.pinpoint().link1.store(null_mut(), Relaxed);
+        self.pinpoint().link2.store(null_mut(), Relaxed);
     }
 
     fn reset_used_bitmap_and_count(&mut self) {
@@ -128,7 +128,7 @@ impl Slab {
     /// otherwise, returns the corresponding error.
     fn allocate_object<T>(&mut self) -> Result<&mut T, Error>
     where
-        T: Default + HasHole,
+        T: Default + HasPinpoint,
     {
         if self.is_full() {
             return Err(AllocateFromFullSlab);
@@ -170,7 +170,7 @@ impl Slab {
     /// Install the default value of [T] to the target slot and return a mut reference to it.
     fn install_default<T>(&self, slot_index: usize) -> &mut T
     where
-        T: Default + HasHole,
+        T: Default + HasPinpoint,
     {
         assert!(
             size_of::<T>() <= self.slot_size.0,
@@ -185,9 +185,9 @@ impl Slab {
     }
 }
 
-impl HasHole for Slab {
-    fn hole(&mut self) -> &mut ListNode {
-        &mut self.hole
+impl HasPinpoint for Slab {
+    fn pinpoint(&mut self) -> &mut Pinpoint {
+        &mut self.pinpoint
     }
 }
 
@@ -210,9 +210,9 @@ mod slab_tests {
 
         fn new_empty() -> Slab {
             Slab {
-                hole: ListNode {
-                    prev: AtomicPtr::default(),
-                    next: AtomicPtr::default(),
+                pinpoint: Pinpoint {
+                    link1: AtomicPtr::default(),
+                    link2: AtomicPtr::default(),
                 },
                 used_bitmap: [0; SLAB_USED_BITMAP_SIZE],
                 used_count: 0,
@@ -245,9 +245,9 @@ mod slab_tests {
 
         fn new_full() -> Slab {
             Slab {
-                hole: ListNode {
-                    prev: AtomicPtr::default(),
-                    next: AtomicPtr::default(),
+                pinpoint: Pinpoint {
+                    link1: AtomicPtr::default(),
+                    link2: AtomicPtr::default(),
                 },
                 used_bitmap: [
                     0xffff_ffff_ffff_ffff,
@@ -270,9 +270,9 @@ mod slab_tests {
 
         fn new_full_max_slots() -> Slab {
             Slab {
-                hole: ListNode {
-                    prev: AtomicPtr::default(),
-                    next: AtomicPtr::default(),
+                pinpoint: Pinpoint {
+                    link1: AtomicPtr::default(),
+                    link2: AtomicPtr::default(),
                 },
                 used_bitmap: [0xffff_ffff_ffff_ffff; SLAB_USED_BITMAP_SIZE],
                 used_count: MAX_SLOTS_PER_SLAB,
@@ -312,9 +312,9 @@ mod slab_tests {
 
         fn new_partial() -> Slab {
             Slab {
-                hole: ListNode {
-                    prev: AtomicPtr::default(),
-                    next: AtomicPtr::default(),
+                pinpoint: Pinpoint {
+                    link1: AtomicPtr::default(),
+                    link2: AtomicPtr::default(),
                 },
                 used_bitmap: [
                     0xffff_ffff_ffff_ffff,
@@ -349,14 +349,14 @@ mod slab_tests {
 
     fn assert_content_equal(slab1: &Slab, slab2: &Slab) {
         assert_eq!(
-            slab1.hole.prev.load(Relaxed),
-            slab2.hole.prev.load(Relaxed),
-            "hole.prev"
+            slab1.pinpoint.link1.load(Relaxed),
+            slab2.pinpoint.link1.load(Relaxed),
+            "pinpoint.link1"
         );
         assert_eq!(
-            slab1.hole.next.load(Relaxed),
-            slab2.hole.next.load(Relaxed),
-            "hole.next"
+            slab1.pinpoint.link2.load(Relaxed),
+            slab2.pinpoint.link2.load(Relaxed),
+            "pinpoint.link2"
         );
         assert_eq!(slab1.used_bitmap, slab2.used_bitmap, "used_bitmap");
         assert_eq!(slab1.used_count, slab2.used_count, "used_count");
