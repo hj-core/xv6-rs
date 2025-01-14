@@ -1,10 +1,10 @@
 pub mod slab;
 pub mod virt;
 
-use crate::dsa::ListNode;
+use crate::dsa::{HasHole, ListNode, ReprC};
 use crate::lock::GuardLock;
 use crate::mem::Error::{InvalidPageStart, PageNotAllocatable};
-use crate::{uart, HasHole, ReprC};
+use crate::uart;
 use core::convert::Into;
 use core::ptr::null_mut;
 use core::sync::atomic::Ordering::Relaxed;

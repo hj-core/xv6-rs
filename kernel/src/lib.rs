@@ -11,7 +11,6 @@ mod sched;
 mod trap;
 mod uart;
 
-use crate::dsa::ListNode;
 use core::sync::atomic::{AtomicBool, Ordering};
 #[cfg(target_arch = "riscv64")]
 use {
@@ -84,14 +83,3 @@ fn interrupt_enabled() -> bool {
 fn interrupt_disabled() -> bool {
     riscv64::read_sstatus() & riscv64::SSTATUS_SIE == 0
 }
-
-/// This trait indicates that a type has a hole (i.e., a [ListNode]) as its first field.  
-/// The hole may be linked to other holes.
-/// Besides, it can act as an anchor to get the object's starting address.
-/// ReprC is required to prevent field reordering.
-trait HasHole: ReprC {
-    fn hole(&mut self) -> &mut ListNode;
-}
-
-/// A marker trait indicating that the type uses C representation.
-trait ReprC {}

@@ -2,10 +2,9 @@
 // Understanding the Linux Virtual Memory Manager by Mel Gorman, Chapter 8
 // https://pdos.csail.mit.edu/~sbw/links/gorman_book.pdf
 
-use crate::dsa::ListNode;
+use crate::dsa::{HasHole, ListNode, ReprC};
 use crate::lock::Spinlock;
 use crate::mem::slab::Error::AllocateFromFullSlab;
-use crate::{HasHole, ReprC};
 use core::ptr;
 use core::ptr::null_mut;
 use core::sync::atomic::Ordering::Relaxed;
