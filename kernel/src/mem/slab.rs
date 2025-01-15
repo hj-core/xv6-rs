@@ -67,7 +67,7 @@ impl HasPinpoint for Cache {
 #[repr(C)]
 #[derive(Debug)]
 struct Slab {
-    /// [Slab] pinpoints within the same [Cache].slabs_* are circularly linked.
+    /// [Slab]s within the same [Cache].slabs_* have their [Pinpoint] circularly linked.
     pinpoint: Pinpoint,
     /// Each bit represents slot usage (0: unused, 1: used).  
     /// The bits are packed: the first u64 represents slots 0-63,
