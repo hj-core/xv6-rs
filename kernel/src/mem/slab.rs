@@ -203,17 +203,13 @@ mod slab_tests {
 
     use super::*;
     use alloc::format;
-    use core::sync::atomic::AtomicPtr;
 
     mod empty_slab {
         use super::*;
 
         fn new_empty() -> Slab {
             Slab {
-                pinpoint: Pinpoint {
-                    link1: AtomicPtr::default(),
-                    link2: AtomicPtr::default(),
-                },
+                pinpoint: Pinpoint::new(),
                 used_bitmap: [0; SLAB_USED_BITMAP_SIZE],
                 used_count: 0,
                 slot0: Address(0),
@@ -245,10 +241,7 @@ mod slab_tests {
 
         fn new_full() -> Slab {
             Slab {
-                pinpoint: Pinpoint {
-                    link1: AtomicPtr::default(),
-                    link2: AtomicPtr::default(),
-                },
+                pinpoint: Pinpoint::new(),
                 used_bitmap: [
                     0xffff_ffff_ffff_ffff,
                     0xffff_ffff_ffff_ffff,
@@ -270,10 +263,7 @@ mod slab_tests {
 
         fn new_full_max_slots() -> Slab {
             Slab {
-                pinpoint: Pinpoint {
-                    link1: AtomicPtr::default(),
-                    link2: AtomicPtr::default(),
-                },
+                pinpoint: Pinpoint::new(),
                 used_bitmap: [0xffff_ffff_ffff_ffff; SLAB_USED_BITMAP_SIZE],
                 used_count: MAX_SLOTS_PER_SLAB,
                 slot0: Address(0),
@@ -312,10 +302,7 @@ mod slab_tests {
 
         fn new_partial() -> Slab {
             Slab {
-                pinpoint: Pinpoint {
-                    link1: AtomicPtr::default(),
-                    link2: AtomicPtr::default(),
-                },
+                pinpoint: Pinpoint::new(),
                 used_bitmap: [
                     0xffff_ffff_ffff_ffff,
                     0x6030_0100_0000_08ff,

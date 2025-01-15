@@ -1,10 +1,13 @@
+use core::marker::PhantomPinned;
 use core::ptr::null_mut;
 use core::sync::atomic::AtomicPtr;
 
+/// This struct is intended to be used as a field within address-sensitive struct.
 #[derive(Debug)]
 pub struct Pinpoint {
     pub link1: AtomicPtr<Pinpoint>,
     pub link2: AtomicPtr<Pinpoint>,
+    _pinned: PhantomPinned,
 }
 
 impl Pinpoint {
@@ -12,6 +15,7 @@ impl Pinpoint {
         Self {
             link1: AtomicPtr::new(null_mut()),
             link2: AtomicPtr::new(null_mut()),
+            _pinned: PhantomPinned,
         }
     }
 }
