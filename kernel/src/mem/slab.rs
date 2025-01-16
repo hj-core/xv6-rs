@@ -183,11 +183,62 @@ impl Slab {
             ptr.as_mut().unwrap()
         }
     }
+
+    fn deallocate_object<T>(&mut self, _object: *mut T) {
+        todo!()
+    }
 }
 
 impl HasPinpoint for Slab {
     fn pinpoint(&mut self) -> &mut Pinpoint {
         &mut self.pinpoint
+    }
+}
+
+struct SlabObject<T> {
+    source: *mut Slab,
+    object: *mut T,
+}
+
+/// A proxy to the actual allocated object.
+/// This proxy provides a layer of protection to the underlying object, which is address-sensitive.
+/// Dropping this object triggers the deallocation of the underlying object.
+impl<T> SlabObject<T> {
+    /// Get a shared reference to the underlying object.
+    pub fn get_ref(&self) -> &T {
+        // SAFETY:
+        // * Since we haven't exposed the object field, and this SlabObject must be
+        //   sourced from an allocation of a Slab<T>, which will properly set this field,
+        //   we can dereference object as type T.
+        // * Dereferencing the raw pointer and then turning it to a reference doesn't
+        //   move the underlying object.
+        unsafe { &*self.object }
+    }
+
+    /// Obtain an exclusive reference to the underlying object.
+    ///
+    /// # SAFETY:
+    ///
+    /// The underlying object is address-sensitive; therefore, clients of this function
+    /// must ensure the underlying object hasn't been moved.
+    /// Please refer to [Module pin](https://doc.rust-lang.org/beta/core/pin/index.html)
+    /// for more details.
+    pub unsafe fn get_mut(&mut self) -> &mut T {
+        &mut *self.object
+    }
+}
+
+impl<T> Drop for SlabObject<T> {
+    fn drop(&mut self) {
+        // SAFETY:
+        // * Slab itself is an address-sensitive object; therefore, we must ensure
+        //   that we haven't moved the underlying object of the source ptr.
+        // * Since the object must be allocated from a [Slab] and its source ptr
+        //   should have been properly set.
+        unsafe {
+            let unsafe_slab = &mut *self.source;
+            unsafe_slab.deallocate_object(self.object);
+        }
     }
 }
 
