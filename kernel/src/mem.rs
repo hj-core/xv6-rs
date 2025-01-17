@@ -58,11 +58,13 @@ fn free_page(start: Address) -> Result<bool, Error> {
     if !is_allocatable(start) {
         return Err(PageNotAllocatable);
     }
+    // Acquire lock before freeing the page
+    let mut head_page = FREE_PAGES.lock();
+
     // Fill the page with junk to catch dangling refs
     const JUNK: u8 = 0xf0;
     memset(start, JUNK, PAGE_SIZE);
 
-    let mut head_page = FREE_PAGES.lock();
     let head = head_page.pinpoint();
     let next = unsafe {
         let ptr = head.link2.load(Relaxed);
