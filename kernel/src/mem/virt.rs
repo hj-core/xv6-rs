@@ -157,6 +157,7 @@ fn enable_paging(root_table: PhysicalAddress) {
     riscv64::write_satp(riscv64::SATP_MODE_SV39 | root_table.ppn());
 }
 
+#[repr(transparent)]
 struct PageTable([PTE; TABLE_SIZE]);
 
 impl PageTable {
@@ -183,6 +184,7 @@ impl PageTable {
 }
 
 #[derive(Debug, Eq, PartialEq)]
+#[repr(transparent)]
 struct PTE(u64);
 
 impl PTE {
@@ -222,6 +224,7 @@ impl PTE {
 }
 
 #[derive(Copy, Clone, Debug)]
+#[repr(transparent)]
 struct PhysicalAddress(u64);
 
 impl PhysicalAddress {
@@ -285,6 +288,7 @@ impl<T> From<*mut T> for PhysicalAddress {
 }
 
 #[derive(Copy, Clone, Debug)]
+#[repr(transparent)]
 struct VirtualAddress(u64);
 
 impl VirtualAddress {

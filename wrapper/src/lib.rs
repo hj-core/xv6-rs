@@ -3,6 +3,7 @@
 use core::ops::{Add, Mul};
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[repr(transparent)]
 pub struct Bytes(pub usize);
 
 impl Add<Bytes> for Bytes {
@@ -21,6 +22,7 @@ impl Mul<usize> for Bytes {
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[repr(transparent)]
 pub struct Address(pub u64);
 
 impl Add<Bytes> for Address {
