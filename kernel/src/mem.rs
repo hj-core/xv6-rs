@@ -58,8 +58,9 @@ fn free_page(start: Address) -> Result<bool, Error> {
     if !is_allocatable(start) {
         return Err(PageNotAllocatable);
     }
-    // Fill page with junk to catch dangling refs
-    memset(start.into(), 0xf0, PAGE_SIZE);
+    // Fill the page with junk to catch dangling refs
+    const JUNK: u8 = 0xf0;
+    memset(start, JUNK, PAGE_SIZE);
 
     let mut head_page = FREE_PAGES.lock();
     let head = head_page.pinpoint();
@@ -67,15 +68,22 @@ fn free_page(start: Address) -> Result<bool, Error> {
         let ptr = head.link2.load(Relaxed);
         ptr.as_mut().unwrap()
     };
-    let new = unsafe {
-        let ptr: *mut Pinpoint = start.into();
-        ptr.as_mut().unwrap()
-    };
 
-    new.link2.store(next, Relaxed);
-    new.link1.store(head, Relaxed);
-    next.link1.store(new, Relaxed);
-    head.link2.store(new, Relaxed);
+    let mut new_page = Page {
+        pinpoint: Pinpoint::new(),
+    };
+    new_page.pinpoint().link1.store(head, Relaxed);
+    new_page.pinpoint().link2.store(next, Relaxed);
+
+    let new_page_ptr: *mut Page = start.into();
+    unsafe {
+        new_page_ptr.write(new_page);
+    }
+
+    let new_next = unsafe { (&mut *new_page_ptr).pinpoint() };
+    head.link2.store(new_next, Relaxed);
+    next.link1.store(new_next, Relaxed);
+
     Ok(true)
 }
 
