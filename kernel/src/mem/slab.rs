@@ -74,6 +74,8 @@ where
 {
     /// [Slab]s within the same [Cache].slabs_* have their [Pinpoint] circularly linked.
     pinpoint: Pinpoint,
+    /// Pointer to the source [Cache].
+    source: *const Cache,
     total_slots: usize,
     slot0: Address,
     slot_size: Bytes,
@@ -278,10 +280,12 @@ mod slab_tests {
 
     mod empty_slab {
         use super::*;
+        use core::ptr::null;
 
         fn new_empty() -> Slab<u64> {
             Slab {
                 pinpoint: Pinpoint::new(),
+                source: null(),
                 used_bitmap: [0; SLAB_USED_BITMAP_SIZE],
                 used_count: 0,
                 slot0: Address(0),
@@ -311,10 +315,12 @@ mod slab_tests {
 
     mod full_slab {
         use super::*;
+        use core::ptr::null;
 
         fn new_full() -> Slab<u64> {
             Slab {
                 pinpoint: Pinpoint::new(),
+                source: null(),
                 used_bitmap: [
                     0xffff_ffff_ffff_ffff,
                     0xffff_ffff_ffff_ffff,
@@ -338,6 +344,7 @@ mod slab_tests {
         fn new_full_max_slots() -> Slab<u64> {
             Slab {
                 pinpoint: Pinpoint::new(),
+                source: null(),
                 used_bitmap: [0xffff_ffff_ffff_ffff; SLAB_USED_BITMAP_SIZE],
                 used_count: MAX_SLOTS_PER_SLAB,
                 slot0: Address(0),
@@ -374,10 +381,12 @@ mod slab_tests {
 
     mod partial_slab {
         use super::*;
+        use core::ptr::null;
 
         fn new_partial() -> Slab<u64> {
             Slab {
                 pinpoint: Pinpoint::new(),
+                source: null(),
                 used_bitmap: [
                     0xffff_ffff_ffff_ffff,
                     0x6030_0100_0000_08ff,
