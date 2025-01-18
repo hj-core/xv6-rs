@@ -5,6 +5,7 @@
 use crate::dsa::{HasPinpoint, Pinpoint, ReprC};
 use crate::lock::Spinlock;
 use crate::mem::slab::Error::AllocateFromFullSlab;
+use core::marker::PhantomData;
 use core::ptr;
 use core::ptr::null_mut;
 use core::sync::atomic::Ordering::Relaxed;
@@ -37,10 +38,10 @@ impl Cache {
     {
         let addr0 = Self::request_contiguous_space(self.slab_size)?;
         let slab = unsafe {
-            let ptr: *mut Slab = addr0.into();
+            let ptr: *mut Slab<T> = addr0.into();
             ptr.as_mut().unwrap()
         };
-        slab.initialize::<T>(self.slab_size);
+        slab.initialize(self.slab_size);
 
         let head = &mut self.slabs_empty;
         let next = unsafe { head.link2.load(Relaxed).as_mut().unwrap() };
@@ -66,7 +67,10 @@ impl HasPinpoint for Cache {
 
 #[repr(C)]
 #[derive(Debug)]
-struct Slab {
+struct Slab<T>
+where
+    T: Default,
+{
     /// [Slab]s within the same [Cache].slabs_* have their [Pinpoint] circularly linked.
     pinpoint: Pinpoint,
     /// Each bit represents slot usage (0: unused, 1: used).  
@@ -77,18 +81,19 @@ struct Slab {
     slot0: Address,
     slot_size: Bytes,
     total_slots: usize,
+    _type_marker: PhantomData<T>,
 }
 
-impl ReprC for Slab {}
+impl<T> ReprC for Slab<T> where T: Default {}
 
-impl Slab {
-    fn initialize<T>(&mut self, slab_size: Bytes)
-    where
-        T: Default + HasPinpoint,
-    {
+impl<T> Slab<T>
+where
+    T: Default,
+{
+    fn initialize(&mut self, slab_size: Bytes) {
         self.unlink_pinpoint();
         self.reset_used_bitmap_and_count();
-        self.set_slot0_size_and_total::<T>(slab_size);
+        self.set_slot0_size_and_total(slab_size);
     }
 
     fn unlink_pinpoint(&mut self) {
@@ -103,8 +108,8 @@ impl Slab {
         self.used_count = 0;
     }
 
-    fn set_slot0_size_and_total<T>(&mut self, slab_size: Bytes) {
-        let slot0_offset = self.compute_slot0_offset::<T>();
+    fn set_slot0_size_and_total(&mut self, slab_size: Bytes) {
+        let slot0_offset = self.compute_slot0_offset();
         self.slot0 = Address::from(ptr::from_ref(self)) + slot0_offset;
         self.slot_size = Bytes(size_of::<T>());
 
@@ -116,9 +121,9 @@ impl Slab {
     }
 
     /// Offset to slot0 from the address of [Slab].
-    fn compute_slot0_offset<T>(&self) -> Bytes {
+    fn compute_slot0_offset(&self) -> Bytes {
         let base: *const u8 = ptr::from_ref(self).cast();
-        let header_size = size_of::<Slab>();
+        let header_size = size_of::<Slab<T>>();
         let header_end = unsafe { base.byte_add(header_size) };
         let padding = header_end.align_offset(align_of::<T>());
         Bytes(header_size + padding)
@@ -126,15 +131,12 @@ impl Slab {
 
     /// Returns a reference to the object if allocation succeeds;
     /// otherwise, returns the corresponding error.
-    fn allocate_object<T>(&mut self) -> Result<&mut T, Error>
-    where
-        T: Default + HasPinpoint,
-    {
+    fn allocate_object(&mut self) -> Result<&mut T, Error> {
         if self.is_full() {
             return Err(AllocateFromFullSlab);
         }
         let index = self.use_first_free_slot();
-        let result = self.install_default::<T>(index);
+        let result = self.install_default(index);
         Ok(result)
     }
 
@@ -168,10 +170,7 @@ impl Slab {
     }
 
     /// Install the default value of [T] to the target slot and return a mut reference to it.
-    fn install_default<T>(&self, slot_index: usize) -> &mut T
-    where
-        T: Default + HasPinpoint,
-    {
+    fn install_default(&self, slot_index: usize) -> &mut T {
         assert!(
             size_of::<T>() <= self.slot_size.0,
             "Can't fit object into slot."
@@ -184,26 +183,35 @@ impl Slab {
         }
     }
 
-    fn deallocate_object<T>(&mut self, _object: *mut T) {
+    fn deallocate_object(&mut self, _object: *mut T) {
         todo!()
     }
 }
 
-impl HasPinpoint for Slab {
+impl<T> HasPinpoint for Slab<T>
+where
+    T: Default,
+{
     fn pinpoint(&mut self) -> &mut Pinpoint {
         &mut self.pinpoint
     }
 }
 
-struct SlabObject<T> {
-    source: *mut Slab,
+struct SlabObject<T>
+where
+    T: Default,
+{
+    source: *mut Slab<T>,
     object: *mut T,
 }
 
 /// A proxy to the actual allocated object.
 /// This proxy provides a layer of protection to the underlying object, which is address-sensitive.
 /// Dropping this object triggers the deallocation of the underlying object.
-impl<T> SlabObject<T> {
+impl<T> SlabObject<T>
+where
+    T: Default,
+{
     /// Get a shared reference to the underlying object.
     pub fn get_ref(&self) -> &T {
         // SAFETY:
@@ -228,7 +236,10 @@ impl<T> SlabObject<T> {
     }
 }
 
-impl<T> Drop for SlabObject<T> {
+impl<T> Drop for SlabObject<T>
+where
+    T: Default,
+{
     fn drop(&mut self) {
         // SAFETY:
         // * Slab itself is an address-sensitive object; therefore, we must ensure
@@ -258,7 +269,7 @@ mod slab_tests {
     mod empty_slab {
         use super::*;
 
-        fn new_empty() -> Slab {
+        fn new_empty() -> Slab<u64> {
             Slab {
                 pinpoint: Pinpoint::new(),
                 used_bitmap: [0; SLAB_USED_BITMAP_SIZE],
@@ -266,6 +277,7 @@ mod slab_tests {
                 slot0: Address(0),
                 slot_size: Bytes(0),
                 total_slots: 128,
+                _type_marker: PhantomData,
             }
         }
 
@@ -290,7 +302,7 @@ mod slab_tests {
     mod full_slab {
         use super::*;
 
-        fn new_full() -> Slab {
+        fn new_full() -> Slab<u64> {
             Slab {
                 pinpoint: Pinpoint::new(),
                 used_bitmap: [
@@ -303,6 +315,7 @@ mod slab_tests {
                 slot0: Address(0),
                 slot_size: Bytes(0),
                 total_slots: 200,
+                _type_marker: PhantomData,
             }
         }
 
@@ -312,7 +325,7 @@ mod slab_tests {
             assert_slab_state_consistency(&slab);
         }
 
-        fn new_full_max_slots() -> Slab {
+        fn new_full_max_slots() -> Slab<u64> {
             Slab {
                 pinpoint: Pinpoint::new(),
                 used_bitmap: [0xffff_ffff_ffff_ffff; SLAB_USED_BITMAP_SIZE],
@@ -320,6 +333,7 @@ mod slab_tests {
                 slot0: Address(0),
                 slot_size: Bytes(0),
                 total_slots: MAX_SLOTS_PER_SLAB,
+                _type_marker: PhantomData,
             }
         }
 
@@ -351,7 +365,7 @@ mod slab_tests {
     mod partial_slab {
         use super::*;
 
-        fn new_partial() -> Slab {
+        fn new_partial() -> Slab<u64> {
             Slab {
                 pinpoint: Pinpoint::new(),
                 used_bitmap: [
@@ -364,6 +378,7 @@ mod slab_tests {
                 slot0: Address(0),
                 slot_size: Bytes(0),
                 total_slots: 188,
+                _type_marker: PhantomData,
             }
         }
 
@@ -385,7 +400,7 @@ mod slab_tests {
         }
     }
 
-    fn assert_content_equal(slab1: &Slab, slab2: &Slab) {
+    fn assert_content_equal(slab1: &Slab<u64>, slab2: &Slab<u64>) {
         assert_eq!(
             slab1.pinpoint.link1.load(Relaxed),
             slab2.pinpoint.link1.load(Relaxed),
@@ -403,12 +418,12 @@ mod slab_tests {
         assert_eq!(slab1.total_slots, slab2.total_slots, "total_slots");
     }
 
-    fn assert_slab_state_consistency(slab: &Slab) {
+    fn assert_slab_state_consistency(slab: &Slab<u64>) {
         assert_used_bitmap_count_consistency(slab);
         assert_used_bitmap_total_slots_consistency(slab);
     }
 
-    fn assert_used_bitmap_count_consistency(slab: &Slab) {
+    fn assert_used_bitmap_count_consistency(slab: &Slab<u64>) {
         let count = slab
             .used_bitmap
             .iter()
@@ -420,7 +435,7 @@ mod slab_tests {
         );
     }
 
-    fn assert_used_bitmap_total_slots_consistency(slab: &Slab) {
+    fn assert_used_bitmap_total_slots_consistency(slab: &Slab<u64>) {
         if slab.total_slots == MAX_SLOTS_PER_SLAB {
             return;
         }
@@ -438,7 +453,11 @@ mod slab_tests {
         }
     }
 
-    fn assert_use_first_free_slot(expected_return: usize, expected_after: Slab, mut before: Slab) {
+    fn assert_use_first_free_slot(
+        expected_return: usize,
+        expected_after: Slab<u64>,
+        mut before: Slab<u64>,
+    ) {
         let str_before = format!("{before:?}");
         let actual_return = before.use_first_free_slot();
         assert_eq!(expected_return, actual_return, "{str_before}");

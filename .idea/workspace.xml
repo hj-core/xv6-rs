@@ -10,7 +10,9 @@
     <cargoProject FILE="$PROJECT_DIR$/Cargo.toml" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="79d91817-cab6-48db-8c64-627b37812669" name="Changes" comment="Implement Cache::grow" />
+    <list default="true" id="79d91817-cab6-48db-8c64-627b37812669" name="Changes" comment="Implement Cache::grow">
+      <change beforePath="$PROJECT_DIR$/kernel/src/mem/slab.rs" beforeDir="false" afterPath="$PROJECT_DIR$/kernel/src/mem/slab.rs" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -63,7 +65,7 @@
   }
 }</component>
   <component name="GitRewordedCommitMessages">
-    <option name="onto" value="dec16bfb13e9987fee0da79e73f237bce499252e" />
+    <option name="onto" value="26407b1f2c3f509450197efae937e672a735edbd" />
   </component>
   <component name="GithubPullRequestsUISettings">{
   &quot;selectedUrlAndAccountId&quot;: {
