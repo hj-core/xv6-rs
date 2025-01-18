@@ -1,1 +1,9 @@
 /target
+
+/.idea/shelf
+/.idea/workspace.xml
+/.idea/usage.statistics.xml
+
+*.ipr
+*.iml
+*.iws
