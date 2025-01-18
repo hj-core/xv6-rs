@@ -130,15 +130,31 @@ where
         Bytes(header_size + padding)
     }
 
-    /// Returns a reference to the object if allocation succeeds;
+    /// Returns a [SlabObject] wrapping the allocated object [T] if the allocation succeeded;
     /// otherwise, returns the corresponding error.
-    fn allocate_object(&mut self) -> Result<&mut T, Error> {
+    fn allocate_object(&mut self) -> Result<SlabObject<T>, Error> {
         if self.is_full() {
             return Err(AllocateFromFullSlab);
         }
-        let index = self.use_first_free_slot();
-        let result = self.install_default(index);
-        Ok(result)
+        let slot_index = self.use_first_free_slot();
+        let object_ptr: *mut T = (self.slot0 + self.slot_size * slot_index).into();
+        // SAFETY:
+        // * Each slot is properly aligned and large enough to contain an object of type [T];
+        //   each slot lies within the memory allocated for this [Slab].
+        // * These conditions are guaranteed during [Slab] initialization, therefore,
+        //   writing the default value to the slot is safe.
+        // * Both [Slab] and the object [T] are address-sensitive.
+        // * Creating the [SlabObject] from the raw pointers of this [Slab] and the new object
+        //   does not move the underlying [Slab] or object [T].
+        // * Returning the [SlabObject] does not move the underlying [Slab] or object [T].
+        unsafe {
+            object_ptr.write(T::default());
+            let result = SlabObject {
+                source: AtomicPtr::new(self as *mut Slab<T>),
+                object: AtomicPtr::from(object_ptr),
+            };
+            Ok(result)
+        }
     }
 
     fn is_full(&self) -> bool {
@@ -168,20 +184,6 @@ where
             panic!("No free slots available.");
         }
         result
-    }
-
-    /// Install the default value of [T] to the target slot and return a mut reference to it.
-    fn install_default(&self, slot_index: usize) -> &mut T {
-        assert!(
-            size_of::<T>() <= self.slot_size.0,
-            "Can't fit object into slot."
-        );
-        let addr = self.slot0 + (self.slot_size * slot_index);
-        let ptr: *mut T = addr.into();
-        unsafe {
-            ptr.write(T::default());
-            ptr.as_mut().unwrap()
-        }
     }
 
     fn deallocate_object(&mut self, _object: *mut T) {
