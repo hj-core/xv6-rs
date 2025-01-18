@@ -123,7 +123,8 @@ where
         self.total_slots = (slab_size.0 - slot0_offset.0) % self.slot_size.0
     }
 
-    /// Offset to slot0 from the address of [Slab].
+    /// Offset from the [Slab]'s address to slot 0.
+    /// This offset has considered the alignment requirement of object [T].
     fn compute_slot0_offset(&self) -> Bytes {
         let base: *const u8 = ptr::from_ref(self).cast();
         let header_size = size_of::<Slab<T>>();
@@ -253,9 +254,9 @@ where
     fn drop(&mut self) {
         // SAFETY:
         // * The source field is not publicly exposed.
-        // * Since SlabObject are only created through Slab<T> allocations, which should
+        // * Since SlabObject is only created through Slab<T> allocations, which should
         //   correctly initialize source field, we can safely dereference it.
-        // * Dereferencing the raw pointer to obtain an exclusive reference does not
+        // * Dereferencing the raw pointer to get an exclusive reference does not
         //   move the underlying Slab, which is address-sensitive.
         // * The deallocate_object method should itself handle the Slab object properly.
         unsafe {
