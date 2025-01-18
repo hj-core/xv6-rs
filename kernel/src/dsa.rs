@@ -4,6 +4,7 @@ use core::sync::atomic::AtomicPtr;
 
 /// This struct is intended to be used as a field within address-sensitive struct.
 #[derive(Debug)]
+#[repr(C)]
 pub struct Pinpoint {
     pub link1: AtomicPtr<Pinpoint>,
     pub link2: AtomicPtr<Pinpoint>,
