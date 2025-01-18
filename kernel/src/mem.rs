@@ -6,7 +6,6 @@ use crate::lock::GuardLock;
 use crate::mem::Error::{InvalidPageStart, PageNotAllocatable};
 use crate::uart;
 use core::convert::Into;
-use core::ptr::null_mut;
 use core::sync::atomic::Ordering::Relaxed;
 use hw::{DRAM_SIZE, DRAM_START};
 use wrapper::{Address, Bytes};
@@ -107,24 +106,29 @@ fn memset(start: Address, value: u8, size: Bytes) {
 fn allocate_page() -> Result<Address, Error> {
     let mut head_page = FREE_PAGES.lock();
     let head = head_page.pinpoint();
-    if head.link2.load(Relaxed) == head {
+
+    let no_free_page = head.link2.load(Relaxed) == (head as *mut Pinpoint);
+    if no_free_page {
         return Err(Error::OutOfMemory);
     }
 
-    let result = unsafe {
+    let pinpoint = unsafe {
         let ptr = head.link2.load(Relaxed);
         ptr.as_mut().unwrap()
     };
-    let next_next = unsafe {
-        let ptr = result.link2.load(Relaxed);
+    let new_next = unsafe {
+        let ptr = pinpoint.link2.load(Relaxed);
         ptr.as_mut().unwrap()
     };
-    head.link2.store(next_next, Relaxed);
-    next_next.link1.store(head, Relaxed);
+    head.link2.store(new_next, Relaxed);
+    new_next.link1.store(head, Relaxed);
 
-    result.link1.store(null_mut(), Relaxed);
-    result.link2.store(null_mut(), Relaxed);
-    Ok((result as *mut Pinpoint).into())
+    let result = (pinpoint as *const Pinpoint).into();
+    unsafe {
+        let page: *mut Page = (pinpoint as *mut Pinpoint).cast();
+        page.drop_in_place();
+    }
+    Ok(result)
 }
 
 #[repr(C)]
