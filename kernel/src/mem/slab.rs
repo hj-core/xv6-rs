@@ -8,6 +8,7 @@ use crate::mem::slab::Error::AllocateFromFullSlab;
 use core::marker::PhantomData;
 use core::ptr;
 use core::ptr::null_mut;
+use core::sync::atomic::AtomicPtr;
 use core::sync::atomic::Ordering::Relaxed;
 use wrapper::{Address, Bytes};
 
@@ -201,8 +202,8 @@ struct SlabObject<T>
 where
     T: Default,
 {
-    source: *mut Slab<T>,
-    object: *mut T,
+    source: AtomicPtr<Slab<T>>,
+    object: AtomicPtr<T>,
 }
 
 /// A proxy to the actual allocated object.
@@ -215,24 +216,29 @@ where
     /// Get a shared reference to the underlying object.
     pub fn get_ref(&self) -> &T {
         // SAFETY:
-        // * Since we haven't exposed the object field, and this SlabObject must be
-        //   sourced from an allocation of a Slab<T>, which will properly set this field,
-        //   we can dereference object as type T.
-        // * Dereferencing the raw pointer and then turning it to a reference doesn't
-        //   move the underlying object.
-        unsafe { &*self.object }
+        // * The object field is not publicly exposed.
+        // * Since SlabObject are only created through Slab<T> allocations, which should
+        //   correctly initialize this field, we can safely dereference it.
+        // * Dereferencing the raw pointer to obtain a shared reference does not move
+        //   the underlying object.
+        unsafe { &*self.object.load(Relaxed) }
     }
 
-    /// Obtain an exclusive reference to the underlying object.
+    /// Get an exclusive reference to the underlying object.
     ///
     /// # SAFETY:
     ///
-    /// The underlying object is address-sensitive; therefore, clients of this function
-    /// must ensure the underlying object hasn't been moved.
-    /// Please refer to [Module pin](https://doc.rust-lang.org/beta/core/pin/index.html)
-    /// for more details.
+    /// The underlying object [T] is address-sensitive; therefore, clients of this function
+    /// must ensure the object hasn't been moved.
+    /// See [Module pin](https://doc.rust-lang.org/beta/core/pin/index.html) for more details.
     pub unsafe fn get_mut(&mut self) -> &mut T {
-        &mut *self.object
+        // SAFETY:
+        // * The object field is not publicly exposed.
+        // * Since SlabObject are only created through Slab<T> allocations, which should
+        //   correctly initialize this field, we can safely dereference it.
+        // * Dereferencing the raw pointer to obtain an exclusive reference does not
+        //   move the underlying object.
+        &mut *self.object.load(Relaxed)
     }
 }
 
@@ -242,13 +248,15 @@ where
 {
     fn drop(&mut self) {
         // SAFETY:
-        // * Slab itself is an address-sensitive object; therefore, we must ensure
-        //   that we haven't moved the underlying object of the source ptr.
-        // * Since the object must be allocated from a [Slab] and its source ptr
-        //   should have been properly set.
+        // * The source field is not publicly exposed.
+        // * Since SlabObject are only created through Slab<T> allocations, which should
+        //   correctly initialize source field, we can safely dereference it.
+        // * Dereferencing the raw pointer to obtain an exclusive reference does not
+        //   move the underlying Slab, which is address-sensitive.
+        // * The deallocate_object method should itself handle the Slab object properly.
         unsafe {
-            let unsafe_slab = &mut *self.source;
-            unsafe_slab.deallocate_object(self.object);
+            let unsafe_slab = &mut *self.source.load(Relaxed);
+            unsafe_slab.deallocate_object(self.object.load(Relaxed));
         }
     }
 }

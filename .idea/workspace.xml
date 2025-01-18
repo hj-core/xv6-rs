@@ -577,10 +577,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="Introduce ListNode" />
-    <MESSAGE value="Introduce ListNode" />
-    <MESSAGE value="Rename ListHead to ListNode" />
-    <MESSAGE value="amend ppns" />
     <MESSAGE value="Implement new for ListNode" />
     <MESSAGE value="Refactor Page to use ListNode" />
     <MESSAGE value="Add struct Cache and Slab" />
@@ -602,7 +598,11 @@
     <MESSAGE value="Exploring SlabObject implementation" />
     <MESSAGE value="Exploring the overall design" />
     <MESSAGE value="Introduce SlabObject" />
-    <option name="LAST_COMMIT_MESSAGE" value="Introduce SlabObject" />
+    <MESSAGE value="Make Pinpoint use C repr" />
+    <MESSAGE value="Make Pinpoint use C repr" />
+    <MESSAGE value="Make the wrappers use transparent repr" />
+    <MESSAGE value="Make the wrappers use transparent repr" />
+    <option name="LAST_COMMIT_MESSAGE" value="Make the wrappers use transparent repr" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />
