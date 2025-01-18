@@ -74,14 +74,14 @@ where
 {
     /// [Slab]s within the same [Cache].slabs_* have their [Pinpoint] circularly linked.
     pinpoint: Pinpoint,
+    total_slots: usize,
+    slot0: Address,
+    slot_size: Bytes,
     /// Each bit represents slot usage (0: unused, 1: used).  
     /// The bits are packed: the first u64 represents slots 0-63,
     /// the second u64 represents slots 64-127, and so on.
     used_bitmap: [u64; SLAB_USED_BITMAP_SIZE],
     used_count: usize,
-    slot0: Address,
-    slot_size: Bytes,
-    total_slots: usize,
     _type_marker: PhantomData<T>,
 }
 
