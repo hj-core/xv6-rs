@@ -7,7 +7,7 @@ use crate::lock::Spinlock;
 use crate::mem::slab::Error::AllocateFromFullSlab;
 use core::marker::PhantomData;
 use core::ptr;
-use core::ptr::null_mut;
+use core::ptr::{null, null_mut};
 use core::sync::atomic::AtomicPtr;
 use core::sync::atomic::Ordering::Relaxed;
 use wrapper::{Address, Bytes};
@@ -93,6 +93,21 @@ impl<T> Slab<T>
 where
     T: Default,
 {
+    pub fn new_empty() -> Self {
+        assert_ne!(0, size_of::<T>(), "Zero-size types are not supported.");
+
+        Self {
+            pinpoint: Pinpoint::new(),
+            source: null(),
+            total_slots: 0,
+            slot0: Address(0),
+            slot_size: Bytes(0),
+            used_bitmap: [0; SLAB_USED_BITMAP_SIZE],
+            used_count: 0,
+            _type_marker: PhantomData,
+        }
+    }
+
     fn initialize(&mut self, slab_size: Bytes) {
         self.unlink_pinpoint();
         self.reset_used_bitmap_and_count();
