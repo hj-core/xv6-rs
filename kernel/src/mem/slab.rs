@@ -141,11 +141,20 @@ where
     /// Offset from the [Slab]'s address to slot 0.
     /// This offset has considered the alignment requirement of object [T].
     fn compute_slot0_offset(&self) -> Bytes {
-        let base: *const u8 = ptr::from_ref(self).cast();
-        let header_size = size_of::<Slab<T>>();
-        let header_end = unsafe { base.byte_add(header_size) };
-        let padding = header_end.align_offset(align_of::<T>());
-        Bytes(header_size + padding)
+        let addr0 = Address(ptr::from_ref(self).addr() as u64);
+        let header_size = Bytes(size_of::<Slab<T>>());
+        Self::compute_slot0_offset_helper(addr0, header_size)
+    }
+
+    fn compute_slot0_offset_helper(addr0: Address, header_size: Bytes) -> Bytes {
+        let header_end = (addr0 + header_size).0 as usize;
+        let object_align = align_of::<T>();
+        let padding = if header_end % object_align == 0 {
+            0
+        } else {
+            object_align - (header_end % object_align)
+        };
+        header_size + Bytes(padding)
     }
 
     /// Returns a [SlabObject] wrapping the allocated object [T] if the allocation succeeded;
@@ -293,6 +302,53 @@ mod slab_tests {
 
     use super::*;
     use alloc::format;
+
+    mod object_ignorance {
+        use super::*;
+        use core::any::type_name;
+
+        #[test]
+        fn test_compute_slot0_offset_helper() {
+            let expected = Bytes(5);
+            let addr0 = Address(0x0);
+            let header_size = Bytes(5);
+            assert_compute_slot0_offset_helper::<u8>(expected, addr0, header_size);
+
+            let expected = Bytes(23);
+            let addr0 = Address(0x8000_fff1);
+            let header_size = Bytes(16);
+            assert_compute_slot0_offset_helper::<u64>(expected, addr0, header_size);
+
+            let expected = Bytes(31);
+            let addr0 = Address(0x8000_fff1);
+            let header_size = Bytes(22);
+            assert_compute_slot0_offset_helper::<u128>(expected, addr0, header_size);
+
+            let expected = Bytes(31);
+            let addr0 = Address(0x8000_fff1);
+            let header_size = Bytes(28);
+            assert_compute_slot0_offset_helper::<u128>(expected, addr0, header_size);
+
+            let expected = Bytes(30);
+            let addr0 = Address(0x8000_fff2);
+            let header_size = Bytes(28);
+            assert_compute_slot0_offset_helper::<u128>(expected, addr0, header_size);
+        }
+
+        fn assert_compute_slot0_offset_helper<T: Default>(
+            expected: Bytes,
+            addr0: Address,
+            header_size: Bytes,
+        ) {
+            let actual = Slab::<T>::compute_slot0_offset_helper(addr0, header_size);
+            assert_eq!(
+                expected,
+                actual,
+                "addr0= {addr0:?}, header_size= {header_size:?}, type= {:?}",
+                type_name::<T>()
+            );
+        }
+    }
 
     mod empty_slab {
         use super::*;
