@@ -17,6 +17,7 @@ static FREE_PAGES: GuardLock<Page> = GuardLock::new(Page {
 
 const DRAM_END_EXCLUSIVE: Address = Address(DRAM_START.0 + DRAM_SIZE.0 as u64);
 const PAGE_SIZE: Bytes = Bytes(4096);
+const PAGE_ALIGN: Bytes = Bytes(4096);
 
 pub fn initialize() {
     uart::busy_print_str("-> Initializing physical memories... ");
@@ -34,7 +35,7 @@ fn initialize_free_pages() {
     drop(head_page); // Release the lock
 
     let alloc_start = allocatable_start();
-    let align_offset = (alloc_start.0 as *const u8).align_offset(PAGE_SIZE.0);
+    let align_offset = (alloc_start.0 as *const u8).align_offset(PAGE_ALIGN.0);
 
     let mut start = alloc_start + Bytes(align_offset);
     while free_page(start).is_ok() {
