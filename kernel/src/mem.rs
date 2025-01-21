@@ -101,9 +101,7 @@ fn is_allocatable(addr: Address) -> bool {
 
 unsafe fn memset(start: Address, value: u8, size: Bytes) {
     let start: *mut u8 = start.into();
-    for i in 0..size.0 {
-        *start.add(i) = value;
-    }
+    start.write_bytes(value, size.0)
 }
 
 fn allocate_page() -> Result<Address, Error> {
