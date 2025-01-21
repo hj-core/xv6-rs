@@ -63,7 +63,9 @@ fn free_page(start: Address) -> Result<bool, Error> {
 
     // Fill the page with junk to catch dangling refs
     const JUNK: u8 = 0xf0;
-    memset(start, JUNK, PAGE_SIZE);
+    unsafe {
+        memset(start, JUNK, PAGE_SIZE);
+    }
 
     let head = head_page.pinpoint();
     let next = unsafe {
@@ -97,10 +99,10 @@ fn is_allocatable(addr: Address) -> bool {
     allocatable_start().0 <= addr.0 && addr.0 < DRAM_END_EXCLUSIVE.0
 }
 
-fn memset(start: Address, value: u8, size: Bytes) {
+unsafe fn memset(start: Address, value: u8, size: Bytes) {
     let start: *mut u8 = start.into();
     for i in 0..size.0 {
-        unsafe { *start.add(i) = value };
+        *start.add(i) = value;
     }
 }
 

@@ -163,7 +163,9 @@ struct PageTable([PTE; TABLE_SIZE]);
 impl PageTable {
     fn new() -> Result<*mut PageTable, mem::Error> {
         let page = mem::allocate_page()?;
-        memset(page, 0, PAGE_SIZE);
+        unsafe {
+            memset(page, 0, PAGE_SIZE);
+        }
         Ok(page.into())
     }
 
