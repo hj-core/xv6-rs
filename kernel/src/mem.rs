@@ -61,11 +61,11 @@ fn free_page(start: Address) -> Result<bool, Error> {
     // Acquire lock before freeing the page
     let mut head_page = FREE_PAGES.lock();
 
-    const JUNK: u8 = 0xf0;
     // Fill the page with junk to catch dangling refs
     //
     // SAFETY: todo!("should we mark the whole free_page unsafe?")
     unsafe {
+        const JUNK: u8 = 0xf0;
         let start_ptr: *mut u8 = start.into();
         start_ptr.write_bytes(JUNK, PAGE_SIZE.0);
     }

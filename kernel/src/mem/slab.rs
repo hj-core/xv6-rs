@@ -222,9 +222,9 @@ where
     pub fn get_ref(&self) -> &T {
         // SAFETY:
         // * The object field is not publicly exposed.
-        // * Since SlabObject are only created through Slab<T> allocations, which should
+        // * Since SlabObject is only created through Slab<T> allocations, which should
         //   correctly initialize this field, we can safely dereference it.
-        // * Dereferencing the raw pointer to obtain a shared reference does not move
+        // * Dereferencing the raw pointer to get a shared reference does not move
         //   the underlying object.
         unsafe { &*self.object.load(Relaxed) }
     }
@@ -239,9 +239,9 @@ where
     pub unsafe fn get_mut(&mut self) -> &mut T {
         // SAFETY:
         // * The object field is not publicly exposed.
-        // * Since SlabObject are only created through Slab<T> allocations, which should
+        // * Since SlabObject is only created through Slab<T> allocations, which should
         //   correctly initialize this field, we can safely dereference it.
-        // * Dereferencing the raw pointer to obtain an exclusive reference does not
+        // * Dereferencing the raw pointer to get an exclusive reference does not
         //   move the underlying object.
         &mut *self.object.load(Relaxed)
     }
