@@ -16,7 +16,7 @@ use hw::DRAM_START;
 use wrapper::{Address, Bytes};
 
 static KERNEL_ROOT_TABLE: AtomicPtr<PageTable> = AtomicPtr::new(null_mut());
-const TABLE_SIZE: usize = 2 << 9;
+const TABLE_SIZE: usize = 1 << 9;
 
 #[cfg(target_arch = "riscv64")]
 pub fn initialize() {
@@ -335,9 +335,24 @@ impl From<VirtualAddress> for Address {
 }
 
 #[cfg(test)]
+mod page_table_tests {
+    use super::*;
+
+    #[test]
+    fn test_self_size() {
+        assert_eq!(PAGE_SIZE.0, size_of::<PageTable>())
+    }
+}
+
+#[cfg(test)]
 mod pte_tests {
     use super::{PhysicalAddress, PTE};
     use wrapper::Address;
+
+    #[test]
+    fn test_self_size() {
+        assert_eq!(8, size_of::<PTE>());
+    }
 
     #[test]
     fn test_valid() {
