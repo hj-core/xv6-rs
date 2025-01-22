@@ -1,6 +1,6 @@
 // Use the Sv39 scheme (3-level 512-entry page table).
 
-use crate::mem::{is_valid_page, memset, DRAM_END_EXCLUSIVE, PAGE_SIZE};
+use crate::mem::{is_valid_page, DRAM_END_EXCLUSIVE, PAGE_SIZE};
 use crate::{mem, uart};
 use core::ops::Add;
 use core::ptr::null_mut;
@@ -163,8 +163,10 @@ struct PageTable([PTE; TABLE_SIZE]);
 impl PageTable {
     fn new() -> Result<*mut PageTable, mem::Error> {
         let page = mem::allocate_page()?;
+        // SAFETY: todo!()
         unsafe {
-            memset(page, 0, PAGE_SIZE);
+            let start_ptr: *mut u8 = page.into();
+            start_ptr.write_bytes(0, PAGE_SIZE.0);
         }
         Ok(page.into())
     }

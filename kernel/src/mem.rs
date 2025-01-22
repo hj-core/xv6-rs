@@ -61,10 +61,13 @@ fn free_page(start: Address) -> Result<bool, Error> {
     // Acquire lock before freeing the page
     let mut head_page = FREE_PAGES.lock();
 
-    // Fill the page with junk to catch dangling refs
     const JUNK: u8 = 0xf0;
+    // Fill the page with junk to catch dangling refs
+    //
+    // SAFETY: todo!("should we mark the whole free_page unsafe?")
     unsafe {
-        memset(start, JUNK, PAGE_SIZE);
+        let start_ptr: *mut u8 = start.into();
+        start_ptr.write_bytes(JUNK, PAGE_SIZE.0);
     }
 
     let head = head_page.pinpoint();
@@ -97,11 +100,6 @@ fn is_valid_page(start: Address) -> bool {
 
 fn is_allocatable(addr: Address) -> bool {
     allocatable_start().0 <= addr.0 && addr.0 < DRAM_END_EXCLUSIVE.0
-}
-
-unsafe fn memset(start: Address, value: u8, size: Bytes) {
-    let start: *mut u8 = start.into();
-    start.write_bytes(value, size.0)
 }
 
 fn allocate_page() -> Result<Address, Error> {
