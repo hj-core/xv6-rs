@@ -3,6 +3,13 @@ use core::ptr::null_mut;
 use core::sync::atomic::AtomicPtr;
 
 /// This struct is intended to be used as a field within address-sensitive struct.
+///
+/// # CAUTION:
+/// 
+/// repr(C) seems not working. 
+/// The link2 comes before link1 in the initialized FREE_PAGE.
+/// 
+/// todo!("why?")
 #[derive(Debug)]
 #[repr(C)]
 pub struct Pinpoint {
