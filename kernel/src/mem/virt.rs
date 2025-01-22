@@ -163,12 +163,32 @@ struct PageTable([PTE; TABLE_SIZE]);
 impl PageTable {
     fn new() -> Result<*mut PageTable, mem::Error> {
         let page = mem::allocate_page()?;
-        // SAFETY: todo!()
+        // SAFETY:
+        // * We have asserted that our PageTable fits into one page and is aligned.
+        //   Furthermore, because both PageTable and PTE are repr(transparent),
+        //   the layout of PageTable is the same as [u64; TABLE_SIZE].
+        // * Therefore, writing the size of the PageTable bytes with 0 from the page's
+        //   starting address is not unsafe.
+        // * Although this writing may cause UB if there is any dangling reference,
+        //   such references will still cause UB even if we don't write to them,
+        //   and this function is not in a position to address such kinds of UB.
+        // * Therefore, writing to the pointer is considered safe.
         unsafe {
-            let start_ptr: *mut u8 = page.into();
-            start_ptr.write_bytes(0, PAGE_SIZE.0);
+            assert_eq!(
+                PAGE_SIZE.0,
+                size_of::<PageTable>(),
+                "PageTable doesn't fit into one page."
+            );
+            assert_eq!(
+                0,
+                page.0 as usize % align_of::<PageTable>(),
+                "PageTable isn't aligned at the page start."
+            );
+
+            let result: *mut PageTable = page.into();
+            result.write_bytes(0, 1);
+            Ok(result)
         }
-        Ok(page.into())
     }
 
     /// Returns the entry at index, allocating one if necessary.
