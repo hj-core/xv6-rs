@@ -313,27 +313,27 @@ impl<T> From<*mut T> for PhysicalAddress {
 
 #[derive(Copy, Clone, Debug)]
 #[repr(transparent)]
-struct VirtualAddress(u64);
+struct VirtualAddress(usize);
 
 impl VirtualAddress {
-    const MASK_VPN0: u64 = 0x1ff << 12;
-    const MASK_VPN1: u64 = 0x1ff << 21;
-    const MASK_VPN2: u64 = 0x1ff << 30;
-    const MASK_OFFSET: u64 = 0xfff;
+    const MASK_VPN0: usize = 0x1ff << 12;
+    const MASK_VPN1: usize = 0x1ff << 21;
+    const MASK_VPN2: usize = 0x1ff << 30;
+    const MASK_OFFSET: usize = 0xfff;
 
-    fn vpn0(&self) -> u64 {
+    fn vpn0(&self) -> usize {
         (self.0 & Self::MASK_VPN0) >> 12
     }
 
-    fn vpn1(&self) -> u64 {
+    fn vpn1(&self) -> usize {
         (self.0 & Self::MASK_VPN1) >> 21
     }
 
-    fn vpn2(&self) -> u64 {
+    fn vpn2(&self) -> usize {
         (self.0 & Self::MASK_VPN2) >> 30
     }
 
-    fn offset(&self) -> u64 {
+    fn offset(&self) -> usize {
         self.0 & Self::MASK_OFFSET
     }
 }
@@ -342,19 +342,19 @@ impl Add<Bytes> for VirtualAddress {
     type Output = Self;
 
     fn add(self, rhs: Bytes) -> Self::Output {
-        Self(self.0 + rhs.0 as u64)
+        Self(self.0 + rhs.0)
     }
 }
 
 impl From<Address> for VirtualAddress {
     fn from(addr: Address) -> Self {
-        Self(addr.0 as u64)
+        Self(addr.0)
     }
 }
 
 impl From<VirtualAddress> for Address {
     fn from(va: VirtualAddress) -> Self {
-        Self(va.0 as usize)
+        Self(va.0)
     }
 }
 
@@ -561,7 +561,7 @@ mod virtual_address_tests {
         assert_vpn0(0x1ff, VA(0xffff_ffff_ffff_ffff));
     }
 
-    fn assert_vpn0(expected: u64, va: VA) {
+    fn assert_vpn0(expected: usize, va: VA) {
         assert_eq!(expected, va.vpn0(), "{va:?}");
     }
 
@@ -576,7 +576,7 @@ mod virtual_address_tests {
         assert_vpn1(0x1ff, VA(0xffff_ffff_ffff_ffff));
     }
 
-    fn assert_vpn1(expected: u64, va: VA) {
+    fn assert_vpn1(expected: usize, va: VA) {
         assert_eq!(expected, va.vpn1(), "{va:?}");
     }
 
@@ -591,7 +591,7 @@ mod virtual_address_tests {
         assert_vpn2(0x1ff, VA(0xffff_ffff_ffff_ffff));
     }
 
-    fn assert_vpn2(expected: u64, va: VA) {
+    fn assert_vpn2(expected: usize, va: VA) {
         assert_eq!(expected, va.vpn2(), "{va:?}");
     }
 
@@ -603,7 +603,7 @@ mod virtual_address_tests {
         assert_offset(0xfff, VA(0xffff_ffff_ffff_ffff));
     }
 
-    fn assert_offset(expected: u64, va: VA) {
+    fn assert_offset(expected: usize, va: VA) {
         assert_eq!(expected, va.offset(), "{va:?}");
     }
 }
