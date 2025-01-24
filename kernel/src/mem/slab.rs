@@ -141,7 +141,7 @@ where
     /// Offset from the [Slab]'s address to slot 0.
     /// This offset has considered the alignment requirement of object [T].
     fn compute_slot0_offset(&self) -> Bytes {
-        let addr0 = Address(ptr::from_ref(self).addr() as u64);
+        let addr0 = Address(ptr::from_ref(self).addr());
         let header_size = Bytes(size_of::<Slab<T>>());
         Self::compute_slot0_offset_helper(addr0, header_size)
     }

@@ -15,7 +15,7 @@ static FREE_PAGES: GuardLock<Page> = GuardLock::new(Page {
     pinpoint: Pinpoint::new(),
 });
 
-const DRAM_END_EXCLUSIVE: Address = Address(DRAM_START.0 + DRAM_SIZE.0 as u64);
+const DRAM_END_EXCLUSIVE: Address = Address(DRAM_START.0 + DRAM_SIZE.0);
 const PAGE_SIZE: Bytes = Bytes(4096);
 const PAGE_ALIGN: Bytes = Bytes(4096);
 
@@ -48,7 +48,7 @@ fn allocatable_start() -> Address {
         #[link_name = "link_end"]
         static addr_as_value: u8;
     }
-    Address(&raw const addr_as_value as u64)
+    (&raw const addr_as_value).into()
 }
 
 fn free_page(start: Address) -> Result<bool, Error> {
@@ -95,7 +95,7 @@ fn free_page(start: Address) -> Result<bool, Error> {
 }
 
 fn is_valid_page(start: Address) -> bool {
-    start.0 % (PAGE_SIZE.0 as u64) == 0 && (start + PAGE_SIZE).0 <= DRAM_END_EXCLUSIVE.0
+    start.0 % PAGE_SIZE.0 == 0 && (start + PAGE_SIZE).0 <= DRAM_END_EXCLUSIVE.0
 }
 
 fn is_allocatable(addr: Address) -> bool {

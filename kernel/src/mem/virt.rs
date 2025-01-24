@@ -73,7 +73,7 @@ fn kernel_text_end_exclusive() -> Address {
         #[link_name = "link_text_end"]
         static addr_as_value: u8;
     }
-    Address(&raw const addr_as_value as u64)
+    (&raw const addr_as_value).into()
 }
 
 /// Direct Map all pages after kernel text.
@@ -243,7 +243,7 @@ impl PTE {
     }
 
     fn get_table_start(&self) -> Address {
-        Address((self.0 & Self::MASK_PPN) << 2)
+        Address(((self.0 & Self::MASK_PPN) << 2) as usize)
     }
 }
 
@@ -289,13 +289,13 @@ impl Add<Bytes> for PhysicalAddress {
 
 impl From<Address> for PhysicalAddress {
     fn from(addr: Address) -> Self {
-        Self(addr.0)
+        Self(addr.0 as u64)
     }
 }
 
 impl From<PhysicalAddress> for Address {
     fn from(pa: PhysicalAddress) -> Self {
-        Self(pa.0)
+        Self(pa.0 as usize)
     }
 }
 
@@ -348,13 +348,13 @@ impl Add<Bytes> for VirtualAddress {
 
 impl From<Address> for VirtualAddress {
     fn from(addr: Address) -> Self {
-        Self(addr.0)
+        Self(addr.0 as u64)
     }
 }
 
 impl From<VirtualAddress> for Address {
     fn from(va: VirtualAddress) -> Self {
-        Self(va.0)
+        Self(va.0 as usize)
     }
 }
 

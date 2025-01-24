@@ -23,19 +23,19 @@ impl Mul<usize> for Bytes {
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 #[repr(transparent)]
-pub struct Address(pub u64);
+pub struct Address(pub usize);
 
 impl Add<Bytes> for Address {
     type Output = Self;
 
     fn add(self, rhs: Bytes) -> Self::Output {
-        Self(self.0 + rhs.0 as u64)
+        Self(self.0 + rhs.0)
     }
 }
 
 impl<T> From<*const T> for Address {
     fn from(ptr: *const T) -> Self {
-        Self(ptr as u64)
+        Self(ptr as usize)
     }
 }
 
@@ -47,7 +47,7 @@ impl<T> Into<*const T> for Address {
 
 impl<T> From<*mut T> for Address {
     fn from(ptr: *mut T) -> Self {
-        Self(ptr as u64)
+        Self(ptr as usize)
     }
 }
 
