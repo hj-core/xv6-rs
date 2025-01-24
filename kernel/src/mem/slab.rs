@@ -142,7 +142,7 @@ where
             slot0_offset.0 + self.slot_size.0 <= total_size.0,
             "Slab size is too small."
         );
-        self.total_slots = (total_size.0 - slot0_offset.0) % self.slot_size.0
+        self.total_slots = (total_size.0 - slot0_offset.0) / self.slot_size.0
     }
 
     /// Offset from the [Slab]'s address to slot 0.
