@@ -154,7 +154,7 @@ pub fn configure_cpu() {
 
 #[cfg(target_arch = "riscv64")]
 fn enable_paging(root_table: PhysicalAddress) {
-    riscv64::write_satp(riscv64::SATP_MODE_SV39 | root_table.ppn());
+    riscv64::write_satp(riscv64::SATP_MODE_SV39 | root_table.ppn() as u64);
 }
 
 #[repr(transparent)]
@@ -200,7 +200,7 @@ impl PageTable {
         let new_table = PageTable::new()?;
         let mut pte = PTE(0);
         pte.mark_valid();
-        pte.set_ppn(PhysicalAddress(new_table as u64));
+        pte.set_ppn(PhysicalAddress(new_table as usize));
 
         self.0[index] = pte;
         Ok(&mut self.0[index])
@@ -239,7 +239,7 @@ impl PTE {
 
     fn set_ppn(&mut self, pa: PhysicalAddress) {
         self.0 &= !Self::MASK_PPN;
-        self.0 |= pa.ppn() << 10;
+        self.0 |= (pa.ppn() << 10) as u64;
     }
 
     fn get_table_start(&self) -> Address {
@@ -249,32 +249,32 @@ impl PTE {
 
 #[derive(Copy, Clone, Debug)]
 #[repr(transparent)]
-struct PhysicalAddress(u64);
+struct PhysicalAddress(usize);
 
 impl PhysicalAddress {
-    const MASK_PPN0: u64 = 0x1ff << 12;
-    const MASK_PPN1: u64 = 0x1ff << 21;
-    const MASK_PPN2: u64 = 0x3ff_ffff << 30;
-    const MASK_PPN: u64 = 0xfff_ffff_ffff << 12;
-    const MASK_OFFSET: u64 = 0xfff;
+    const MASK_PPN0: usize = 0x1ff << 12;
+    const MASK_PPN1: usize = 0x1ff << 21;
+    const MASK_PPN2: usize = 0x3ff_ffff << 30;
+    const MASK_PPN: usize = 0xfff_ffff_ffff << 12;
+    const MASK_OFFSET: usize = 0xfff;
 
-    fn ppn(&self) -> u64 {
+    fn ppn(&self) -> usize {
         (self.0 & Self::MASK_PPN) >> 12
     }
 
-    fn ppn0(&self) -> u64 {
+    fn ppn0(&self) -> usize {
         (self.0 & Self::MASK_PPN0) >> 12
     }
 
-    fn ppn1(&self) -> u64 {
+    fn ppn1(&self) -> usize {
         (self.0 & Self::MASK_PPN1) >> 21
     }
 
-    fn ppn2(&self) -> u64 {
+    fn ppn2(&self) -> usize {
         (self.0 & Self::MASK_PPN2) >> 30
     }
 
-    fn offset(&self) -> u64 {
+    fn offset(&self) -> usize {
         self.0 & Self::MASK_OFFSET
     }
 }
@@ -283,31 +283,31 @@ impl Add<Bytes> for PhysicalAddress {
     type Output = Self;
 
     fn add(self, rhs: Bytes) -> Self::Output {
-        Self(self.0 + rhs.0 as u64)
+        Self(self.0 + rhs.0)
     }
 }
 
 impl From<Address> for PhysicalAddress {
     fn from(addr: Address) -> Self {
-        Self(addr.0 as u64)
+        Self(addr.0)
     }
 }
 
 impl From<PhysicalAddress> for Address {
     fn from(pa: PhysicalAddress) -> Self {
-        Self(pa.0 as usize)
+        Self(pa.0)
     }
 }
 
 impl<T> From<*const T> for PhysicalAddress {
     fn from(ptr: *const T) -> Self {
-        PhysicalAddress(ptr as u64)
+        PhysicalAddress(ptr as usize)
     }
 }
 
 impl<T> From<*mut T> for PhysicalAddress {
     fn from(ptr: *mut T) -> Self {
-        PhysicalAddress(ptr as u64)
+        PhysicalAddress(ptr as usize)
     }
 }
 
@@ -484,7 +484,7 @@ mod physical_address_tests {
         assert_ppn(0xbab73216ece, PA(0xc5bab73216ece2d3));
     }
 
-    fn assert_ppn(expected: u64, pa: PA) {
+    fn assert_ppn(expected: usize, pa: PA) {
         assert_eq!(expected, pa.ppn(), "{pa:?}");
     }
 
@@ -499,7 +499,7 @@ mod physical_address_tests {
         assert_ppn0(0x1ff, PA(0xffff_ffff_ffff_ffff));
     }
 
-    fn assert_ppn0(expected: u64, pa: PA) {
+    fn assert_ppn0(expected: usize, pa: PA) {
         assert_eq!(expected, pa.ppn0(), "{pa:?}");
     }
 
@@ -514,7 +514,7 @@ mod physical_address_tests {
         assert_ppn1(0x1ff, PA(0xffff_ffff_ffff_ffff));
     }
 
-    fn assert_ppn1(expected: u64, pa: PA) {
+    fn assert_ppn1(expected: usize, pa: PA) {
         assert_eq!(expected, pa.ppn1(), "{pa:?}");
     }
 
@@ -529,7 +529,7 @@ mod physical_address_tests {
         assert_ppn2(0x3ff_ffff, PA(0xffff_ffff_ffff_ffff));
     }
 
-    fn assert_ppn2(expected: u64, pa: PA) {
+    fn assert_ppn2(expected: usize, pa: PA) {
         assert_eq!(expected, pa.ppn2(), "{pa:?}");
     }
 
@@ -541,7 +541,7 @@ mod physical_address_tests {
         assert_offset(0xfff, PA(0xffff_ffff_ffff_ffff));
     }
 
-    fn assert_offset(expected: u64, pa: PA) {
+    fn assert_offset(expected: usize, pa: PA) {
         assert_eq!(expected, pa.offset(), "{pa:?}");
     }
 }
