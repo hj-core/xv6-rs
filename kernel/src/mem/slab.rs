@@ -5,6 +5,7 @@
 use crate::dsa::{HasPinpoint, Pinpoint, ReprC};
 use crate::lock::Spinlock;
 use crate::mem::slab::Error::AllocateFromFullSlab;
+use crate::mem::PAGE_SIZE;
 use core::marker::PhantomData;
 use core::ptr;
 use core::ptr::{null, null_mut};
@@ -23,7 +24,7 @@ struct Cache {
     /// Protect [Cache] from concurrent access.
     lock: Spinlock,
     name: [char; CACHE_NAME_LENGTH],
-    slab_size: Bytes,
+    pages_per_slab: usize,
     /// slabs_* is the sentinel head of the circularly linked [Slab] pinpoints.
     slabs_full: Pinpoint,
     slabs_partial: Pinpoint,
@@ -37,12 +38,12 @@ impl Cache {
     where
         T: Default + HasPinpoint,
     {
-        let addr0 = Self::request_contiguous_space(self.slab_size)?;
+        let addr0 = Self::request_contiguous_pages(self.pages_per_slab)?;
         let slab = unsafe {
             let ptr: *mut Slab<T> = addr0.into();
             ptr.as_mut().unwrap()
         };
-        slab.initialize(self.slab_size);
+        slab.initialize(PAGE_SIZE * self.pages_per_slab);
 
         let head = &mut self.slabs_empty;
         let next = unsafe { head.link2.load(Relaxed).as_mut().unwrap() };
@@ -55,7 +56,11 @@ impl Cache {
         Ok(true)
     }
 
-    fn request_contiguous_space(_size: Bytes) -> Result<Address, Error> {
+    /// Ask the allocator for contiguous free pages.
+    ///
+    /// Return the starting address if the allocation succeeds;
+    /// otherwise, return the corresponding error.
+    fn request_contiguous_pages(_count: usize) -> Result<Address, Error> {
         todo!()
     }
 }
@@ -108,10 +113,12 @@ where
         }
     }
 
-    fn initialize(&mut self, slab_size: Bytes) {
+    fn initialize(&mut self, total_size: Bytes) {
+        assert_ne!(0, size_of::<T>(), "Zero-size types are not supported.");
+
         self.unlink_pinpoint();
+        self.set_slot0_size_and_total(total_size);
         self.reset_used_bitmap_and_count();
-        self.set_slot0_size_and_total(slab_size);
     }
 
     fn unlink_pinpoint(&mut self) {
@@ -126,16 +133,16 @@ where
         self.used_count = 0;
     }
 
-    fn set_slot0_size_and_total(&mut self, slab_size: Bytes) {
+    fn set_slot0_size_and_total(&mut self, total_size: Bytes) {
         let slot0_offset = self.compute_slot0_offset();
         self.slot0 = Address::from(ptr::from_ref(self)) + slot0_offset;
         self.slot_size = Bytes(size_of::<T>());
 
         assert!(
-            slot0_offset.0 + self.slot_size.0 <= slab_size.0,
+            slot0_offset.0 + self.slot_size.0 <= total_size.0,
             "Slab size is too small."
         );
-        self.total_slots = (slab_size.0 - slot0_offset.0) % self.slot_size.0
+        self.total_slots = (total_size.0 - slot0_offset.0) % self.slot_size.0
     }
 
     /// Offset from the [Slab]'s address to slot 0.
@@ -147,7 +154,7 @@ where
     }
 
     fn compute_slot0_offset_helper(addr0: Address, header_size: Bytes) -> Bytes {
-        let header_end = (addr0 + header_size).0 as usize;
+        let header_end = (addr0 + header_size).0;
         let object_align = align_of::<T>();
         let padding = if header_end % object_align == 0 {
             0
