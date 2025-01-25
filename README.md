@@ -25,6 +25,7 @@ This project is an attempt to implement xv6 using Rust.
 | Rust by Example                                          | https://doc.rust-lang.org/rust-by-example/index.html                            |
 | The Embedded Rust Book                                   | https://doc.rust-lang.org/stable/embedded-book/intro/index.html                 |
 | The Embedonomicon                                        | https://docs.rust-embedded.org/embedonomicon/                                   |
+| Learn Rust With Entirely Too Many Linked Lists           | https://rust-unofficial.github.io/too-many-lists/                               |
 | Rust Atomics and Locks by Mara Bos                       | https://marabos.nl/atomics/                                                     |
 | Comprehensive Rust                                       | https://google.github.io/comprehensive-rust/index.html                          |
 | Writing an OS in Rust                                    | https://os.phil-opp.com/                                                        |
