@@ -8,7 +8,7 @@ use crate::mem::slab::Error::AllocateFromFullSlab;
 use crate::mem::PAGE_SIZE;
 use core::marker::PhantomData;
 use core::ptr;
-use core::ptr::{null, null_mut};
+use core::ptr::null_mut;
 use core::sync::atomic::AtomicPtr;
 use core::sync::atomic::Ordering::Relaxed;
 use wrapper::{Address, Bytes};
@@ -80,7 +80,7 @@ where
     /// [Slab]s within the same [Cache].slabs_* have their [Pinpoint] circularly linked.
     pinpoint: Pinpoint,
     /// Pointer to the source [Cache].
-    source: *const Cache,
+    source: *mut Cache,
     total_slots: usize,
     slot0: Address,
     slot_size: Bytes,
@@ -103,7 +103,7 @@ where
 
         Self {
             pinpoint: Pinpoint::new(),
-            source: null(),
+            source: null_mut(),
             total_slots: 0,
             slot0: Address(0),
             slot_size: Bytes(0),
@@ -366,7 +366,7 @@ mod slab_tests {
         fn new_empty() -> Slab<u64> {
             Slab {
                 pinpoint: Pinpoint::new(),
-                source: null(),
+                source: null_mut(),
                 used_bitmap: [0; SLAB_USED_BITMAP_SIZE],
                 used_count: 0,
                 slot0: Address(0),
@@ -401,7 +401,7 @@ mod slab_tests {
         fn new_full() -> Slab<u64> {
             Slab {
                 pinpoint: Pinpoint::new(),
-                source: null(),
+                source: null_mut(),
                 used_bitmap: [
                     0xffff_ffff_ffff_ffff,
                     0xffff_ffff_ffff_ffff,
@@ -425,7 +425,7 @@ mod slab_tests {
         fn new_full_max_slots() -> Slab<u64> {
             Slab {
                 pinpoint: Pinpoint::new(),
-                source: null(),
+                source: null_mut(),
                 used_bitmap: [0xffff_ffff_ffff_ffff; SLAB_USED_BITMAP_SIZE],
                 used_count: MAX_SLOTS_PER_SLAB,
                 slot0: Address(0),
@@ -467,7 +467,7 @@ mod slab_tests {
         fn new_partial() -> Slab<u64> {
             Slab {
                 pinpoint: Pinpoint::new(),
-                source: null(),
+                source: null_mut(),
                 used_bitmap: [
                     0xffff_ffff_ffff_ffff,
                     0x6030_0100_0000_08ff,
