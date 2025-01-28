@@ -2,7 +2,6 @@
 // Understanding the Linux Virtual Memory Manager by Mel Gorman, Chapter 8
 // https://pdos.csail.mit.edu/~sbw/links/gorman_book.pdf
 
-use crate::dsa::Pinpoint;
 use crate::lock::Spinlock;
 use crate::mem::slab::Error::AllocateFromFullSlab;
 use core::marker::PhantomData;
@@ -18,28 +17,34 @@ const SLAB_USED_BITMAP_SIZE: usize = 4;
 const MAX_SLOTS_PER_SLAB: usize = SLAB_USED_BITMAP_SIZE * 64;
 
 #[repr(C)]
-struct Cache {
+struct Cache<T>
+where
+    T: Default,
+{
     /// Protect [Cache] from concurrent access.
     lock: Spinlock,
     name: [char; CACHE_NAME_LENGTH],
     pages_per_slab: usize,
-    /// slabs_* is the sentinel head of the circularly linked [SlabHeader].
-    slabs_full: Pinpoint,
-    slabs_partial: Pinpoint,
-    slabs_empty: Pinpoint,
+    // slabs_* is null or circularly linked [SlabHead]s.
+    slabs_full: AtomicPtr<SlabHeader<T>>,
+    slabs_partial: AtomicPtr<SlabHeader<T>>,
+    slabs_empty: AtomicPtr<SlabHeader<T>>,
 }
 
-impl Cache {
+impl<T> Cache<T>
+where
+    T: Default,
+{
     /// Return a [SlabObject] if the allocation succeeds;
     /// otherwise, return the corresponding error.
     ///
     /// The allocated object has the default value of [T], and clients can access it through
     /// the [SlabObject].
-    pub fn allocate_object<T: Default>() -> Result<SlabObject<T>, Error> {
+    pub fn allocate_object() -> Result<SlabObject<T>, Error> {
         todo!()
     }
 
-    fn grow<T: Default>(&mut self) -> Result<bool, Error> {
+    fn grow(&mut self) -> Result<bool, Error> {
         todo!()
     }
 
@@ -59,7 +64,7 @@ where
     T: Default,
 {
     /// Pointer to the source [Cache].
-    source: *mut Cache,
+    source: *mut Cache<T>,
     /// [SlabHeader]s within the same [Cache].slabs_* are circularly linked.
     prev: AtomicPtr<SlabHeader<T>>,
     /// [SlabHeader]s within the same [Cache].slabs_* are circularly linked.
