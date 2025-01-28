@@ -25,7 +25,7 @@ struct Cache {
     lock: Spinlock,
     name: [char; CACHE_NAME_LENGTH],
     pages_per_slab: usize,
-    /// slabs_* is the sentinel head of the circularly linked [Slab] pinpoints.
+    /// slabs_* is the sentinel head of the circularly linked [SlabHeader].
     slabs_full: Pinpoint,
     slabs_partial: Pinpoint,
     slabs_empty: Pinpoint,
@@ -58,16 +58,16 @@ impl HasPinpoint for Cache {
 
 #[repr(C)]
 #[derive(Debug)]
-struct Slab<T>
+struct SlabHeader<T>
 where
     T: Default,
 {
     /// Pointer to the source [Cache].
     source: *mut Cache,
-    /// [Slab]s within the same [Cache].slabs_* are circularly linked.
-    prev: AtomicPtr<Slab<T>>,
-    /// [Slab]s within the same [Cache].slabs_* are circularly linked.
-    next: AtomicPtr<Slab<T>>,
+    /// [SlabHeader]s within the same [Cache].slabs_* are circularly linked.
+    prev: AtomicPtr<SlabHeader<T>>,
+    /// [SlabHeader]s within the same [Cache].slabs_* are circularly linked.
+    next: AtomicPtr<SlabHeader<T>>,
     total_slots: usize,
     slot0: Address,
     slot_size: Bytes,
@@ -80,7 +80,7 @@ where
     _pinned: PhantomPinned,
 }
 
-impl<T> Slab<T>
+impl<T> SlabHeader<T>
 where
     T: Default,
 {
@@ -101,11 +101,11 @@ where
         }
     }
 
-    fn initialize(&mut self, total_size: Bytes) {
+    fn initialize(&mut self, slab_size: Bytes) {
         assert_ne!(0, size_of::<T>(), "Zero-size types are not supported.");
 
         self.unlink();
-        self.set_slot0_size_and_total(total_size);
+        self.set_slot0_size_and_total(slab_size);
         self.reset_used_bitmap_and_count();
     }
 
@@ -121,23 +121,23 @@ where
         self.used_count = 0;
     }
 
-    fn set_slot0_size_and_total(&mut self, total_size: Bytes) {
+    fn set_slot0_size_and_total(&mut self, slab_size: Bytes) {
         let slot0_offset = self.compute_slot0_offset();
         self.slot0 = Address::from(ptr::from_ref(self)) + slot0_offset;
         self.slot_size = Bytes(size_of::<T>());
 
         assert!(
-            slot0_offset.0 + self.slot_size.0 <= total_size.0,
+            slot0_offset.0 + self.slot_size.0 <= slab_size.0,
             "Slab size is too small."
         );
-        self.total_slots = (total_size.0 - slot0_offset.0) / self.slot_size.0
+        self.total_slots = (slab_size.0 - slot0_offset.0) / self.slot_size.0
     }
 
-    /// Offset from the [Slab]'s address to slot 0.
+    /// Offset from the [SlabHeader]'s address to slot 0.
     /// This offset has considered the alignment requirement of object [T].
     fn compute_slot0_offset(&self) -> Bytes {
         let addr0 = Address(ptr::from_ref(self).addr());
-        let header_size = Bytes(size_of::<Slab<T>>());
+        let header_size = Bytes(size_of::<SlabHeader<T>>());
         Self::compute_slot0_offset_helper(addr0, header_size)
     }
 
@@ -172,7 +172,7 @@ where
         unsafe {
             object_ptr.write(T::default());
             let result = SlabObject {
-                source: AtomicPtr::new(self as *mut Slab<T>),
+                source: AtomicPtr::new(self as *mut SlabHeader<T>),
                 object: AtomicPtr::from(object_ptr),
                 _marker: PhantomData,
             };
@@ -218,7 +218,7 @@ struct SlabObject<T>
 where
     T: Default,
 {
-    source: AtomicPtr<Slab<T>>,
+    source: AtomicPtr<SlabHeader<T>>,
     object: AtomicPtr<T>,
     _marker: PhantomData<T>,
 }
@@ -328,7 +328,7 @@ mod slab_tests {
             addr0: Address,
             header_size: Bytes,
         ) {
-            let actual = Slab::<T>::compute_slot0_offset_helper(addr0, header_size);
+            let actual = SlabHeader::<T>::compute_slot0_offset_helper(addr0, header_size);
             assert_eq!(
                 expected,
                 actual,
@@ -341,8 +341,8 @@ mod slab_tests {
     mod empty_slab {
         use super::*;
 
-        fn new_empty() -> Slab<u64> {
-            Slab {
+        fn new_empty() -> SlabHeader<u64> {
+            SlabHeader {
                 source: null_mut(),
                 prev: AtomicPtr::new(null_mut()),
                 next: AtomicPtr::new(null_mut()),
@@ -377,8 +377,8 @@ mod slab_tests {
     mod full_slab {
         use super::*;
 
-        fn new_full() -> Slab<u64> {
-            Slab {
+        fn new_full() -> SlabHeader<u64> {
+            SlabHeader {
                 source: null_mut(),
                 prev: AtomicPtr::new(null_mut()),
                 next: AtomicPtr::new(null_mut()),
@@ -403,8 +403,8 @@ mod slab_tests {
             assert_slab_state_consistency(&slab);
         }
 
-        fn new_full_max_slots() -> Slab<u64> {
-            Slab {
+        fn new_full_max_slots() -> SlabHeader<u64> {
+            SlabHeader {
                 source: null_mut(),
                 prev: AtomicPtr::new(null_mut()),
                 next: AtomicPtr::new(null_mut()),
@@ -446,8 +446,8 @@ mod slab_tests {
     mod partial_slab {
         use super::*;
 
-        fn new_partial() -> Slab<u64> {
-            Slab {
+        fn new_partial() -> SlabHeader<u64> {
+            SlabHeader {
                 source: null_mut(),
                 prev: AtomicPtr::new(null_mut()),
                 next: AtomicPtr::new(null_mut()),
@@ -484,7 +484,7 @@ mod slab_tests {
         }
     }
 
-    fn assert_content_equal(slab1: &Slab<u64>, slab2: &Slab<u64>) {
+    fn assert_content_equal(slab1: &SlabHeader<u64>, slab2: &SlabHeader<u64>) {
         assert_eq!(
             slab1.prev.load(Relaxed),
             slab2.prev.load(Relaxed),
@@ -502,12 +502,12 @@ mod slab_tests {
         assert_eq!(slab1.total_slots, slab2.total_slots, "total_slots");
     }
 
-    fn assert_slab_state_consistency(slab: &Slab<u64>) {
+    fn assert_slab_state_consistency(slab: &SlabHeader<u64>) {
         assert_used_bitmap_count_consistency(slab);
         assert_used_bitmap_total_slots_consistency(slab);
     }
 
-    fn assert_used_bitmap_count_consistency(slab: &Slab<u64>) {
+    fn assert_used_bitmap_count_consistency(slab: &SlabHeader<u64>) {
         let count = slab
             .used_bitmap
             .iter()
@@ -519,7 +519,7 @@ mod slab_tests {
         );
     }
 
-    fn assert_used_bitmap_total_slots_consistency(slab: &Slab<u64>) {
+    fn assert_used_bitmap_total_slots_consistency(slab: &SlabHeader<u64>) {
         if slab.total_slots == MAX_SLOTS_PER_SLAB {
             return;
         }
@@ -539,8 +539,8 @@ mod slab_tests {
 
     fn assert_use_first_free_slot(
         expected_return: usize,
-        expected_after: Slab<u64>,
-        mut before: Slab<u64>,
+        expected_after: SlabHeader<u64>,
+        mut before: SlabHeader<u64>,
     ) {
         let str_before = format!("{before:?}");
         let actual_return = before.use_first_free_slot();
