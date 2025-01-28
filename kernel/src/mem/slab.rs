@@ -186,6 +186,7 @@ where
             let result = SlabObject {
                 source: AtomicPtr::new(self as *mut Slab<T>),
                 object: AtomicPtr::from(object_ptr),
+                _marker: PhantomData,
             };
             Ok(result)
         }
@@ -240,6 +241,7 @@ where
 {
     source: AtomicPtr<Slab<T>>,
     object: AtomicPtr<T>,
+    _marker: PhantomData<T>,
 }
 
 /// A proxy to the actual allocated object.
