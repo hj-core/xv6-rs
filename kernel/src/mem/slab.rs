@@ -5,8 +5,8 @@
 use crate::dsa::{HasPinpoint, Pinpoint, ReprC};
 use crate::lock::Spinlock;
 use crate::mem::slab::Error::AllocateFromFullSlab;
-use crate::mem::PAGE_SIZE;
 use core::marker::PhantomData;
+use core::marker::PhantomPinned;
 use core::ptr;
 use core::ptr::null_mut;
 use core::sync::atomic::AtomicPtr;
@@ -38,22 +38,7 @@ impl Cache {
     where
         T: Default + HasPinpoint,
     {
-        let addr0 = Self::request_contiguous_pages(self.pages_per_slab)?;
-        let slab = unsafe {
-            let ptr: *mut Slab<T> = addr0.into();
-            ptr.as_mut().unwrap()
-        };
-        slab.initialize(PAGE_SIZE * self.pages_per_slab);
-
-        let head = &mut self.slabs_empty;
-        let next = unsafe { head.link2.load(Relaxed).as_mut().unwrap() };
-        let new = slab.pinpoint();
-        new.link1.store(head, Relaxed);
-        new.link2.store(next, Relaxed);
-        head.link2.store(new, Relaxed);
-        next.link1.store(new, Relaxed);
-
-        Ok(true)
+        todo!()
     }
 
     /// Ask the allocator for contiguous free pages.
@@ -77,22 +62,23 @@ struct Slab<T>
 where
     T: Default,
 {
-    /// [Slab]s within the same [Cache].slabs_* have their [Pinpoint] circularly linked.
-    pinpoint: Pinpoint,
     /// Pointer to the source [Cache].
     source: *mut Cache,
+    /// [Slab]s within the same [Cache].slabs_* are circularly linked.
+    prev: AtomicPtr<Slab<T>>,
+    /// [Slab]s within the same [Cache].slabs_* are circularly linked.
+    next: AtomicPtr<Slab<T>>,
     total_slots: usize,
     slot0: Address,
     slot_size: Bytes,
-    /// Each bit represents slot usage (0: unused, 1: used).  
+    /// Each bit represents slot usage (0: unused, 1: used).
     /// The bits are packed: the first u64 represents slots 0-63,
     /// the second u64 represents slots 64-127, and so on.
     used_bitmap: [u64; SLAB_USED_BITMAP_SIZE],
     used_count: usize,
     _marker: PhantomData<T>,
+    _pinned: PhantomPinned,
 }
-
-impl<T> ReprC for Slab<T> where T: Default {}
 
 impl<T> Slab<T>
 where
@@ -102,28 +88,30 @@ where
         assert_ne!(0, size_of::<T>(), "Zero-size types are not supported.");
 
         Self {
-            pinpoint: Pinpoint::new(),
             source: null_mut(),
+            prev: AtomicPtr::new(null_mut()),
+            next: AtomicPtr::new(null_mut()),
             total_slots: 0,
             slot0: Address(0),
             slot_size: Bytes(0),
             used_bitmap: [0; SLAB_USED_BITMAP_SIZE],
             used_count: 0,
             _marker: PhantomData,
+            _pinned: PhantomPinned,
         }
     }
 
     fn initialize(&mut self, total_size: Bytes) {
         assert_ne!(0, size_of::<T>(), "Zero-size types are not supported.");
 
-        self.unlink_pinpoint();
+        self.unlink();
         self.set_slot0_size_and_total(total_size);
         self.reset_used_bitmap_and_count();
     }
 
-    fn unlink_pinpoint(&mut self) {
-        self.pinpoint().link1.store(null_mut(), Relaxed);
-        self.pinpoint().link2.store(null_mut(), Relaxed);
+    fn unlink(&mut self) {
+        self.prev.store(null_mut(), Relaxed);
+        self.next.store(null_mut(), Relaxed);
     }
 
     fn reset_used_bitmap_and_count(&mut self) {
@@ -223,15 +211,6 @@ where
 
     fn deallocate_object(&mut self, _object: *mut T) {
         todo!()
-    }
-}
-
-impl<T> HasPinpoint for Slab<T>
-where
-    T: Default,
-{
-    fn pinpoint(&mut self) -> &mut Pinpoint {
-        &mut self.pinpoint
     }
 }
 
@@ -361,18 +340,19 @@ mod slab_tests {
 
     mod empty_slab {
         use super::*;
-        use core::ptr::null;
 
         fn new_empty() -> Slab<u64> {
             Slab {
-                pinpoint: Pinpoint::new(),
                 source: null_mut(),
+                prev: AtomicPtr::new(null_mut()),
+                next: AtomicPtr::new(null_mut()),
                 used_bitmap: [0; SLAB_USED_BITMAP_SIZE],
                 used_count: 0,
                 slot0: Address(0),
                 slot_size: Bytes(0),
                 total_slots: 128,
                 _marker: PhantomData,
+                _pinned: PhantomPinned,
             }
         }
 
@@ -396,12 +376,12 @@ mod slab_tests {
 
     mod full_slab {
         use super::*;
-        use core::ptr::null;
 
         fn new_full() -> Slab<u64> {
             Slab {
-                pinpoint: Pinpoint::new(),
                 source: null_mut(),
+                prev: AtomicPtr::new(null_mut()),
+                next: AtomicPtr::new(null_mut()),
                 used_bitmap: [
                     0xffff_ffff_ffff_ffff,
                     0xffff_ffff_ffff_ffff,
@@ -413,6 +393,7 @@ mod slab_tests {
                 slot_size: Bytes(0),
                 total_slots: 200,
                 _marker: PhantomData,
+                _pinned: PhantomPinned,
             }
         }
 
@@ -424,14 +405,16 @@ mod slab_tests {
 
         fn new_full_max_slots() -> Slab<u64> {
             Slab {
-                pinpoint: Pinpoint::new(),
                 source: null_mut(),
+                prev: AtomicPtr::new(null_mut()),
+                next: AtomicPtr::new(null_mut()),
                 used_bitmap: [0xffff_ffff_ffff_ffff; SLAB_USED_BITMAP_SIZE],
                 used_count: MAX_SLOTS_PER_SLAB,
                 slot0: Address(0),
                 slot_size: Bytes(0),
                 total_slots: MAX_SLOTS_PER_SLAB,
                 _marker: PhantomData,
+                _pinned: PhantomPinned,
             }
         }
 
@@ -462,12 +445,12 @@ mod slab_tests {
 
     mod partial_slab {
         use super::*;
-        use core::ptr::null;
 
         fn new_partial() -> Slab<u64> {
             Slab {
-                pinpoint: Pinpoint::new(),
                 source: null_mut(),
+                prev: AtomicPtr::new(null_mut()),
+                next: AtomicPtr::new(null_mut()),
                 used_bitmap: [
                     0xffff_ffff_ffff_ffff,
                     0x6030_0100_0000_08ff,
@@ -479,6 +462,7 @@ mod slab_tests {
                 slot_size: Bytes(0),
                 total_slots: 188,
                 _marker: PhantomData,
+                _pinned: PhantomPinned,
             }
         }
 
@@ -502,13 +486,13 @@ mod slab_tests {
 
     fn assert_content_equal(slab1: &Slab<u64>, slab2: &Slab<u64>) {
         assert_eq!(
-            slab1.pinpoint.link1.load(Relaxed),
-            slab2.pinpoint.link1.load(Relaxed),
+            slab1.prev.load(Relaxed),
+            slab2.prev.load(Relaxed),
             "pinpoint.link1"
         );
         assert_eq!(
-            slab1.pinpoint.link2.load(Relaxed),
-            slab2.pinpoint.link2.load(Relaxed),
+            slab1.next.load(Relaxed),
+            slab2.next.load(Relaxed),
             "pinpoint.link2"
         );
         assert_eq!(slab1.used_bitmap, slab2.used_bitmap, "used_bitmap");
