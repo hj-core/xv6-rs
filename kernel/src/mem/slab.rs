@@ -2,7 +2,7 @@
 // Understanding the Linux Virtual Memory Manager by Mel Gorman, Chapter 8
 // https://pdos.csail.mit.edu/~sbw/links/gorman_book.pdf
 
-use crate::dsa::{HasPinpoint, Pinpoint, ReprC};
+use crate::dsa::Pinpoint;
 use crate::lock::Spinlock;
 use crate::mem::slab::Error::AllocateFromFullSlab;
 use core::marker::PhantomData;
@@ -19,8 +19,6 @@ const MAX_SLOTS_PER_SLAB: usize = SLAB_USED_BITMAP_SIZE * 64;
 
 #[repr(C)]
 struct Cache {
-    /// [Cache] pinpoints within the same [Cache] chain are circularly linked.
-    pinpoint: Pinpoint,
     /// Protect [Cache] from concurrent access.
     lock: Spinlock,
     name: [char; CACHE_NAME_LENGTH],
@@ -30,8 +28,6 @@ struct Cache {
     slabs_partial: Pinpoint,
     slabs_empty: Pinpoint,
 }
-
-impl ReprC for Cache {}
 
 impl Cache {
     /// Return a [SlabObject] if the allocation succeeds;
@@ -43,10 +39,7 @@ impl Cache {
         todo!()
     }
 
-    fn grow<T>(&mut self) -> Result<bool, Error>
-    where
-        T: Default + HasPinpoint,
-    {
+    fn grow<T: Default>(&mut self) -> Result<bool, Error> {
         todo!()
     }
 
@@ -56,12 +49,6 @@ impl Cache {
     /// otherwise, return the corresponding error.
     fn request_contiguous_pages(_count: usize) -> Result<Address, Error> {
         todo!()
-    }
-}
-
-impl HasPinpoint for Cache {
-    fn pinpoint(&mut self) -> &mut Pinpoint {
-        &mut self.pinpoint
     }
 }
 
