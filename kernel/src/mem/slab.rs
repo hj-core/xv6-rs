@@ -89,7 +89,7 @@ where
     /// the second u64 represents slots 64-127, and so on.
     used_bitmap: [u64; SLAB_USED_BITMAP_SIZE],
     used_count: usize,
-    _type_marker: PhantomData<T>,
+    _marker: PhantomData<T>,
 }
 
 impl<T> ReprC for Slab<T> where T: Default {}
@@ -109,7 +109,7 @@ where
             slot_size: Bytes(0),
             used_bitmap: [0; SLAB_USED_BITMAP_SIZE],
             used_count: 0,
-            _type_marker: PhantomData,
+            _marker: PhantomData,
         }
     }
 
@@ -293,8 +293,8 @@ where
         //   move the underlying Slab, which is address-sensitive.
         // * The deallocate_object method should itself handle the Slab object properly.
         unsafe {
-            let unsafe_slab = &mut *self.source.load(Relaxed);
-            unsafe_slab.deallocate_object(self.object.load(Relaxed));
+            let slab = &mut *self.source.load(Relaxed);
+            slab.deallocate_object(self.object.load(Relaxed));
         }
     }
 }
@@ -372,7 +372,7 @@ mod slab_tests {
                 slot0: Address(0),
                 slot_size: Bytes(0),
                 total_slots: 128,
-                _type_marker: PhantomData,
+                _marker: PhantomData,
             }
         }
 
@@ -412,7 +412,7 @@ mod slab_tests {
                 slot0: Address(0),
                 slot_size: Bytes(0),
                 total_slots: 200,
-                _type_marker: PhantomData,
+                _marker: PhantomData,
             }
         }
 
@@ -431,7 +431,7 @@ mod slab_tests {
                 slot0: Address(0),
                 slot_size: Bytes(0),
                 total_slots: MAX_SLOTS_PER_SLAB,
-                _type_marker: PhantomData,
+                _marker: PhantomData,
             }
         }
 
@@ -478,7 +478,7 @@ mod slab_tests {
                 slot0: Address(0),
                 slot_size: Bytes(0),
                 total_slots: 188,
-                _type_marker: PhantomData,
+                _marker: PhantomData,
             }
         }
 
