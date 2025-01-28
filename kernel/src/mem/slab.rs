@@ -34,6 +34,15 @@ struct Cache {
 impl ReprC for Cache {}
 
 impl Cache {
+    /// Return a [SlabObject] if the allocation succeeds;
+    /// otherwise, return the corresponding error.
+    ///
+    /// The allocated object has the default value of [T], and clients can access it through
+    /// the [SlabObject].
+    pub fn allocate_object<T: Default>() -> Result<SlabObject<T>, Error> {
+        todo!()
+    }
+
     fn grow<T>(&mut self) -> Result<bool, Error>
     where
         T: Default + HasPinpoint,
