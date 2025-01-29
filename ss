@@ -4,7 +4,7 @@ import sys
 
 
 def main():
-    shortcuts = [shortcut0, shortcut1, shortcut2, shortcut3, shortcut4]
+    shortcuts = [shortcut0, shortcut1, shortcut2, shortcut3, shortcut4, shortcut5]
     match len(sys.argv):
         case 1:
             shortcuts[0]()
@@ -41,6 +41,11 @@ def shortcut4():
         exit(1)
 
 
+def shortcut5():
+    if miri_test():
+        exit(1)
+
+
 def echo_cmd(cmd: str):
     print(f"Prompt> {cmd}")
 
@@ -71,6 +76,12 @@ def cargo_objdump_release() -> int:
 
 def cargo_test() -> int:
     cmd = "cargo test --target x86_64-unknown-linux-gnu"
+    echo_cmd(cmd)
+    return subprocess.run(cmd, shell=True).returncode
+
+
+def miri_test() -> int:
+    cmd = "cargo +nightly miri test --target x86_64-unknown-linux-gnu"
     echo_cmd(cmd)
     return subprocess.run(cmd, shell=True).returncode
 
