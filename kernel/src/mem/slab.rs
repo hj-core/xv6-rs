@@ -17,11 +17,11 @@ const SLAB_USED_BITMAP_SIZE: usize = 4;
 const MAX_SLOTS_PER_SLAB: usize = SLAB_USED_BITMAP_SIZE * 64;
 
 #[repr(C)]
-struct Cache<T>
+struct CacheImpl<T>
 where
     T: Default,
 {
-    /// Protect [Cache] from concurrent access.
+    /// Protect [CacheImpl] from concurrent access.
     lock: Spinlock,
     name: [char; CACHE_NAME_LENGTH],
     pages_per_slab: usize,
@@ -31,7 +31,7 @@ where
     slabs_empty: AtomicPtr<SlabHeader<T>>,
 }
 
-impl<T> Cache<T>
+impl<T> CacheImpl<T>
 where
     T: Default,
 {
@@ -63,13 +63,13 @@ struct SlabHeader<T>
 where
     T: Default,
 {
-    /// Pointer to the source [Cache].
+    /// Pointer to the source [CacheImpl].
     ///
-    /// This field also make [SlabHeader] ![Sync], ![Send] and is invariant over [T].
-    source: *mut Cache<T>,
-    /// [SlabHeader]s within the same [Cache].slabs_* are circularly linked.
+    /// This field also makes [SlabHeader] ![Sync] ![Send] and invariant over [T].
+    source: *mut CacheImpl<T>,
+    /// [SlabHeader]s within the same [CacheImpl].slabs_* are circularly linked.
     prev: AtomicPtr<SlabHeader<T>>,
-    /// [SlabHeader]s within the same [Cache].slabs_* are circularly linked.
+    /// [SlabHeader]s within the same [CacheImpl].slabs_* are circularly linked.
     next: AtomicPtr<SlabHeader<T>>,
     total_slots: usize,
     slot0: Address,
