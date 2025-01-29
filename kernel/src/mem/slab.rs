@@ -4,6 +4,7 @@
 
 use crate::lock::Spinlock;
 use crate::mem::slab::Error::AllocateFromFullSlab;
+use crate::mem::PAGE_SIZE;
 use core::marker::PhantomData;
 use core::marker::PhantomPinned;
 use core::ptr;
@@ -48,8 +49,49 @@ impl<T> CacheImpl<T>
 where
     T: Default,
 {
-    fn grow(&mut self) -> Result<bool, Error> {
-        todo!()
+    /// Returns a pointer to the newly allocated empty [SlabHeader],
+    /// or else returns the corresponding error if allocation fails.
+    fn grow(&mut self) -> Result<*mut SlabHeader<T>, Error> {
+        let slab_size = PAGE_SIZE * self.pages_per_slab;
+        let safe_min_size = align_of::<SlabHeader<T>>()
+            + size_of::<SlabHeader<T>>()
+            + align_of::<T>()
+            + size_of::<T>();
+        assert!(
+            safe_min_size <= slab_size.0,
+            "Slab size is definitely not large enough."
+        );
+
+        let header = SlabHeader::<T>::new_empty();
+        let addr0 = Self::request_contiguous_pages(self.pages_per_slab)?;
+
+        assert_eq!(
+            0,
+            addr0.0 % align_of::<SlabHeader<T>>(),
+            "Fails to meet the alignment of SlabHeader."
+        );
+        // SAFETY:
+        // * If the request for pages returns an Ok result,
+        //   it is assumed that we can use `page_per_slab` pages of memory
+        //   starting from the returned address.
+        // * We have checked that the allocated size can accommodate a SlabHeader,
+        //   and that the address is aligned to the SlabHeader's alignment.
+        // * Therefore, it is safe to write the newly created SlabHeader to the pointer.
+        // * We have placed the SlabHeader at its pinned address.
+        //   It is safe to dereference the newly written pointer to get a mutable reference
+        //   and call its initialize method.
+        // * If the initialize method panics, we may have a memory leak but no UB.
+        //   At this point, we haven't linked the SlabHeader to the Cache,
+        //   and the initialize method should not cause UB since we have met its
+        //   safety contract.
+        // * Thus, we can conclude that the unsafe block is safe.
+        unsafe {
+            let header_ptr: *mut SlabHeader<T> = addr0.into();
+            header_ptr.write(header);
+            (&mut *header_ptr).initialize(slab_size);
+
+            Ok(header_ptr)
+        }
     }
 
     /// Ask the allocator for contiguous free pages.
