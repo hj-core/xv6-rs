@@ -161,21 +161,31 @@ where
         if self.is_full() {
             return Err(AllocateFromFullSlab);
         }
+        // This temporary value is not satisfactory because it takes up space other than the
+        // reserved slot, but I have no idea how to construct the object directly over the
+        // reserved slot.
+        // One workaround is to make the object reusable: in the destructor of the SlabObject, we
+        // restore the fields and relevant states of the underlying object so that it can be reused
+        // by the next client.
+        // This sounds unsafe, and I’m not sure if it outweighs the overhead of creating
+        // a temporary value.
+        let new_object = T::default();
+
         let slot_index = self.use_first_free_slot();
-        let object_ptr: *mut T = (self.slot0 + self.slot_size * slot_index).into();
         // SAFETY:
-        // * Each slot is properly aligned and large enough to contain an object of type [T];
-        //   each slot lies within the memory allocated for this [Slab].
-        // * These conditions are guaranteed during [Slab] initialization, therefore,
+        // * Each slot is properly aligned and large enough to contain an object of type T;
+        //   each slot lies within the memory allocated for this Slab.
+        // * These conditions are guaranteed during Slab initialization, therefore,
         //   writing the default value to the slot is safe.
-        // * Both [Slab] and the object [T] are address-sensitive.
-        // * Creating the [SlabObject] from the raw pointers of this [Slab] and the new object
-        //   does not move the underlying [Slab] or object [T].
-        // * Returning the [SlabObject] does not move the underlying [Slab] or object [T].
+        // * Both Slab and the object T are address-sensitive.
+        // * Creating the SlabObject from the raw pointers of this Slab and the new object
+        //   does not move the underlying Slab or object T.
+        // * Returning the SlabObject does not move the underlying Slab or object T.
         unsafe {
-            object_ptr.write(T::default());
+            let object_ptr: *mut T = (self.slot0 + self.slot_size * slot_index).into();
+            object_ptr.write(new_object);
             let result = SlabObject {
-                source: AtomicPtr::new(self as *mut SlabHeader<T>),
+                source: AtomicPtr::new(ptr::from_mut(self)),
                 object: AtomicPtr::from(object_ptr),
                 _marker: PhantomData,
             };
