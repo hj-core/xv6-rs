@@ -23,6 +23,10 @@ trait Cache<T: Default> {
     /// The allocated object has the default value of [T], and clients can access it through
     /// the [SlabObject].
     fn allocate(&mut self) -> Result<SlabObject<T>, Error>;
+
+    /// Returns true if the attempt to deallocate the [SlabObject] succeeds,
+    /// or else returns the corresponding error.
+    fn deallocate(&mut self, slab_object: &SlabObject<T>) -> Result<bool, Error>;
 }
 
 #[repr(C)]
@@ -44,15 +48,6 @@ impl<T> CacheImpl<T>
 where
     T: Default,
 {
-    /// Return a [SlabObject] if the allocation succeeds;
-    /// otherwise, return the corresponding error.
-    ///
-    /// The allocated object has the default value of [T], and clients can access it through
-    /// the [SlabObject].
-    pub fn allocate_object() -> Result<SlabObject<T>, Error> {
-        todo!()
-    }
-
     fn grow(&mut self) -> Result<bool, Error> {
         todo!()
     }
@@ -62,6 +57,19 @@ where
     /// Return the starting address if the allocation succeeds;
     /// otherwise, return the corresponding error.
     fn request_contiguous_pages(_count: usize) -> Result<Address, Error> {
+        todo!()
+    }
+}
+
+impl<T> Cache<T> for CacheImpl<T>
+where
+    T: Default,
+{
+    fn allocate(&mut self) -> Result<SlabObject<T>, Error> {
+        todo!()
+    }
+
+    fn deallocate(&mut self, _slab_object: &SlabObject<T>) -> Result<bool, Error> {
         todo!()
     }
 }
