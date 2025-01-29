@@ -64,6 +64,8 @@ where
     T: Default,
 {
     /// Pointer to the source [Cache].
+    ///
+    /// This field also make [SlabHeader] ![Sync], ![Send] and is invariant over [T].
     source: *mut Cache<T>,
     /// [SlabHeader]s within the same [Cache].slabs_* are circularly linked.
     prev: AtomicPtr<SlabHeader<T>>,
@@ -235,7 +237,7 @@ where
     pub fn get_ref(&self) -> &T {
         // SAFETY:
         // * The object field is not publicly exposed.
-        // * Since SlabObject is only created through Slab<T> allocations, which should
+        // * Since SlabObject is only created through Slab allocations, which should
         //   correctly initialize this field, we can safely dereference it.
         // * Dereferencing the raw pointer to get a shared reference does not move
         //   the underlying object.
@@ -252,7 +254,7 @@ where
     pub unsafe fn get_mut(&mut self) -> &mut T {
         // SAFETY:
         // * The object field is not publicly exposed.
-        // * Since SlabObject is only created through Slab<T> allocations, which should
+        // * Since SlabObject is only created through Slab allocations, which should
         //   correctly initialize this field, we can safely dereference it.
         // * Dereferencing the raw pointer to get an exclusive reference does not
         //   move the underlying object.
