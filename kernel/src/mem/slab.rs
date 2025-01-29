@@ -16,6 +16,15 @@ const CACHE_NAME_LENGTH: usize = 16;
 const SLAB_USED_BITMAP_SIZE: usize = 4;
 const MAX_SLOTS_PER_SLAB: usize = SLAB_USED_BITMAP_SIZE * 64;
 
+trait Cache<T: Default> {
+    /// Returns a [SlabObject] wrapping the allocated object [T] if the allocation succeeds,
+    /// or else returns the corresponding error.
+    ///
+    /// The allocated object has the default value of [T], and clients can access it through
+    /// the [SlabObject].
+    fn allocate(&mut self) -> Result<SlabObject<T>, Error>;
+}
+
 #[repr(C)]
 struct CacheImpl<T>
 where
