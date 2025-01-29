@@ -295,12 +295,19 @@ where
 {
     fn drop(&mut self) {
         // SAFETY:
-        // * The source field is not publicly exposed.
-        // * Since SlabObject is only created through Slab allocations, which should
-        //   correctly initialize source field, we can safely dereference it.
-        // * The deallocate_object method should do the cleanup properly.
+        // * SlabObject is only created through Cache allocation,
+        //   which should correctly initialize the source field.
+        // * The source field is private to the SlabObject,
+        //   and we haven't exposed any methods to mutate it,
+        //   so it's supposed to retain its initial value.
+        // * A SlabHeader should have its source field correctly set.
+        // * The Cache and SlabHeader should live longer than this SlabObject.
+        // * Therefore, we are safe to dereference the source field to get the SlabHeader,
+        //   and further dereference its source field to get the Cache.
+        // * There are no moves of values.
+        // * There are no concerns regarding exception safety.
         unsafe {
-            (*self.source.load(Relaxed)).deallocate_object(self.object.load(Relaxed));
+            let _ = (*(*self.source.load(Relaxed)).source).deallocate(self);
         }
     }
 }
