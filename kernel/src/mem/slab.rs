@@ -121,7 +121,12 @@ where
         }
     }
 
-    fn initialize(&mut self, slab_size: Bytes) {
+    /// Initializes the fields of this [SlabHeader].
+    ///
+    /// # SAFETY:
+    /// [SlabHeader] is address-sensitive.
+    /// When calling this method, the [SlabHeader] must be at its pinned address.
+    unsafe fn initialize(&mut self, slab_size: Bytes) {
         assert_ne!(0, size_of::<T>(), "Zero-size types are not supported.");
 
         self.unlink();
