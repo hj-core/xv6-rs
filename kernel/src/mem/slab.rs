@@ -267,14 +267,11 @@ where
     fn drop(&mut self) {
         // SAFETY:
         // * The source field is not publicly exposed.
-        // * Since SlabObject is only created through Slab<T> allocations, which should
+        // * Since SlabObject is only created through Slab allocations, which should
         //   correctly initialize source field, we can safely dereference it.
-        // * Dereferencing the raw pointer to get an exclusive reference does not
-        //   move the underlying Slab, which is address-sensitive.
-        // * The deallocate_object method should itself handle the Slab object properly.
+        // * The deallocate_object method should do the cleanup properly.
         unsafe {
-            let slab = &mut *self.source.load(Relaxed);
-            slab.deallocate_object(self.object.load(Relaxed));
+            (*self.source.load(Relaxed)).deallocate_object(self.object.load(Relaxed));
         }
     }
 }
