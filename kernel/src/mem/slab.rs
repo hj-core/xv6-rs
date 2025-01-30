@@ -4,7 +4,6 @@
 
 use crate::lock::Spinlock;
 use crate::mem::slab::Error::{AllocateFromFullSlab, SlabNotAligned, SlabTooSmall};
-use crate::mem::PAGE_SIZE;
 use core::alloc::Layout;
 use core::marker::PhantomData;
 use core::marker::PhantomPinned;
@@ -27,7 +26,7 @@ where
     lock: Spinlock,
     name: [char; CACHE_NAME_LENGTH],
     slab_layout: Layout,
-    // `slabs_*` is either null or the head of the doubly-linked [SlabHead]s.
+    // `slabs_*` is either null or the head of the doubly-linked [SlabHeader]s.
     slabs_full: AtomicPtr<SlabHeader<T>>,
     slabs_partial: AtomicPtr<SlabHeader<T>>,
     slabs_empty: AtomicPtr<SlabHeader<T>>,
