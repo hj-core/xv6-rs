@@ -3,7 +3,7 @@
 // https://pdos.csail.mit.edu/~sbw/links/gorman_book.pdf
 
 use crate::lock::Spinlock;
-use crate::mem::slab::Error::AllocateFromFullSlab;
+use crate::mem::slab::Error::{AllocateFromFullSlab, SlabNotAligned, SlabTooSmall};
 use crate::mem::PAGE_SIZE;
 use core::alloc::Layout;
 use core::marker::PhantomData;
@@ -11,7 +11,7 @@ use core::marker::PhantomPinned;
 use core::ptr;
 use core::ptr::null_mut;
 use core::sync::atomic::AtomicPtr;
-use core::sync::atomic::Ordering::Relaxed;
+use core::sync::atomic::Ordering::{Acquire, Relaxed, Release};
 use wrapper::{Address, Bytes};
 
 const CACHE_NAME_LENGTH: usize = 16;
@@ -52,56 +52,60 @@ where
         todo!()
     }
 
-    /// Returns a pointer to the newly allocated empty [SlabHeader],
-    /// or else returns the corresponding error if allocation fails.
-    fn grow(&mut self) -> Result<*mut SlabHeader<T>, Error> {
-        let slab_size = self.slab_layout.size();
-        let safe_min_size = align_of::<SlabHeader<T>>()
-            + size_of::<SlabHeader<T>>()
-            + align_of::<T>()
-            + size_of::<T>();
-        assert!(
-            safe_min_size <= slab_size,
-            "Slab size is definitely not large enough."
-        );
+    /// Attempts to create a new slab and push it to the `slab_empty`.
+    /// Clients of this method are responsible for acquiring the required memory
+    /// and providing the starting address `addr0`.
+    ///
+    /// Returns a pointer to the newly created [SlabHeader] if the attempt succeeds,
+    /// or returns the corresponding error if it fails.
+    ///
+    /// # SAFETY:
+    /// * `addr0` must point to a memory block satisfying the `slab_layout` and dedicated
+    ///   to the new slab.
+    /// * `slab_empty` must be null or a valid pointer.
+    unsafe fn grow(&mut self, addr0: Address) -> Result<*mut SlabHeader<T>, Error> {
+        if addr0.0 % self.slab_layout.align() != 0 || addr0.0 % align_of::<SlabHeader<T>>() != 0 {
+            return Err(SlabNotAligned);
+        }
+
+        let header_size = Bytes(size_of::<SlabHeader<T>>());
+        let slot0_offset = SlabHeader::compute_slot0_offset_helper(addr0, header_size);
+        let min_size = slot0_offset + Bytes(size_of::<T>());
+
+        if self.slab_layout.size() < min_size.0 {
+            return Err(SlabTooSmall);
+        }
 
         let header = SlabHeader::<T>::new_empty();
-        let addr0 = Self::request_contiguous_pages(self.slab_layout.size() / PAGE_SIZE.0)?;
 
-        assert_eq!(
-            0,
-            addr0.0 % align_of::<SlabHeader<T>>(),
-            "Fails to meet the alignment of SlabHeader."
-        );
         // SAFETY:
-        // * If the request for pages returns an Ok result,
-        //   it is assumed that we can use `page_per_slab` pages of memory
-        //   starting from the returned address.
-        // * We have checked that the allocated size can accommodate a SlabHeader,
-        //   and that the address is aligned to the SlabHeader's alignment.
-        // * Therefore, it is safe to write the newly created SlabHeader to the pointer.
-        // * We have placed the SlabHeader at its pinned address.
-        //   It is safe to dereference the newly written pointer to get a mutable reference
-        //   and call its initialize method.
-        // * If the initialize method panics, we may have a memory leak but no UB.
-        //   At this point, we haven't linked the SlabHeader to the Cache,
-        //   and the initialize method should not cause UB since we have met its safety contract.
-        // * Thus, we can conclude that the unsafe block is safe.
+        // * The `addr0` provided by the client should comply with the `slab_layout`.
+        //   Additionally, we have checked the alignment and intended size.
+        //   Therefore, it is safe to cast a pointer from it and write the newly
+        //   created [SlabHeader].
+        // * We have placed the [SlabHeader] at its pinned address, which is the safety contract
+        //   for calling its `initialize` method.
+        //   Thus, it is safe to dereference the newly written pointer to get a mutable reference
+        //   and call its `initialize` method.
+        // * If the `initialize` method panics, we may have a memory leak but no undefined behavior.
+        //   At this point, we haven't linked the [SlabHeader] to the [Cache],
+        //   The `initialize` method should not cause UB since we have met its safety contract.
+        // * If the `slabs_empty` is not null, we are safe to dereference it and mutate its `prev`
+        //   field since we have specified in the safety contract that it is valid if not null.
+        // * In light of the above, this unsafe block is considered safe.
         unsafe {
             let header_ptr: *mut SlabHeader<T> = addr0.into();
             header_ptr.write(header);
-            (&mut *header_ptr).initialize(Bytes(slab_size));
+            (&mut *header_ptr).initialize(Bytes(self.slab_layout.size()));
 
+            let old_head = self.slabs_empty.load(Acquire);
+            if !old_head.is_null() {
+                (&mut *header_ptr).next.store(old_head, Release);
+                (&mut *old_head).prev.store(header_ptr, Release);
+            }
+            self.slabs_empty.store(header_ptr, Release);
             Ok(header_ptr)
         }
-    }
-
-    /// Ask the allocator for contiguous free pages.
-    ///
-    /// Return the starting address if the allocation succeeds;
-    /// otherwise, return the corresponding error.
-    fn request_contiguous_pages(_count: usize) -> Result<Address, Error> {
-        todo!()
     }
 }
 
@@ -350,6 +354,8 @@ where
 
 #[derive(Debug)]
 enum Error {
+    SlabNotAligned,
+    SlabTooSmall,
     RequestMemoryFailed,
     AllocateFromFullSlab,
 }
