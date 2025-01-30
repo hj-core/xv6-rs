@@ -5,6 +5,7 @@
 use crate::lock::Spinlock;
 use crate::mem::slab::Error::AllocateFromFullSlab;
 use crate::mem::PAGE_SIZE;
+use core::alloc::Layout;
 use core::marker::PhantomData;
 use core::marker::PhantomPinned;
 use core::ptr;
@@ -25,7 +26,7 @@ where
     /// Protect [Cache] from concurrent access.
     lock: Spinlock,
     name: [char; CACHE_NAME_LENGTH],
-    pages_per_slab: usize,
+    slab_layout: Layout,
     // slabs_* is null or circularly linked [SlabHead]s.
     slabs_full: AtomicPtr<SlabHeader<T>>,
     slabs_partial: AtomicPtr<SlabHeader<T>>,
@@ -54,18 +55,18 @@ where
     /// Returns a pointer to the newly allocated empty [SlabHeader],
     /// or else returns the corresponding error if allocation fails.
     fn grow(&mut self) -> Result<*mut SlabHeader<T>, Error> {
-        let slab_size = PAGE_SIZE * self.pages_per_slab;
+        let slab_size = self.slab_layout.size();
         let safe_min_size = align_of::<SlabHeader<T>>()
             + size_of::<SlabHeader<T>>()
             + align_of::<T>()
             + size_of::<T>();
         assert!(
-            safe_min_size <= slab_size.0,
+            safe_min_size <= slab_size,
             "Slab size is definitely not large enough."
         );
 
         let header = SlabHeader::<T>::new_empty();
-        let addr0 = Self::request_contiguous_pages(self.pages_per_slab)?;
+        let addr0 = Self::request_contiguous_pages(self.slab_layout.size() / PAGE_SIZE.0)?;
 
         assert_eq!(
             0,
@@ -89,7 +90,7 @@ where
         unsafe {
             let header_ptr: *mut SlabHeader<T> = addr0.into();
             header_ptr.write(header);
-            (&mut *header_ptr).initialize(slab_size);
+            (&mut *header_ptr).initialize(Bytes(slab_size));
 
             Ok(header_ptr)
         }
