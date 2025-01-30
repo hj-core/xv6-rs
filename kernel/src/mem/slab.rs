@@ -82,8 +82,7 @@ where
         //   and call its initialize method.
         // * If the initialize method panics, we may have a memory leak but no UB.
         //   At this point, we haven't linked the SlabHeader to the Cache,
-        //   and the initialize method should not cause UB since we have met its
-        //   safety contract.
+        //   and the initialize method should not cause UB since we have met its safety contract.
         // * Thus, we can conclude that the unsafe block is safe.
         unsafe {
             let header_ptr: *mut SlabHeader<T> = addr0.into();
