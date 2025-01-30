@@ -27,7 +27,7 @@ where
     lock: Spinlock,
     name: [char; CACHE_NAME_LENGTH],
     slab_layout: Layout,
-    // slabs_* is null or circularly linked [SlabHead]s.
+    // `slabs_*` is either null or the head of the doubly-linked [SlabHead]s.
     slabs_full: AtomicPtr<SlabHeader<T>>,
     slabs_partial: AtomicPtr<SlabHeader<T>>,
     slabs_empty: AtomicPtr<SlabHeader<T>>,
@@ -115,9 +115,9 @@ where
     ///
     /// This field also makes [SlabHeader] ![Sync] ![Send] and invariant over [T].
     source: *mut Cache<T>,
-    /// [SlabHeader]s within the same [Cache].slabs_* are circularly linked.
+    /// [SlabHeader]s within the same [Cache].slabs_* are doubly-linked.
     prev: AtomicPtr<SlabHeader<T>>,
-    /// [SlabHeader]s within the same [Cache].slabs_* are circularly linked.
+    /// [SlabHeader]s within the same [Cache].slabs_* are doubly-linked.
     next: AtomicPtr<SlabHeader<T>>,
     total_slots: usize,
     slot0: Address,
