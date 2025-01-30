@@ -17,25 +17,12 @@ const CACHE_NAME_LENGTH: usize = 16;
 const SLAB_USED_BITMAP_SIZE: usize = 4;
 const MAX_SLOTS_PER_SLAB: usize = SLAB_USED_BITMAP_SIZE * 64;
 
-trait Cache<T: Default> {
-    /// Returns a [SlabObject] wrapping the allocated object [T] if the allocation succeeds,
-    /// or else returns the corresponding error.
-    ///
-    /// The allocated object has the default value of [T], and clients can access it through
-    /// the [SlabObject].
-    fn allocate(&mut self) -> Result<SlabObject<T>, Error>;
-
-    /// Returns true if the attempt to deallocate the [SlabObject] succeeds,
-    /// or else returns the corresponding error.
-    fn deallocate(&mut self, slab_object: &SlabObject<T>) -> Result<bool, Error>;
-}
-
 #[repr(C)]
-struct CacheImpl<T>
+struct Cache<T>
 where
     T: Default,
 {
-    /// Protect [CacheImpl] from concurrent access.
+    /// Protect [Cache] from concurrent access.
     lock: Spinlock,
     name: [char; CACHE_NAME_LENGTH],
     pages_per_slab: usize,
@@ -45,10 +32,25 @@ where
     slabs_empty: AtomicPtr<SlabHeader<T>>,
 }
 
-impl<T> CacheImpl<T>
+impl<T> Cache<T>
 where
     T: Default,
 {
+    /// Returns a [SlabObject] wrapping the allocated object [T] if the allocation succeeds,
+    /// or else returns the corresponding error.
+    ///
+    /// The allocated object has the default value of [T], and clients can access it through
+    /// the [SlabObject].
+    fn allocate_object(&mut self) -> Result<SlabObject<T>, Error> {
+        todo!()
+    }
+
+    /// Returns true if the attempt to deallocate the [SlabObject] succeeds,
+    /// or else returns the corresponding error.
+    fn deallocate_object(&mut self, _slab_object: &SlabObject<T>) -> Result<bool, Error> {
+        todo!()
+    }
+
     /// Returns a pointer to the newly allocated empty [SlabHeader],
     /// or else returns the corresponding error if allocation fails.
     fn grow(&mut self) -> Result<*mut SlabHeader<T>, Error> {
@@ -102,32 +104,19 @@ where
     }
 }
 
-impl<T> Cache<T> for CacheImpl<T>
-where
-    T: Default,
-{
-    fn allocate(&mut self) -> Result<SlabObject<T>, Error> {
-        todo!()
-    }
-
-    fn deallocate(&mut self, _slab_object: &SlabObject<T>) -> Result<bool, Error> {
-        todo!()
-    }
-}
-
 #[repr(C)]
 #[derive(Debug)]
 struct SlabHeader<T>
 where
     T: Default,
 {
-    /// Pointer to the source [CacheImpl].
+    /// Pointer to the source [Cache].
     ///
     /// This field also makes [SlabHeader] ![Sync] ![Send] and invariant over [T].
-    source: *mut CacheImpl<T>,
-    /// [SlabHeader]s within the same [CacheImpl].slabs_* are circularly linked.
+    source: *mut Cache<T>,
+    /// [SlabHeader]s within the same [Cache].slabs_* are circularly linked.
     prev: AtomicPtr<SlabHeader<T>>,
-    /// [SlabHeader]s within the same [CacheImpl].slabs_* are circularly linked.
+    /// [SlabHeader]s within the same [Cache].slabs_* are circularly linked.
     next: AtomicPtr<SlabHeader<T>>,
     total_slots: usize,
     slot0: Address,
@@ -353,7 +342,7 @@ where
         // * There are no moves of values.
         // * There are no concerns regarding exception safety.
         unsafe {
-            let _ = (*(*self.source.load(Relaxed)).source).deallocate(self);
+            let _ = (*(*self.source.load(Relaxed)).source).deallocate_object(self);
         }
     }
 }
