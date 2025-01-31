@@ -360,7 +360,7 @@ enum Error {
 }
 
 #[cfg(test)]
-mod slab_tests {
+mod header_tests {
     extern crate alloc;
 
     use super::*;
