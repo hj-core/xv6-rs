@@ -68,7 +68,7 @@ where
         }
 
         let header_size = Bytes(size_of::<SlabHeader<T>>());
-        let slot0_offset = SlabHeader::compute_slot0_offset_helper(addr0, header_size);
+        let slot0_offset = SlabHeader::<T>::compute_slot0_offset_helper(addr0, header_size);
         let min_size = slot0_offset + Bytes(size_of::<T>());
 
         if self.slab_layout.size() < min_size.0 {
