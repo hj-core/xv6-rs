@@ -360,6 +360,162 @@ enum Error {
 }
 
 #[cfg(test)]
+mod cache_tests {
+    extern crate alloc;
+    use super::*;
+    use alloc::alloc::{alloc, dealloc};
+    use alloc::format;
+    use alloc::vec::Vec;
+
+    fn new_test_default<T: Default>() -> Cache<T> {
+        Cache::<T> {
+            lock: Spinlock::new(),
+            name: ['c'; CACHE_NAME_LENGTH],
+            slab_layout: Layout::from_size_align(4096, align_of::<SlabHeader<T>>()).unwrap(),
+            slabs_full: Default::default(),
+            slabs_partial: Default::default(),
+            slabs_empty: Default::default(),
+        }
+    }
+
+    fn acquire_memory(layout: Layout, count: usize) -> Vec<*mut u8> {
+        let mut result = Vec::with_capacity(count);
+        for _ in 0..count {
+            let addr0 = unsafe { alloc(layout) };
+            result.push(addr0);
+        }
+        result
+    }
+
+    fn release_memory(ptrs: Vec<*mut u8>, layout: Layout) {
+        for ptr in ptrs {
+            unsafe { dealloc(ptr, layout) };
+        }
+    }
+
+    #[test]
+    fn grow_succeeds_update_slabs_empty() {
+        type T = u64;
+        let mut cache = new_test_default::<T>();
+
+        let addrs = acquire_memory(cache.slab_layout, 10);
+        {
+            let result = unsafe { cache.grow(addrs[0].into()) };
+            assert!(result.is_ok_and(|ptr| ptr.addr() == addrs[0].addr()));
+            assert!(cache.slabs_full.load(Relaxed).is_null());
+            assert!(cache.slabs_partial.load(Relaxed).is_null());
+
+            let slab_empty = cache.slabs_empty.load(Relaxed);
+            assert!(!slab_empty.is_null());
+            assert_eq!(addrs[0].addr(), slab_empty.addr());
+
+            let prev = unsafe { (*slab_empty).prev.load(Relaxed) };
+            assert!(prev.is_null());
+
+            let next = unsafe { (*slab_empty).next.load(Relaxed) };
+            assert!(next.is_null());
+        }
+
+        {
+            let result = unsafe { cache.grow(addrs[1].into()) };
+            assert!(result.is_ok_and(|ptr| ptr.addr() == addrs[1].addr()));
+            assert!(cache.slabs_full.load(Relaxed).is_null());
+            assert!(cache.slabs_partial.load(Relaxed).is_null());
+
+            let slab_empty = cache.slabs_empty.load(Relaxed);
+            assert!(!slab_empty.is_null());
+            assert_eq!(addrs[1].addr(), slab_empty.addr());
+
+            let prev = unsafe { (*slab_empty).prev.load(Relaxed) };
+            assert!(prev.is_null());
+
+            let next = unsafe { (*slab_empty).next.load(Relaxed) };
+            assert!(!next.is_null());
+            assert_eq!(addrs[0].addr(), next.addr());
+
+            let next_prev = unsafe { (*next).prev.load(Relaxed) };
+            assert_eq!(slab_empty, next_prev);
+            let next_next = unsafe { (*next).next.load(Relaxed) };
+            assert!(next_next.is_null());
+        }
+
+        {
+            for i in 2..addrs.len() {
+                let result = unsafe { cache.grow(addrs[i].into()) };
+                assert!(result.is_ok_and(|ptr| ptr.addr() == addrs[i].addr()));
+                assert!(cache.slabs_full.load(Relaxed).is_null());
+                assert!(cache.slabs_partial.load(Relaxed).is_null());
+            }
+
+            let mut count = addrs.len();
+            let mut prev = null_mut();
+            let mut curr = cache.slabs_empty.load(Relaxed);
+            while !curr.is_null() {
+                count -= 1;
+                assert_eq!(addrs[count].addr(), curr.addr());
+                prev = curr;
+                curr = unsafe { (*curr).next.load(Relaxed) };
+            }
+            assert_eq!(0, count);
+            assert_eq!(addrs[0].addr(), prev.addr());
+
+            while !prev.is_null() {
+                assert_eq!(addrs[count].addr(), prev.addr());
+                curr = prev;
+                prev = unsafe { (*prev).prev.load(Relaxed) };
+                count += 1;
+            }
+            assert_eq!(addrs.len(), count);
+            assert_eq!(addrs[addrs.len() - 1].addr(), curr.addr());
+        }
+
+        release_memory(addrs, cache.slab_layout);
+    }
+
+    #[test]
+    fn grow_with_insufficient_size_return_size_err() {
+        type T = u64;
+        let mut cache = new_test_default::<T>();
+        let small_layout =
+            Layout::from_size_align(size_of::<SlabHeader<T>>(), align_of::<SlabHeader<u64>>())
+                .unwrap();
+        cache.slab_layout = small_layout;
+
+        let addrs = acquire_memory(cache.slab_layout, 1);
+        let result = unsafe { cache.grow(addrs[0].into()) };
+        let result_str = format!("{:?}", result);
+        assert!(
+            result.is_err_and(|err| matches!(err, SlabTooSmall)),
+            "Expected Err({SlabTooSmall:?}) but got {result_str}."
+        );
+        assert!(cache.slabs_full.load(Relaxed).is_null());
+        assert!(cache.slabs_partial.load(Relaxed).is_null());
+        assert!(cache.slabs_empty.load(Relaxed).is_null());
+
+        release_memory(addrs, cache.slab_layout);
+    }
+
+    #[test]
+    fn grow_with_wrong_align_return_align_err() {
+        type T = u64;
+        let mut cache = new_test_default::<T>();
+
+        let addrs = acquire_memory(cache.slab_layout, 1);
+        let result = unsafe { cache.grow(Address(addrs[0].addr() + 1)) };
+        let result_str = format!("{:?}", result);
+        assert!(
+            result.is_err_and(|err| matches!(err, SlabNotAligned)),
+            "Expected Err({SlabNotAligned:?}) but got {result_str}."
+        );
+        assert!(cache.slabs_full.load(Relaxed).is_null());
+        assert!(cache.slabs_partial.load(Relaxed).is_null());
+        assert!(cache.slabs_empty.load(Relaxed).is_null());
+
+        release_memory(addrs, cache.slab_layout);
+    }
+}
+
+#[cfg(test)]
 mod header_tests {
     extern crate alloc;
 
