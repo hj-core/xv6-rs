@@ -382,6 +382,7 @@ mod cache_tests {
         let mut result = Vec::with_capacity(count);
         for _ in 0..count {
             let addr0 = unsafe { alloc(layout) };
+            assert!(!addr0.is_null(), "Failed to allocate memory");
             result.push(addr0);
         }
         result
