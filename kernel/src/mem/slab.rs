@@ -26,7 +26,7 @@ where
     lock: Spinlock,
     name: [char; CACHE_NAME_LENGTH],
     slab_layout: Layout,
-    // `slabs_*` is either null or the head of the doubly-linked [SlabHeader]s.
+    // `slabs_*` is either null or the head of the doubly linked [SlabHeader]s.
     slabs_full: AtomicPtr<SlabHeader<T>>,
     slabs_partial: AtomicPtr<SlabHeader<T>>,
     slabs_empty: AtomicPtr<SlabHeader<T>>,
@@ -55,11 +55,11 @@ where
     /// Clients of this method are responsible for acquiring the required memory
     /// and providing the starting address `addr0`.
     ///
-    /// Returns a pointer to the newly created [SlabHeader] if the attempt succeeds,
+    /// Returns a pointer to the newly created [SlabHeader] if the attempt succeeds
     /// or returns the corresponding error if it fails.
     ///
     /// # SAFETY:
-    /// * `addr0` must point to a memory block satisfying the `slab_layout` and dedicated
+    /// * `addr0` must point to a memory block that satisfies the `slab_layout` and dedicated
     ///   to the new slab.
     /// * `slab_empty` must be null or a valid pointer.
     unsafe fn grow(&mut self, addr0: Address) -> Result<*mut SlabHeader<T>, Error> {
@@ -93,17 +93,17 @@ where
         //   field since we have specified in the safety contract that it is valid if not null.
         // * In light of the above, this unsafe block is considered safe.
         unsafe {
-            let header_ptr: *mut SlabHeader<T> = addr0.into();
-            header_ptr.write(header);
-            (&mut *header_ptr).initialize(Bytes(self.slab_layout.size()));
+            let result: *mut SlabHeader<T> = addr0.into();
+            result.write(header);
+            (&mut *result).initialize(Bytes(self.slab_layout.size()));
 
             let old_head = self.slabs_empty.load(Acquire);
             if !old_head.is_null() {
-                (&mut *header_ptr).next.store(old_head, Release);
-                (&mut *old_head).prev.store(header_ptr, Release);
+                (&mut *result).next.store(old_head, Release);
+                (&mut *old_head).prev.store(result, Release);
             }
-            self.slabs_empty.store(header_ptr, Release);
-            Ok(header_ptr)
+            self.slabs_empty.store(result, Release);
+            Ok(result)
         }
     }
 }
@@ -118,9 +118,9 @@ where
     ///
     /// This field also makes [SlabHeader] ![Sync] ![Send] and invariant over [T].
     source: *mut Cache<T>,
-    /// [SlabHeader]s within the same [Cache].slabs_* are doubly-linked.
+    /// [SlabHeader]s within the same [Cache].slabs_* are doubly linked.
     prev: AtomicPtr<SlabHeader<T>>,
-    /// [SlabHeader]s within the same [Cache].slabs_* are doubly-linked.
+    /// [SlabHeader]s within the same [Cache].slabs_* are doubly linked.
     next: AtomicPtr<SlabHeader<T>>,
     total_slots: usize,
     slot0: Address,
