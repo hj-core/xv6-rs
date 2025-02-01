@@ -283,6 +283,7 @@ where
     }
 }
 
+#[derive(Debug)]
 struct SlabObject<T>
 where
     T: Default,
