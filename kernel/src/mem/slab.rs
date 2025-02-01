@@ -395,6 +395,14 @@ mod cache_tests {
         }
     }
 
+    fn assert_slab_empty<T: Default>(header: *mut SlabHeader<T>) {
+        assert!(!header.is_null());
+        unsafe {
+            assert_eq!(0, (*header).used_count);
+            (*header).used_bitmap.iter().for_each(|&i| assert_eq!(0, i));
+        }
+    }
+
     #[test]
     fn grow_succeeds_update_slabs_empty() {
         type T = u64;
@@ -407,14 +415,14 @@ mod cache_tests {
             assert!(cache.slabs_full.load(Relaxed).is_null());
             assert!(cache.slabs_partial.load(Relaxed).is_null());
 
-            let slab_empty = cache.slabs_empty.load(Relaxed);
-            assert!(!slab_empty.is_null());
-            assert_eq!(addrs[0].addr(), slab_empty.addr());
+            let head_empty = cache.slabs_empty.load(Relaxed);
+            assert_slab_empty(head_empty);
+            assert_eq!(addrs[0].addr(), head_empty.addr());
 
-            let prev = unsafe { (*slab_empty).prev.load(Relaxed) };
+            let prev = unsafe { (*head_empty).prev.load(Relaxed) };
             assert!(prev.is_null());
 
-            let next = unsafe { (*slab_empty).next.load(Relaxed) };
+            let next = unsafe { (*head_empty).next.load(Relaxed) };
             assert!(next.is_null());
         }
 
@@ -424,19 +432,19 @@ mod cache_tests {
             assert!(cache.slabs_full.load(Relaxed).is_null());
             assert!(cache.slabs_partial.load(Relaxed).is_null());
 
-            let slab_empty = cache.slabs_empty.load(Relaxed);
-            assert!(!slab_empty.is_null());
-            assert_eq!(addrs[1].addr(), slab_empty.addr());
+            let head_empty = cache.slabs_empty.load(Relaxed);
+            assert_slab_empty(head_empty);
+            assert_eq!(addrs[1].addr(), head_empty.addr());
 
-            let prev = unsafe { (*slab_empty).prev.load(Relaxed) };
+            let prev = unsafe { (*head_empty).prev.load(Relaxed) };
             assert!(prev.is_null());
 
-            let next = unsafe { (*slab_empty).next.load(Relaxed) };
+            let next = unsafe { (*head_empty).next.load(Relaxed) };
             assert!(!next.is_null());
             assert_eq!(addrs[0].addr(), next.addr());
 
             let next_prev = unsafe { (*next).prev.load(Relaxed) };
-            assert_eq!(slab_empty, next_prev);
+            assert_eq!(head_empty, next_prev);
             let next_next = unsafe { (*next).next.load(Relaxed) };
             assert!(next_next.is_null());
         }
@@ -445,6 +453,7 @@ mod cache_tests {
             for i in 2..addrs.len() {
                 let result = unsafe { cache.grow(addrs[i].into()) };
                 assert!(result.is_ok_and(|ptr| ptr.addr() == addrs[i].addr()));
+                assert_slab_empty(cache.slabs_empty.load(Relaxed));
                 assert!(cache.slabs_full.load(Relaxed).is_null());
                 assert!(cache.slabs_partial.load(Relaxed).is_null());
             }
