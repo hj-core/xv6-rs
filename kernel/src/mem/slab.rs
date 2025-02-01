@@ -98,7 +98,7 @@ where
         unsafe {
             let result: *mut SlabHeader<T> = addr0.into();
             result.write(header);
-            (&mut *result).initialize(Bytes(self.slab_layout.size()));
+            (&mut *result).initialize(ptr::from_mut(self), Bytes(self.slab_layout.size()));
 
             let old_head = self.slabs_empty.load(Acquire);
             if !old_head.is_null() {
@@ -163,9 +163,10 @@ where
     /// # SAFETY:
     /// [SlabHeader] is address-sensitive.
     /// When calling this method, the [SlabHeader] must be at its pinned address.
-    unsafe fn initialize(&mut self, slab_size: Bytes) {
+    unsafe fn initialize(&mut self, source: *mut Cache<T>, slab_size: Bytes) {
         assert_ne!(0, size_of::<T>(), "Zero-size types are not supported.");
 
+        self.source = source;
         self.unlink();
         self.set_slot0_size_and_total(slab_size);
         self.reset_used_bitmap_and_count();
@@ -421,6 +422,7 @@ mod cache_tests {
 
             let head_empty = cache.slabs_empty.load(Relaxed);
             assert_slab_empty(head_empty);
+            assert_eq!(&raw mut cache, unsafe { (*head_empty).source });
             assert_eq!(addrs[0].addr(), head_empty.addr());
 
             let prev = unsafe { (*head_empty).prev.load(Relaxed) };
@@ -438,6 +440,7 @@ mod cache_tests {
 
             let head_empty = cache.slabs_empty.load(Relaxed);
             assert_slab_empty(head_empty);
+            assert_eq!(&raw mut cache, unsafe { (*head_empty).source });
             assert_eq!(addrs[1].addr(), head_empty.addr());
 
             let prev = unsafe { (*head_empty).prev.load(Relaxed) };
@@ -457,9 +460,13 @@ mod cache_tests {
             for i in 2..addrs.len() {
                 let result = unsafe { cache.grow(addrs[i].into()) };
                 assert!(result.is_ok_and(|ptr| ptr.addr() == addrs[i].addr()));
-                assert_slab_empty(cache.slabs_empty.load(Relaxed));
                 assert!(cache.slabs_full.load(Relaxed).is_null());
                 assert!(cache.slabs_partial.load(Relaxed).is_null());
+
+                let head_empty = cache.slabs_empty.load(Relaxed);
+                assert_slab_empty(head_empty);
+                assert_eq!(&raw mut cache, unsafe { (*head_empty).source });
+                assert_eq!(addrs[i].addr(), head_empty.addr());
             }
 
             let mut count = addrs.len();
