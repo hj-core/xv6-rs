@@ -62,6 +62,9 @@ where
     /// * `addr0` must point to a memory block that satisfies the `slab_layout` and dedicated
     ///   to the new slab.
     /// * `slab_empty` must be null or a valid pointer.
+    ///
+    /// # THREAD SAFETY:
+    /// * This method is **NOT** thread-safe.
     unsafe fn grow(&mut self, addr0: Address) -> Result<*mut SlabHeader<T>, Error> {
         if addr0.0 % self.slab_layout.align() != 0 || addr0.0 % align_of::<SlabHeader<T>>() != 0 {
             return Err(SlabNotAligned);
@@ -409,6 +412,7 @@ mod cache_tests {
         let mut cache = new_test_default::<T>();
 
         let addrs = acquire_memory(cache.slab_layout, 10);
+        cache.lock.lock();
         {
             let result = unsafe { cache.grow(addrs[0].into()) };
             assert!(result.is_ok_and(|ptr| ptr.addr() == addrs[0].addr()));
@@ -479,7 +483,7 @@ mod cache_tests {
             assert_eq!(addrs.len(), count);
             assert_eq!(addrs[addrs.len() - 1].addr(), curr.addr());
         }
-
+        cache.lock.unlock();
         release_memory(addrs, cache.slab_layout);
     }
 
@@ -487,12 +491,16 @@ mod cache_tests {
     fn grow_with_insufficient_size_return_size_err() {
         type T = u64;
         let mut cache = new_test_default::<T>();
-        let small_layout =
-            Layout::from_size_align(size_of::<SlabHeader<T>>(), align_of::<SlabHeader<u64>>())
-                .unwrap();
-        cache.slab_layout = small_layout;
+        {
+            let small_layout =
+                Layout::from_size_align(size_of::<SlabHeader<T>>(), align_of::<SlabHeader<u64>>())
+                    .unwrap();
+            cache.slab_layout = small_layout;
+        }
 
         let addrs = acquire_memory(cache.slab_layout, 1);
+        cache.lock.lock();
+
         let result = unsafe { cache.grow(addrs[0].into()) };
         let result_str = format!("{:?}", result);
         assert!(
@@ -503,6 +511,7 @@ mod cache_tests {
         assert!(cache.slabs_partial.load(Relaxed).is_null());
         assert!(cache.slabs_empty.load(Relaxed).is_null());
 
+        cache.lock.unlock();
         release_memory(addrs, cache.slab_layout);
     }
 
@@ -512,6 +521,8 @@ mod cache_tests {
         let mut cache = new_test_default::<T>();
 
         let addrs = acquire_memory(cache.slab_layout, 1);
+        cache.lock.lock();
+
         let result = unsafe { cache.grow(Address(addrs[0].addr() + 1)) };
         let result_str = format!("{:?}", result);
         assert!(
@@ -522,6 +533,7 @@ mod cache_tests {
         assert!(cache.slabs_partial.load(Relaxed).is_null());
         assert!(cache.slabs_empty.load(Relaxed).is_null());
 
+        cache.lock.unlock();
         release_memory(addrs, cache.slab_layout);
     }
 }
