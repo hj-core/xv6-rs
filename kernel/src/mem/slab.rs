@@ -2,7 +2,6 @@
 // Understanding the Linux Virtual Memory Manager by Mel Gorman, Chapter 8
 // https://pdos.csail.mit.edu/~sbw/links/gorman_book.pdf
 
-use crate::lock::Spinlock;
 use crate::mem::slab::Error::{AllocateFromFullSlab, SlabNotAligned, SlabTooSmall};
 use core::alloc::Layout;
 use core::marker::PhantomData;
@@ -21,8 +20,6 @@ struct Cache<T>
 where
     T: Default,
 {
-    /// Protect [Cache] from concurrent access.
-    lock: Spinlock,
     name: [char; CACHE_NAME_LENGTH],
     slab_layout: Layout,
     // `slabs_*` is either null or the head of the doubly linked [SlabHeader]s.
@@ -419,7 +416,6 @@ mod cache_tests {
 
     fn new_test_default<T: Default>() -> Cache<T> {
         Cache::<T> {
-            lock: Spinlock::new(),
             name: ['c'; CACHE_NAME_LENGTH],
             slab_layout: Layout::from_size_align(PAGE_SIZE.0, align_of::<SlabHeader<T>>()).unwrap(),
             slabs_full: Default::default(),
@@ -475,7 +471,6 @@ mod cache_tests {
         let mut cache = new_test_default::<T>();
 
         let addrs = acquire_memory(cache.slab_layout, 10);
-        cache.lock.lock();
         {
             let result = unsafe { Cache::grow(&raw mut cache, addrs[0].into()) };
             assert!(result.is_ok_and(|ptr| ptr.addr() == addrs[0].addr()));
@@ -552,7 +547,6 @@ mod cache_tests {
             assert_eq!(addrs.len(), count);
             assert_eq!(addrs[addrs.len() - 1].addr(), curr.addr());
         }
-        cache.lock.unlock();
         unsafe { release_memory(addrs, cache.slab_layout) }
     }
 
@@ -566,9 +560,7 @@ mod cache_tests {
                     .unwrap();
             cache.slab_layout = small_layout;
         }
-
         let addrs = acquire_memory(cache.slab_layout, 1);
-        cache.lock.lock();
 
         let result = unsafe { Cache::grow(&raw mut cache, addrs[0].into()) };
         let result_str = format!("{:?}", result);
@@ -580,7 +572,6 @@ mod cache_tests {
         assert!(cache.slabs_partial.load(Relaxed).is_null());
         assert!(cache.slabs_empty.load(Relaxed).is_null());
 
-        cache.lock.unlock();
         unsafe { release_memory(addrs, cache.slab_layout) }
     }
 
@@ -590,7 +581,6 @@ mod cache_tests {
         let mut cache = new_test_default::<T>();
 
         let addrs = acquire_memory(cache.slab_layout, 1);
-        cache.lock.lock();
 
         let result = unsafe { Cache::grow(&raw mut cache, Address(addrs[0].addr() + 1)) };
         let result_str = format!("{:?}", result);
@@ -602,7 +592,6 @@ mod cache_tests {
         assert!(cache.slabs_partial.load(Relaxed).is_null());
         assert!(cache.slabs_empty.load(Relaxed).is_null());
 
-        cache.lock.unlock();
         unsafe { release_memory(addrs, cache.slab_layout) }
     }
 }
