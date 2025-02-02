@@ -3,7 +3,7 @@
 // https://pdos.csail.mit.edu/~sbw/links/gorman_book.pdf
 
 use crate::mem::slab::Error::{
-    AllocateFromFullSlab, SlabNotAligned, SlabTooSmall, ZeroSizeTypeNotSupport,
+    AllocateFromFullSlab, SlabNotAligned, SlabTooSmall, ZeroSizeTypeNotSupported,
 };
 use core::alloc::Layout;
 use core::marker::PhantomData;
@@ -149,7 +149,7 @@ where
         addr0: Address,
     ) -> Result<*mut Self, Error> {
         if size_of::<T>() == 0 {
-            return Err(ZeroSizeTypeNotSupport);
+            return Err(ZeroSizeTypeNotSupported);
         }
 
         if addr0.0 % align_of::<SlabHeader<T>>() != 0 {
@@ -379,7 +379,7 @@ where
 enum Error {
     SlabNotAligned,
     SlabTooSmall,
-    ZeroSizeTypeNotSupport,
+    ZeroSizeTypeNotSupported,
     RequestMemoryFailed,
     AllocateFromFullSlab,
 }
