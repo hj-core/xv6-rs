@@ -206,8 +206,10 @@ where
         header_size + Bytes(padding)
     }
 
-    /// Returns a [SlabObject] wrapping the allocated object [T] if the allocation succeeded;
-    /// otherwise, returns the corresponding error.
+    /// Attempts to allocate an object from the underlying slab.
+    ///
+    /// Returns a [SlabObject] wrapping the allocated object [T] if the allocation succeeds,
+    /// or returns the corresponding error if it fails.
     ///
     /// # SAFETY:
     /// * `header` must be a valid pointer.
@@ -225,7 +227,7 @@ where
         // a temporary value and moving to the slot.
         let new_object = T::default();
 
-        let slot_index = SlabHeader::use_first_free_slot(header);
+        let slot_index = SlabHeader::use_first_free_slot(header)?;
         // SAFETY:
         // * We are safe to dereference `header` because it is a valid pointer.
         // * We are safe to write the `new_object` to the `object_ptr` because
@@ -255,14 +257,14 @@ where
     }
 
     /// Mark the first free slot used and return its index.
-    /// Panic if no free slots are available.
+    /// Returns [AllocateFromFullSlab] if no free slots are available.
     ///
     /// # SAFETY:
     /// * `header` must be a valid pointer.
-    unsafe fn use_first_free_slot(header: *mut SlabHeader<T>) -> usize {
+    unsafe fn use_first_free_slot(header: *mut SlabHeader<T>) -> Result<usize, Error> {
         // SAFETY:
-        // * We are safe to deference `header` and mutate its fields in place
-        //   because it is a valid pointer.
+        // * We are safe to deference `header` and mutate its fields in place because
+        //   it is a valid pointer.
         let mut result = 0;
         for map in (*header).used_bitmap.iter_mut() {
             if *map == 0xffff_ffff_ffff_ffff {
@@ -280,9 +282,13 @@ where
         }
 
         if result == (*header).total_slots {
-            panic!("No free slots available.");
+            assert!(
+                SlabHeader::is_full(header),
+                "`used_bitmap` is inconsistent with fn `is_full`"
+            );
+            return Err(AllocateFromFullSlab);
         }
-        result
+        Ok(result)
     }
 
     /// Attempts to deallocate the `object` from the slab the `header` refers to.
@@ -649,7 +655,7 @@ mod header_tests {
 
         #[test]
         fn test_use_first_free_slot() {
-            let expected_return = 0;
+            let expected_return = Ok(0);
             let mut expected_after = new_test_empty();
             expected_after.used_bitmap[0] = 1;
             expected_after.used_count = 1;
@@ -717,14 +723,13 @@ mod header_tests {
         }
 
         #[test]
-        #[should_panic(expected = "No free slots available.")]
         fn test_use_first_free_slot() {
-            let return_irrelevant = 0xffff_ffff_ffff_ffff;
+            let expected_return = Err(AllocateFromFullSlab);
             let mut expected_after = new_test_full();
             let mut before = new_test_full();
             unsafe {
                 assert_use_first_free_slot(
-                    return_irrelevant,
+                    expected_return,
                     &raw mut expected_after,
                     &raw mut before,
                 )
@@ -732,14 +737,13 @@ mod header_tests {
         }
 
         #[test]
-        #[should_panic(expected = "No free slots available.")]
         fn test_use_first_free_slot_max_slots() {
-            let return_irrelevant = 0xffff_ffff_ffff_ffff;
+            let expected_return = Err(AllocateFromFullSlab);
             let mut expected_after = new_test_full_max_slots();
             let mut before = new_test_full_max_slots();
             unsafe {
                 assert_use_first_free_slot(
-                    return_irrelevant,
+                    expected_return,
                     &raw mut expected_after,
                     &raw mut before,
                 )
@@ -779,7 +783,7 @@ mod header_tests {
 
         #[test]
         fn test_use_first_free_slot() {
-            let expected_return = 72;
+            let expected_return = Ok(72);
             let mut expected_after = new_test_partial();
             expected_after.used_bitmap[1] |= 1 << 8;
             expected_after.used_count += 1;
@@ -875,12 +879,15 @@ mod header_tests {
     /// # SAFETY:
     /// * `expected_after` and `before` must be valid pointers.
     unsafe fn assert_use_first_free_slot<T: Default>(
-        expected_return: usize,
+        expected_return: Result<usize, Error>,
         expected_after: *mut SlabHeader<T>,
         before: *mut SlabHeader<T>,
     ) {
         let actual_return = SlabHeader::use_first_free_slot(before);
-        assert_eq!(expected_return, actual_return);
+        assert_eq!(
+            expected_return, actual_return,
+            "Expected {expected_return:?} but got {actual_return:?}",
+        );
 
         let actual_after = before;
         assert_content_equal(expected_after, actual_after);
