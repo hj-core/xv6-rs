@@ -62,8 +62,9 @@ where
     /// Clients of this method are responsible for acquiring the required memory
     /// and providing the starting address `addr0`.
     ///
-    /// Returns a pointer to the newly created [SlabHeader] if the attempt succeeds
+    /// Returns a pointer to the newly created [SlabHeader] if the attempt succeeds,
     /// or returns the corresponding error if it fails.
+    /// Furthermore, it is guaranteed that the provided memory is unmodified if the attempt fails.
     ///
     /// # SAFETY:
     /// * `cache` must be a valid pointer.
@@ -77,41 +78,19 @@ where
         // * Dereferencing `cache` is safe because it is a valid pointer.
         // * [Layout] implements [Copy] so there is no ownership transfer.
         let layout = unsafe { (*cache).slab_layout };
-        {
-            if addr0.0 % layout.align() != 0 || addr0.0 % align_of::<SlabHeader<T>>() != 0 {
-                return Err(SlabNotAligned);
-            }
-
-            let header_size = Bytes(size_of::<SlabHeader<T>>());
-            let slot0_offset = SlabHeader::<T>::compute_slot0_offset(addr0, header_size);
-            let min_size = slot0_offset + Bytes(size_of::<T>());
-
-            if layout.size() < min_size.0 {
-                return Err(SlabTooSmall);
-            }
+        if addr0.0 % layout.align() != 0 {
+            return Err(SlabNotAligned);
         }
 
-        let header = SlabHeader::<T>::new_empty();
-        let result: *mut SlabHeader<T> = addr0.into();
-
         // SAFETY:
-        // * We are safe to cast `addr0` to a [SlabHeader] pointer and write the
-        //   newly created header since `addr0` should comply with the `slab_layout`
-        //   and be dedicated to this slab.
-        //   We have also performed additional checks on the alignment and intended size.
-        // * We are safe to call the `initialize` function since we have placed the [SlabHeader]
-        //   at its pinned address, thus satisfying the safety contract of `initialize`.
-        // * If `initialize` panics, we may have a memory leak but no undefined behavior
-        //   because we haven't linked the [SlabHeader] to the [Cache],
-        //   and `initialize` should not cause UB since we have met its safety contract.
-        // * We are safe to dereference `cache` since it is a valid pointer.
-        // * We are safe to dereference the newly written [SlabHeader] pointer.
-        // * We are safe to dereference `slab_empty` and update it because we have
-        //   checked that it is not null.
+        // * We are safe to call the `new` function because we have satisfied its safety contract.
+        // * We are safe to dereference `cache` and update it in place since it is a valid pointer.
+        // * We are safe to dereference the newly returned [SlabHeader] pointer and update it in
+        //   place.
+        // * We are safe to dereference `slab_empty` and update it in place if it is not null.
         // * In light of the above, this unsafe block is considered safe.
         unsafe {
-            result.write(header);
-            SlabHeader::initialize(result, cache, Bytes(layout.size()))?;
+            let result = SlabHeader::new(cache, Bytes(layout.size()), addr0)?;
 
             let old_head = (*cache).slabs_empty.load(Acquire);
             if !old_head.is_null() {
@@ -119,8 +98,9 @@ where
                 (*old_head).prev.store(result, Release);
             }
             (*cache).slabs_empty.store(result, Release);
+
+            Ok(result)
         }
-        Ok(result)
     }
 }
 
@@ -154,87 +134,67 @@ impl<T> SlabHeader<T>
 where
     T: Default,
 {
-    fn new_empty() -> Self {
-        assert_ne!(0, size_of::<T>(), "Zero-size types are not supported.");
-
-        Self {
-            source: null_mut(),
-            prev: AtomicPtr::new(null_mut()),
-            next: AtomicPtr::new(null_mut()),
-            total_slots: 0,
-            slot0: Address(0),
-            slot_size: Bytes(0),
-            used_bitmap: [0; SLAB_USED_BITMAP_SIZE],
-            used_count: 0,
-            _marker: PhantomData,
-            _pinned: PhantomPinned,
-        }
-    }
-
-    /// Initializes the fields of this [SlabHeader].
+    /// Attempts to create a slab for `cache` at `addr0` with a size of `slab_size`.
+    ///
+    /// Returns a pointer to the [SlabHeader] if the attempt succeeds,
+    /// or an [Error] if it fails.
+    /// Furthermore, it is guaranteed that the provided memory is unmodified if the attempt fails.
     ///
     /// # SAFETY:
-    /// * `header` must be a valid pointer.
-    /// * [SlabHeader] is address-sensitive.
-    ///   When calling this method, the [SlabHeader] must be at its pinned address.
-    unsafe fn initialize(
-        header: *mut SlabHeader<T>,
-        source: *mut Cache<T>,
+    /// * The memory block starting at `addr0` and extending for `slab_size` must be dedicated
+    ///   to the new slab's use.
+    unsafe fn new(
+        cache: *mut Cache<T>,
         slab_size: Bytes,
-    ) -> Result<bool, Error> {
+        addr0: Address,
+    ) -> Result<*mut Self, Error> {
         if size_of::<T>() == 0 {
             return Err(ZeroSizeTypeNotSupport);
         }
 
-        (*header).source = source;
-        SlabHeader::unlink(header);
-        SlabHeader::configure_slots(header, slab_size)?;
-        SlabHeader::reset_used(header);
-
-        Ok(true)
-    }
-
-    /// Set both `prev` and `next` to null pointer.
-    ///
-    /// # SAFETY:
-    /// * `header` must be a valid pointer.
-    unsafe fn unlink(header: *mut SlabHeader<T>) {
-        (*header).prev.store(null_mut(), Relaxed);
-        (*header).next.store(null_mut(), Relaxed);
-    }
-
-    /// Reset the `used_bitmap` and `used_count`.
-    ///
-    /// # SAFETY:
-    /// * `header` must be a valid pointer.
-    unsafe fn reset_used(header: *mut SlabHeader<T>) {
-        for map in (*header).used_bitmap.iter_mut() {
-            *map = 0;
+        if addr0.0 % align_of::<SlabHeader<T>>() != 0 {
+            return Err(SlabNotAligned);
         }
-        (*header).used_count = 0;
-    }
 
-    /// Configure the `total_slots`, `slot0`, and `slot_size`.
-    ///
-    /// # SAFETY:
-    /// * `header` must be a valid pointer.
-    unsafe fn configure_slots(header: *mut SlabHeader<T>, slab_size: Bytes) -> Result<bool, Error> {
-        let addr0 = Address(header.addr());
         let header_size = Bytes(size_of::<SlabHeader<T>>());
-        let slot0_offset = SlabHeader::<T>::compute_slot0_offset(addr0, header_size);
+        let slot_size = Bytes(size_of::<T>());
+        let slot0_offset = Self::compute_slot0_offset(addr0, header_size);
+        let min_size = slot0_offset + slot_size;
 
-        (*header).slot0 = Address::from(header) + slot0_offset;
-        (*header).slot_size = Bytes(size_of::<T>());
-
-        let min_size = slot0_offset + (*header).slot_size;
         if slab_size.0 < min_size.0 {
             return Err(SlabTooSmall);
         }
 
-        (*header).total_slots = (slab_size.0 - slot0_offset.0) / (*header).slot_size.0;
-        Ok(true)
+        let total_slots = (slab_size.0 - slot0_offset.0) / slot_size.0;
+        let slot0 = addr0 + slot0_offset;
+
+        let header = SlabHeader {
+            source: cache,
+            prev: AtomicPtr::new(null_mut()),
+            next: AtomicPtr::new(null_mut()),
+            total_slots,
+            slot0,
+            slot_size,
+            used_bitmap: [0; SLAB_USED_BITMAP_SIZE],
+            used_count: 0,
+            _marker: PhantomData,
+            _pinned: PhantomPinned,
+        };
+
+        let result: *mut SlabHeader<T> = addr0.into();
+        // SAFETY:
+        // * We are safe to write the newly created header to `result` because
+        //   1. We have checked the alignment requirement.
+        //   2. We have verified the intended slab size can accommodate the header
+        //      plus at least one slot.
+        //   3. The memory block is dedicated to this slab's use.
+        unsafe { result.write(header) };
+
+        Ok(result)
     }
 
+    /// Offset from the [SlabHeader]'s address to slot 0.
+    /// This offset has considered the alignment requirement of object [T].
     fn compute_slot0_offset(addr0: Address, header_size: Bytes) -> Bytes {
         let header_end = (addr0 + header_size).0;
         let object_align = align_of::<T>();
@@ -869,6 +829,8 @@ mod header_tests {
     /// # SAFETY:
     /// * `header` must be a valid pointer.
     unsafe fn assert_slab_state_consistency<T: Default>(header: *mut SlabHeader<T>) {
+        assert_ne!(0, size_of::<T>(), "Zero size type not supported");
+        assert!(0 < (*header).total_slots, "Zero total_slots");
         assert_used_bitmap_count_consistency(header);
         assert_used_bitmap_total_slots_consistency(header);
     }
