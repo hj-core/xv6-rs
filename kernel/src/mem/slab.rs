@@ -369,7 +369,7 @@ where
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 enum Error {
     SlabNotAligned,
     SlabTooSmall,
