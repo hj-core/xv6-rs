@@ -2,7 +2,9 @@
 // Understanding the Linux Virtual Memory Manager by Mel Gorman, Chapter 8
 // https://pdos.csail.mit.edu/~sbw/links/gorman_book.pdf
 
-use crate::mem::slab::Error::{AllocateFromFullSlab, SlabNotAligned, SlabTooSmall};
+use crate::mem::slab::Error::{
+    AllocateFromFullSlab, SlabNotAligned, SlabTooSmall, ZeroSizeTypeNotSupport,
+};
 use core::alloc::Layout;
 use core::marker::PhantomData;
 use core::marker::PhantomPinned;
@@ -109,7 +111,7 @@ where
         // * In light of the above, this unsafe block is considered safe.
         unsafe {
             result.write(header);
-            SlabHeader::initialize(result, cache, Bytes(layout.size()));
+            SlabHeader::initialize(result, cache, Bytes(layout.size()))?;
 
             let old_head = (*cache).slabs_empty.load(Acquire);
             if !old_head.is_null() {
@@ -175,13 +177,21 @@ where
     /// * `header` must be a valid pointer.
     /// * [SlabHeader] is address-sensitive.
     ///   When calling this method, the [SlabHeader] must be at its pinned address.
-    unsafe fn initialize(header: *mut SlabHeader<T>, source: *mut Cache<T>, slab_size: Bytes) {
-        assert_ne!(0, size_of::<T>(), "Zero-size types are not supported.");
+    unsafe fn initialize(
+        header: *mut SlabHeader<T>,
+        source: *mut Cache<T>,
+        slab_size: Bytes,
+    ) -> Result<bool, Error> {
+        if size_of::<T>() == 0 {
+            return Err(ZeroSizeTypeNotSupport);
+        }
 
         (*header).source = source;
         SlabHeader::unlink(header);
-        SlabHeader::configure_slots(header, slab_size);
+        SlabHeader::configure_slots(header, slab_size)?;
         SlabHeader::reset_used(header);
+
+        Ok(true)
     }
 
     /// Set both `prev` and `next` to null pointer.
@@ -208,7 +218,7 @@ where
     ///
     /// # SAFETY:
     /// * `header` must be a valid pointer.
-    unsafe fn configure_slots(header: *mut SlabHeader<T>, slab_size: Bytes) {
+    unsafe fn configure_slots(header: *mut SlabHeader<T>, slab_size: Bytes) -> Result<bool, Error> {
         let addr0 = Address(header.addr());
         let header_size = Bytes(size_of::<SlabHeader<T>>());
         let slot0_offset = SlabHeader::<T>::compute_slot0_offset(addr0, header_size);
@@ -216,11 +226,13 @@ where
         (*header).slot0 = Address::from(header) + slot0_offset;
         (*header).slot_size = Bytes(size_of::<T>());
 
-        assert!(
-            slot0_offset.0 + (*header).slot_size.0 <= slab_size.0,
-            "Slab size is too small."
-        );
-        (*header).total_slots = (slab_size.0 - slot0_offset.0) / (*header).slot_size.0
+        let min_size = slot0_offset + (*header).slot_size;
+        if slab_size.0 < min_size.0 {
+            return Err(SlabTooSmall);
+        }
+
+        (*header).total_slots = (slab_size.0 - slot0_offset.0) / (*header).slot_size.0;
+        Ok(true)
     }
 
     fn compute_slot0_offset(addr0: Address, header_size: Bytes) -> Bytes {
@@ -401,6 +413,7 @@ where
 enum Error {
     SlabNotAligned,
     SlabTooSmall,
+    ZeroSizeTypeNotSupport,
     RequestMemoryFailed,
     AllocateFromFullSlab,
 }
