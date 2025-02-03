@@ -258,8 +258,12 @@ where
         (*header).used_count == (*header).total_slots
     }
 
-    /// Mark the first free slot used and return its index.
-    /// Returns [AllocateFromFullSlab] if no free slots are available.
+    /// Attempts to mark the first free slot as used.
+    ///
+    /// Returns the index of the free slot if the attempt succeeds,
+    /// or returns the corresponding [Error] if it fails.
+    /// Furthermore, it is guaranteed that if an [Err] is returned, the states of `header`
+    /// remain unmodified.
     ///
     /// # SAFETY:
     /// * `header` must be a valid pointer.
@@ -276,21 +280,19 @@ where
 
             let shift = map.trailing_ones() as usize;
             result += shift;
+
             if result < (*header).total_slots {
                 *map |= 1 << shift;
                 (*header).used_count += 1;
+                return Ok(result);
             }
-            break;
         }
 
-        if result == (*header).total_slots {
-            assert!(
-                SlabHeader::is_full(header),
-                "`used_bitmap` is inconsistent with fn `is_full`"
-            );
-            return Err(AllocateFromFullSlab);
-        }
-        Ok(result)
+        assert!(
+            SlabHeader::is_full(header),
+            "`used_bitmap` is inconsistent with fn `is_full`"
+        );
+        Err(AllocateFromFullSlab)
     }
 
     /// Attempts to deallocate the `object` from the slab the `header` refers to.
