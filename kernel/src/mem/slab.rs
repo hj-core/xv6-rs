@@ -64,7 +64,8 @@ where
     ///
     /// Returns a pointer to the newly created [SlabHeader] if the attempt succeeds,
     /// or returns the corresponding error if it fails.
-    /// Furthermore, it is guaranteed that the provided memory is unmodified if the attempt fails.
+    /// Furthermore, it is guaranteed that if an [Err] is returned, the provided memory
+    /// remain unmodified.
     ///
     /// # SAFETY:
     /// * `cache` must be a valid pointer.
@@ -138,7 +139,8 @@ where
     ///
     /// Returns a pointer to the [SlabHeader] if the attempt succeeds,
     /// or an [Error] if it fails.
-    /// Furthermore, it is guaranteed that the provided memory is unmodified if the attempt fails.
+    /// Furthermore, it is guaranteed that if an [Err] is returned, the provided memory
+    /// remain unmodified.
     ///
     /// # SAFETY:
     /// * The memory block starting at `addr0` and extending for `slab_size` must be dedicated
