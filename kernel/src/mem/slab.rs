@@ -212,6 +212,8 @@ where
     ///
     /// Returns a [SlabObject] wrapping the allocated object [T] if the allocation succeeds,
     /// or returns the corresponding error if it fails.
+    /// Furthermore, it is guaranteed that if an [Err] is returned, the states of `header`
+    /// remain unmodified.
     ///
     /// # SAFETY:
     /// * `header` must be a valid pointer.
