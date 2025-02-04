@@ -11,7 +11,7 @@ use core::marker::PhantomPinned;
 use core::ptr;
 use core::ptr::null_mut;
 use core::sync::atomic::AtomicPtr;
-use core::sync::atomic::Ordering::{Acquire, Relaxed, Release};
+use core::sync::atomic::Ordering::{Acquire, Release};
 use wrapper::{Address, Bytes};
 
 const CACHE_NAME_LENGTH: usize = 16;
@@ -248,8 +248,8 @@ where
         };
 
         let result = SlabObject {
-            source: AtomicPtr::new(header),
-            object: AtomicPtr::new(object_ptr),
+            source: header,
+            object: object_ptr,
             _marker: PhantomData,
         };
         Ok(result)
@@ -325,10 +325,13 @@ struct SlabObject<T>
 where
     T: Default,
 {
-    source: AtomicPtr<SlabHeader<T>>,
-    object: AtomicPtr<T>,
+    source: *mut SlabHeader<T>,
+    object: *mut T,
     _marker: PhantomData<T>,
 }
+
+unsafe impl<T> Send for SlabObject<T> where T: Default + Send {}
+unsafe impl<T> Sync for SlabObject<T> where T: Default + Send {}
 
 impl<T> SlabObject<T>
 where
@@ -342,7 +345,7 @@ where
         //   correctly initialize this field, we can safely dereference it.
         // * Dereferencing the raw pointer to get a shared reference does not move
         //   the underlying object.
-        unsafe { &*self.object.load(Relaxed) }
+        unsafe { &*self.object }
     }
 
     /// Get an exclusive reference to the underlying object.
@@ -359,7 +362,7 @@ where
         //   correctly initialize this field, we can safely dereference it.
         // * Dereferencing the raw pointer to get an exclusive reference does not
         //   move the underlying object.
-        &mut *self.object.load(Relaxed)
+        &mut *self.object
     }
 }
 
@@ -377,7 +380,7 @@ where
         //   [SlabObject].
         //   When this [SlabObject] is dropped, client should have done with the object [T] and
         //   satisfied any invariants related to the object, so we are safe to drop the object [T].
-        unsafe { ptr::drop_in_place(self.object.load(Relaxed)) }
+        unsafe { ptr::drop_in_place(self.object) }
     }
 }
 
@@ -398,6 +401,7 @@ mod cache_tests {
     use alloc::alloc::{alloc, dealloc};
     use alloc::format;
     use alloc::vec::Vec;
+    use core::sync::atomic::Ordering::Relaxed;
 
     fn new_test_default<T: Default>() -> Cache<T> {
         Cache::<T> {
@@ -586,6 +590,7 @@ mod header_tests {
     extern crate alloc;
 
     use super::*;
+    use core::sync::atomic::Ordering::Relaxed;
 
     mod object_ignorance {
         use super::*;
