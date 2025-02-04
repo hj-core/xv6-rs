@@ -18,6 +18,10 @@ const CACHE_NAME_LENGTH: usize = 16;
 const SLAB_USED_BITMAP_SIZE: usize = 4;
 const MAX_SLOTS_PER_SLAB: usize = SLAB_USED_BITMAP_SIZE * 64;
 
+/// todo!()
+///
+/// # SAFETY:
+/// * [T] must not be repr(packed).
 #[repr(C)]
 struct Cache<T>
 where
