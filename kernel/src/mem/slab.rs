@@ -8,6 +8,7 @@ use crate::mem::slab::Error::{
 use core::alloc::Layout;
 use core::marker::PhantomData;
 use core::marker::PhantomPinned;
+use core::ptr;
 use core::ptr::null_mut;
 use core::sync::atomic::AtomicPtr;
 use core::sync::atomic::Ordering::{Acquire, Relaxed, Release};
@@ -46,14 +47,16 @@ where
         todo!()
     }
 
-    /// Returns true if the attempt to deallocate the [SlabObject] succeeds,
-    /// or else returns the corresponding error.
+    /// Attempts to deallocate the object [T] under `object` and reclaim the slot.
+    ///
+    /// Returns true if the attempt succeeds, or returns the corresponding error if it fails.
     ///
     /// # SAFETY:
+    /// * This method is **NOT** thread-safe.
     /// * todo!()
     unsafe fn deallocate_object(
         _cache: *mut Cache<T>,
-        _object: &SlabObject<T>,
+        _object: SlabObject<T>,
     ) -> Result<bool, Error> {
         todo!()
     }
@@ -311,6 +314,12 @@ where
     }
 }
 
+/// A proxy to the actual allocated object, which is address-sensitive.
+///
+/// When done with the object, the client needs to call the `deallocate_object` method of [Cache]
+/// with this [SlabObject].
+/// Failing to do so will cause a memory leak; the destructor of the object will still be invoked
+/// when this [SlabObject] is dropped.
 #[derive(Debug)]
 struct SlabObject<T>
 where
@@ -321,9 +330,6 @@ where
     _marker: PhantomData<T>,
 }
 
-/// A proxy to the actual allocated object.
-/// This proxy provides a layer of protection to the underlying object, which is address-sensitive.
-/// Dropping this object triggers the deallocation of the underlying object.
 impl<T> SlabObject<T>
 where
     T: Default,
@@ -363,21 +369,15 @@ where
 {
     fn drop(&mut self) {
         // SAFETY:
-        // * SlabObject is only created through Cache allocation,
-        //   which should correctly initialize the source field.
-        // * The source field is private to the SlabObject,
-        //   and we haven't exposed any methods to mutate it,
-        //   so it's supposed to retain its initial value.
-        // * A SlabHeader should have its source field correctly set.
-        // * The Cache and SlabHeader should live longer than this SlabObject.
-        // * Therefore, we are safe to dereference the source field to get the SlabHeader,
-        //   and further dereference its source field to get the Cache.
-        // * There are no moves of values.
-        // * There are no concerns regarding exception safety.
-        unsafe {
-            let cache = (*self.source.load(Relaxed)).source;
-            let _ = Cache::deallocate_object(cache, &self);
-        }
+        // * The `object` field remain unmodified since allocation because we have not exposed
+        //   it or methods to mutate it.
+        // * The `object` field should have initialized with a valid pointer, so it is nonnull,
+        //   aligned, and safe for both reads and writes.
+        // * The only safe way for client to access the underlying object [T] is through this
+        //   [SlabObject].
+        //   When this [SlabObject] is dropped, client should have done with the object [T] and
+        //   satisfied any invariants related to the object, so we are safe to drop the object [T].
+        unsafe { ptr::drop_in_place(self.object.load(Relaxed)) }
     }
 }
 
