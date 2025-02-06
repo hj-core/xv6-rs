@@ -10,8 +10,6 @@ use core::marker::PhantomData;
 use core::marker::PhantomPinned;
 use core::ptr;
 use core::ptr::null_mut;
-use core::sync::atomic::AtomicPtr;
-use core::sync::atomic::Ordering::{Acquire, Release};
 use wrapper::{Address, Bytes};
 
 const CACHE_NAME_LENGTH: usize = 16;
@@ -30,9 +28,9 @@ where
     name: [char; CACHE_NAME_LENGTH],
     slab_layout: Layout,
     // `slabs_*` is either null or the head of the doubly linked [SlabHeader]s.
-    slabs_full: AtomicPtr<SlabHeader<T>>,
-    slabs_partial: AtomicPtr<SlabHeader<T>>,
-    slabs_empty: AtomicPtr<SlabHeader<T>>,
+    slabs_full: *mut SlabHeader<T>,
+    slabs_partial: *mut SlabHeader<T>,
+    slabs_empty: *mut SlabHeader<T>,
 }
 
 impl<T> Cache<T>
@@ -100,12 +98,12 @@ where
         unsafe {
             let result = SlabHeader::new(cache, Bytes(layout.size()), addr0)?;
 
-            let old_head = (*cache).slabs_empty.load(Acquire);
+            let old_head = (*cache).slabs_empty;
             if !old_head.is_null() {
                 (*result).next = old_head;
                 (*old_head).prev = result;
             }
-            (*cache).slabs_empty.store(result, Release);
+            (*cache).slabs_empty = result;
 
             Ok(result)
         }
@@ -405,15 +403,14 @@ mod cache_tests {
     use alloc::alloc::{alloc, dealloc};
     use alloc::format;
     use alloc::vec::Vec;
-    use core::sync::atomic::Ordering::Relaxed;
 
     fn new_test_default<T: Default>() -> Cache<T> {
         Cache::<T> {
             name: ['c'; CACHE_NAME_LENGTH],
             slab_layout: Layout::from_size_align(PAGE_SIZE.0, align_of::<SlabHeader<T>>()).unwrap(),
-            slabs_full: Default::default(),
-            slabs_partial: Default::default(),
-            slabs_empty: Default::default(),
+            slabs_full: null_mut(),
+            slabs_partial: null_mut(),
+            slabs_empty: null_mut(),
         }
     }
 
@@ -467,10 +464,10 @@ mod cache_tests {
         {
             let result = unsafe { Cache::grow(&raw mut cache, addrs[0].into()) };
             assert!(result.is_ok_and(|ptr| ptr.addr() == addrs[0].addr()));
-            assert!(cache.slabs_full.load(Relaxed).is_null());
-            assert!(cache.slabs_partial.load(Relaxed).is_null());
+            assert!(cache.slabs_full.is_null());
+            assert!(cache.slabs_partial.is_null());
 
-            let head_empty = cache.slabs_empty.load(Relaxed);
+            let head_empty = cache.slabs_empty;
             assert_slab_empty(head_empty);
             assert_eq!(&raw mut cache, unsafe { (*head_empty).source });
             assert_eq!(addrs[0].addr(), head_empty.addr());
@@ -485,10 +482,10 @@ mod cache_tests {
         {
             let result = unsafe { Cache::grow(&raw mut cache, addrs[1].into()) };
             assert!(result.is_ok_and(|ptr| ptr.addr() == addrs[1].addr()));
-            assert!(cache.slabs_full.load(Relaxed).is_null());
-            assert!(cache.slabs_partial.load(Relaxed).is_null());
+            assert!(cache.slabs_full.is_null());
+            assert!(cache.slabs_partial.is_null());
 
-            let head_empty = cache.slabs_empty.load(Relaxed);
+            let head_empty = cache.slabs_empty;
             assert_slab_empty(head_empty);
             assert_eq!(&raw mut cache, unsafe { (*head_empty).source });
             assert_eq!(addrs[1].addr(), head_empty.addr());
@@ -510,10 +507,10 @@ mod cache_tests {
             for i in 2..addrs.len() {
                 let result = unsafe { Cache::grow(&raw mut cache, addrs[i].into()) };
                 assert!(result.is_ok_and(|ptr| ptr.addr() == addrs[i].addr()));
-                assert!(cache.slabs_full.load(Relaxed).is_null());
-                assert!(cache.slabs_partial.load(Relaxed).is_null());
+                assert!(cache.slabs_full.is_null());
+                assert!(cache.slabs_partial.is_null());
 
-                let head_empty = cache.slabs_empty.load(Relaxed);
+                let head_empty = cache.slabs_empty;
                 assert_slab_empty(head_empty);
                 assert_eq!(&raw mut cache, unsafe { (*head_empty).source });
                 assert_eq!(addrs[i].addr(), head_empty.addr());
@@ -521,7 +518,7 @@ mod cache_tests {
 
             let mut count = addrs.len();
             let mut prev = null_mut();
-            let mut curr = cache.slabs_empty.load(Relaxed);
+            let mut curr = cache.slabs_empty;
             while !curr.is_null() {
                 count -= 1;
                 assert_eq!(addrs[count].addr(), curr.addr());
@@ -561,9 +558,9 @@ mod cache_tests {
             result.is_err_and(|err| matches!(err, SlabTooSmall)),
             "Expected Err({SlabTooSmall:?}) but got {result_str}."
         );
-        assert!(cache.slabs_full.load(Relaxed).is_null());
-        assert!(cache.slabs_partial.load(Relaxed).is_null());
-        assert!(cache.slabs_empty.load(Relaxed).is_null());
+        assert!(cache.slabs_full.is_null());
+        assert!(cache.slabs_partial.is_null());
+        assert!(cache.slabs_empty.is_null());
 
         unsafe { release_memory(addrs, cache.slab_layout) }
     }
@@ -581,9 +578,9 @@ mod cache_tests {
             result.is_err_and(|err| matches!(err, SlabNotAligned)),
             "Expected Err({SlabNotAligned:?}) but got {result_str}."
         );
-        assert!(cache.slabs_full.load(Relaxed).is_null());
-        assert!(cache.slabs_partial.load(Relaxed).is_null());
-        assert!(cache.slabs_empty.load(Relaxed).is_null());
+        assert!(cache.slabs_full.is_null());
+        assert!(cache.slabs_partial.is_null());
+        assert!(cache.slabs_empty.is_null());
 
         unsafe { release_memory(addrs, cache.slab_layout) }
     }
