@@ -102,8 +102,8 @@ where
 
             let old_head = (*cache).slabs_empty.load(Acquire);
             if !old_head.is_null() {
-                (*result).next.store(old_head, Release);
-                (*old_head).prev.store(result, Release);
+                (*result).next = old_head;
+                (*old_head).prev = result;
             }
             (*cache).slabs_empty.store(result, Release);
 
@@ -123,9 +123,9 @@ where
     /// This field also makes [SlabHeader] ![Sync] ![Send] and invariant over [T].
     source: *mut Cache<T>,
     /// [SlabHeader]s within the same [Cache].slabs_* are doubly linked.
-    prev: AtomicPtr<SlabHeader<T>>,
+    prev: *mut SlabHeader<T>,
     /// [SlabHeader]s within the same [Cache].slabs_* are doubly linked.
-    next: AtomicPtr<SlabHeader<T>>,
+    next: *mut SlabHeader<T>,
     total_slots: usize,
     slot0: Address,
     slot_size: Bytes,
@@ -179,8 +179,8 @@ where
 
         let header = SlabHeader {
             source: cache,
-            prev: AtomicPtr::new(null_mut()),
-            next: AtomicPtr::new(null_mut()),
+            prev: null_mut(),
+            next: null_mut(),
             total_slots,
             slot0,
             slot_size,
@@ -475,10 +475,10 @@ mod cache_tests {
             assert_eq!(&raw mut cache, unsafe { (*head_empty).source });
             assert_eq!(addrs[0].addr(), head_empty.addr());
 
-            let prev = unsafe { (*head_empty).prev.load(Relaxed) };
+            let prev = unsafe { (*head_empty).prev };
             assert!(prev.is_null());
 
-            let next = unsafe { (*head_empty).next.load(Relaxed) };
+            let next = unsafe { (*head_empty).next };
             assert!(next.is_null());
         }
 
@@ -493,16 +493,16 @@ mod cache_tests {
             assert_eq!(&raw mut cache, unsafe { (*head_empty).source });
             assert_eq!(addrs[1].addr(), head_empty.addr());
 
-            let prev = unsafe { (*head_empty).prev.load(Relaxed) };
+            let prev = unsafe { (*head_empty).prev };
             assert!(prev.is_null());
 
-            let next = unsafe { (*head_empty).next.load(Relaxed) };
+            let next = unsafe { (*head_empty).next };
             assert!(!next.is_null());
             assert_eq!(addrs[0].addr(), next.addr());
 
-            let next_prev = unsafe { (*next).prev.load(Relaxed) };
+            let next_prev = unsafe { (*next).prev };
             assert_eq!(head_empty, next_prev);
-            let next_next = unsafe { (*next).next.load(Relaxed) };
+            let next_next = unsafe { (*next).next };
             assert!(next_next.is_null());
         }
 
@@ -526,7 +526,7 @@ mod cache_tests {
                 count -= 1;
                 assert_eq!(addrs[count].addr(), curr.addr());
                 prev = curr;
-                curr = unsafe { (*curr).next.load(Relaxed) };
+                curr = unsafe { (*curr).next };
             }
             assert_eq!(0, count);
             assert_eq!(addrs[0].addr(), prev.addr());
@@ -534,7 +534,7 @@ mod cache_tests {
             while !prev.is_null() {
                 assert_eq!(addrs[count].addr(), prev.addr());
                 curr = prev;
-                prev = unsafe { (*prev).prev.load(Relaxed) };
+                prev = unsafe { (*prev).prev };
                 count += 1;
             }
             assert_eq!(addrs.len(), count);
@@ -594,7 +594,6 @@ mod header_tests {
     extern crate alloc;
 
     use super::*;
-    use core::sync::atomic::Ordering::Relaxed;
 
     mod object_ignorance {
         use super::*;
@@ -650,8 +649,8 @@ mod header_tests {
         fn new_test_empty() -> SlabHeader<T> {
             SlabHeader {
                 source: null_mut(),
-                prev: AtomicPtr::new(null_mut()),
-                next: AtomicPtr::new(null_mut()),
+                prev: null_mut(),
+                next: null_mut(),
                 used_bitmap: [0; SLAB_USED_BITMAP_SIZE],
                 used_count: 0,
                 slot0: Address(0),
@@ -693,8 +692,8 @@ mod header_tests {
         fn new_test_full() -> SlabHeader<T> {
             SlabHeader {
                 source: null_mut(),
-                prev: AtomicPtr::new(null_mut()),
-                next: AtomicPtr::new(null_mut()),
+                prev: null_mut(),
+                next: null_mut(),
                 used_bitmap: [
                     0xffff_ffff_ffff_ffff,
                     0xffff_ffff_ffff_ffff,
@@ -719,8 +718,8 @@ mod header_tests {
         fn new_test_full_max_slots() -> SlabHeader<T> {
             SlabHeader {
                 source: null_mut(),
-                prev: AtomicPtr::new(null_mut()),
-                next: AtomicPtr::new(null_mut()),
+                prev: null_mut(),
+                next: null_mut(),
                 used_bitmap: [0xffff_ffff_ffff_ffff; SLAB_USED_BITMAP_SIZE],
                 used_count: MAX_SLOTS_PER_SLAB,
                 slot0: Address(0),
@@ -773,8 +772,8 @@ mod header_tests {
         fn new_test_partial() -> SlabHeader<T> {
             SlabHeader {
                 source: null_mut(),
-                prev: AtomicPtr::new(null_mut()),
-                next: AtomicPtr::new(null_mut()),
+                prev: null_mut(),
+                next: null_mut(),
                 used_bitmap: [
                     0xffff_ffff_ffff_ffff,
                     0x6030_0100_0000_08ff,
@@ -820,16 +819,8 @@ mod header_tests {
         header1: *const SlabHeader<T>,
         header2: *const SlabHeader<T>,
     ) {
-        assert_eq!(
-            (*header1).prev.load(Relaxed),
-            (*header2).prev.load(Relaxed),
-            "prev"
-        );
-        assert_eq!(
-            (*header1).next.load(Relaxed),
-            (*header2).next.load(Relaxed),
-            "next"
-        );
+        assert_eq!((*header1).prev, (*header2).prev, "prev");
+        assert_eq!((*header1).next, (*header2).next, "next");
         assert_eq!(
             (*header1).used_bitmap,
             (*header2).used_bitmap,
