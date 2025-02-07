@@ -449,37 +449,10 @@ mod cache_tests {
     extern crate alloc;
     use super::*;
     use crate::mem::PAGE_SIZE;
-    use alloc::alloc::{alloc, dealloc};
     use alloc::format;
-    use alloc::vec::Vec;
-
-    #[derive(Debug, PartialEq)]
-    struct TestObject {
-        x: u64,
-        y: u32,
-        z: usize,
-    }
-
-    impl Default for TestObject {
-        fn default() -> Self {
-            Self {
-                x: 256,
-                y: 128,
-                z: 1024,
-            }
-        }
-    }
-
-    #[derive(Debug, PartialEq)]
-    struct TestObjectXL {
-        x: [u8; 3072],
-    }
-
-    impl Default for TestObjectXL {
-        fn default() -> Self {
-            Self { x: [128; 3072] }
-        }
-    }
+    use header_tests::assert_slab_empty;
+    use header_tests::assert_slab_state_consistency;
+    use test_utils::*;
 
     fn new_test_default<T: Default>() -> Cache<T> {
         Cache::<T> {
@@ -489,85 +462,6 @@ mod cache_tests {
             slabs_partial: null_mut(),
             slabs_empty: null_mut(),
         }
-    }
-
-    /// Calls `alloc` with the `layout` `count` times and
-    /// returns a collection of the returned pointers.
-    fn acquire_memory(layout: Layout, count: usize) -> Vec<*mut u8> {
-        assert!(0 < layout.size(), "Zero size not supported");
-        let mut result = Vec::with_capacity(count);
-        for _ in 0..count {
-            // SAFETY:
-            // * We are safe to call `alloc` with `layout`
-            //   because we have checked that the `layout` has a non-zero size.
-            let addr0 = unsafe { alloc(layout) };
-            assert!(!addr0.is_null(), "Failed to allocate memory");
-            result.push(addr0);
-        }
-        result
-    }
-
-    /// Calls `dealloc` with each pointer in `ptrs` using the `layout`.
-    ///
-    /// # SAFETY:
-    /// * Each `(ptr, layout)` pair must satisfy the safety contract of `dealloc`.
-    unsafe fn release_memory(ptrs: Vec<*mut u8>, layout: Layout) {
-        for ptr in ptrs {
-            unsafe { dealloc(ptr, layout) };
-        }
-    }
-
-    /// Asserts that `used_bitmap` and `used_count` describe an empty slab.
-    ///
-    /// # SAFETY:
-    /// * `header` must be a valid pointer.
-    fn assert_slab_empty<T: Default>(header: *const SlabHeader<T>) {
-        assert!(!header.is_null());
-        // SAFETY:
-        // * We are safe to dereference `header` and mutate it in place
-        //   because it is a valid pointer.
-        unsafe {
-            assert_eq!(0, (*header).used_count);
-            (*header).used_bitmap.iter().for_each(|&i| assert_eq!(0, i));
-        }
-    }
-
-    fn assert_list_doubly_linked<T: Default>(head: *mut SlabHeader<T>) {
-        if head.is_null() {
-            return;
-        }
-        let head_prev = unsafe { (*head).prev };
-        assert!(head_prev.is_null(), "`prev` of `head` should be null");
-
-        let mut curr = head;
-        let mut next = unsafe { (*curr).next };
-        while !next.is_null() {
-            assert_eq!(
-                unsafe { (*next).prev },
-                curr,
-                "`prev` of {next:?} should be {curr:?}"
-            );
-            curr = next;
-            next = unsafe { (*curr).next };
-        }
-    }
-
-    fn size_of_list<T: Default>(head: *mut SlabHeader<T>) -> usize {
-        let mut result = 0;
-        let mut curr = head;
-        while !curr.is_null() {
-            result += 1;
-            curr = unsafe { (*curr).next };
-        }
-        result
-    }
-
-    fn contains_node<T: Default>(head: *mut SlabHeader<T>, node: *mut SlabHeader<T>) -> bool {
-        let mut curr = head;
-        while !curr.is_null() && curr != node {
-            curr = unsafe { (*curr).next };
-        }
-        !curr.is_null()
     }
 
     #[test]
@@ -647,7 +541,7 @@ mod cache_tests {
 
         // Verify `only_slab`
         unsafe {
-            header_tests::assert_slab_state_consistency(only_slab);
+            assert_slab_state_consistency(only_slab);
             assert_eq!(
                 1,
                 (*only_slab).used_count,
@@ -724,7 +618,7 @@ mod cache_tests {
 
         // Verify `only_slab`
         unsafe {
-            header_tests::assert_slab_state_consistency(only_slab);
+            assert_slab_state_consistency(only_slab);
             assert_eq!(
                 1,
                 (*only_slab).used_count,
@@ -819,7 +713,7 @@ mod cache_tests {
 
         // Verify `slab0`
         unsafe {
-            header_tests::assert_slab_state_consistency(slab0);
+            assert_slab_state_consistency(slab0);
             assert_eq!(1, (*slab0).used_count, "Incorrect `used_count` for `slab0`");
             assert_eq!(
                 1,
@@ -830,13 +724,13 @@ mod cache_tests {
 
         // Verify `slab1`
         unsafe {
-            header_tests::assert_slab_state_consistency(slab1);
+            assert_slab_state_consistency(slab1);
             assert_eq!(0, (*slab1).used_count, "Incorrect `used_count` for `slab1`");
         }
 
         // Verify `slab2`
         unsafe {
-            header_tests::assert_slab_state_consistency(slab2);
+            assert_slab_state_consistency(slab2);
             assert_eq!(1, (*slab2).used_count, "Incorrect `used_count` for `slab2`");
             assert_eq!(
                 1,
@@ -1330,5 +1224,121 @@ mod header_tests {
 
         let actual_after = before;
         assert_content_equal(expected_after, actual_after);
+    }
+
+    /// Asserts that `used_bitmap` and `used_count` describe an empty slab.
+    ///
+    /// # SAFETY:
+    /// * `header` must be a valid pointer.
+    pub fn assert_slab_empty<T: Default>(header: *const SlabHeader<T>) {
+        assert!(!header.is_null());
+        // SAFETY:
+        // * We are safe to dereference `header` and mutate it in place
+        //   because it is a valid pointer.
+        unsafe {
+            assert_eq!(0, (*header).used_count);
+            (*header).used_bitmap.iter().for_each(|&i| assert_eq!(0, i));
+        }
+    }
+}
+
+#[cfg(test)]
+mod test_utils {
+    extern crate alloc;
+    use crate::mem::slab::SlabHeader;
+    use alloc::alloc::{alloc, dealloc};
+    use alloc::vec::Vec;
+    use core::alloc::Layout;
+
+    #[derive(Debug, PartialEq)]
+    pub struct TestObject {
+        x: u64,
+        y: u32,
+        z: usize,
+    }
+
+    impl Default for TestObject {
+        fn default() -> Self {
+            Self {
+                x: 256,
+                y: 128,
+                z: 1024,
+            }
+        }
+    }
+
+    #[derive(Debug, PartialEq)]
+    pub struct TestObjectXL {
+        x: [u8; 3072],
+    }
+
+    impl Default for TestObjectXL {
+        fn default() -> Self {
+            Self { x: [128; 3072] }
+        }
+    }
+
+    /// Calls `alloc` with the `layout` `count` times and
+    /// returns a collection of the returned pointers.
+    pub fn acquire_memory(layout: Layout, count: usize) -> Vec<*mut u8> {
+        assert!(0 < layout.size(), "Zero size not supported");
+        let mut result = Vec::with_capacity(count);
+        for _ in 0..count {
+            // SAFETY:
+            // * We are safe to call `alloc` with `layout`
+            //   because we have checked that the `layout` has a non-zero size.
+            let addr0 = unsafe { alloc(layout) };
+            assert!(!addr0.is_null(), "Failed to allocate memory");
+            result.push(addr0);
+        }
+        result
+    }
+
+    /// Calls `dealloc` with each pointer in `ptrs` using the `layout`.
+    ///
+    /// # SAFETY:
+    /// * Each `(ptr, layout)` pair must satisfy the safety contract of `dealloc`.
+    pub unsafe fn release_memory(ptrs: Vec<*mut u8>, layout: Layout) {
+        for ptr in ptrs {
+            unsafe { dealloc(ptr, layout) };
+        }
+    }
+
+    pub fn assert_list_doubly_linked<T: Default>(head: *mut SlabHeader<T>) {
+        if head.is_null() {
+            return;
+        }
+        let head_prev = unsafe { (*head).prev };
+        assert!(head_prev.is_null(), "`prev` of `head` should be null");
+
+        let mut curr = head;
+        let mut next = unsafe { (*curr).next };
+        while !next.is_null() {
+            assert_eq!(
+                unsafe { (*next).prev },
+                curr,
+                "`prev` of {next:?} should be {curr:?}"
+            );
+            curr = next;
+            next = unsafe { (*curr).next };
+        }
+    }
+
+    pub fn size_of_list<T: Default>(head: *mut SlabHeader<T>) -> usize {
+        let mut result = 0;
+        let mut curr = head;
+        while !curr.is_null() {
+            result += 1;
+            curr = unsafe { (*curr).next };
+        }
+        result
+    }
+
+    pub fn contains_node<T: Default>(head: *mut SlabHeader<T>, node: *mut SlabHeader<T>) -> bool {
+        let mut curr = head;
+        while !curr.is_null() && curr != node {
+            curr = unsafe { (*curr).next };
+        }
+        !curr.is_null()
     }
 }
