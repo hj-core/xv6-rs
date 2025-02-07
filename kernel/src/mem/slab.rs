@@ -78,15 +78,23 @@ where
         }
         (*cache).slabs_empty = new_head_empty;
 
-        // Update the `slabs_partial`
-        let old_head_partial = (*cache).slabs_partial;
-        let new_head_partial = old_head_empty;
-        (*new_head_partial).next = old_head_partial;
-        if !old_head_partial.is_null() {
-            (*old_head_partial).prev = new_head_partial;
+        if SlabHeader::is_full(old_head_empty) {
+            let new_head_full = old_head_empty;
+            let old_head_full = (*cache).slabs_full;
+            (*new_head_full).next = old_head_full;
+            if !old_head_full.is_null() {
+                (*old_head_full).prev = new_head_full;
+            }
+            (*cache).slabs_full = new_head_full;
+        } else {
+            let new_head_partial = old_head_empty;
+            let old_head_partial = (*cache).slabs_partial;
+            (*new_head_partial).next = old_head_partial;
+            if !old_head_partial.is_null() {
+                (*old_head_partial).prev = new_head_partial;
+            }
+            (*cache).slabs_partial = new_head_partial;
         }
-        (*cache).slabs_partial = new_head_partial;
-
         Ok(result)
     }
 
@@ -462,6 +470,17 @@ mod cache_tests {
         }
     }
 
+    #[derive(Debug, PartialEq)]
+    struct TestObjectXL {
+        x: [u8; 3072],
+    }
+
+    impl Default for TestObjectXL {
+        fn default() -> Self {
+            Self { x: [128; 3072] }
+        }
+    }
+
     fn new_test_default<T: Default>() -> Cache<T> {
         Cache::<T> {
             name: ['c'; CACHE_NAME_LENGTH],
@@ -591,7 +610,7 @@ mod cache_tests {
     }
 
     #[test]
-    fn allocate_from_empty_with_single_empty_slab() {
+    fn allocate_from_empty_with_single_empty_multi_slots_slab() {
         // Set up a [Cache] with single empty slab
         type T = TestObject;
         let mut cache = new_test_default::<T>();
@@ -599,6 +618,11 @@ mod cache_tests {
         let addrs = acquire_memory(cache.slab_layout, 1);
         let only_slab = unsafe { Cache::grow(&raw mut cache, addrs[0].into()) }
             .expect("Failed to grow `cache`");
+
+        assert!(
+            unsafe { (*only_slab).total_slots > 1 },
+            "Slab for this test should have a `total_slots` greater than one"
+        );
 
         // Allocated an object from the empty slab
         let result = unsafe { Cache::allocate_from_empty(&raw mut cache) };
@@ -663,7 +687,87 @@ mod cache_tests {
     }
 
     #[test]
-    fn allocate_from_empty_with_empty_and_partial_slabs() {
+    fn allocate_from_empty_with_single_empty_single_slot_slab() {
+        type T = TestObjectXL;
+        let mut cache = new_test_default::<T>();
+        let addrs = acquire_memory(cache.slab_layout, 1);
+
+        let only_slab = unsafe { Cache::grow(&raw mut cache, addrs[0].into()) }
+            .expect("Failed to grow `cache`");
+
+        assert_eq!(
+            1,
+            unsafe { (*only_slab).total_slots },
+            "Slab for this test should have a `total_slots` of one"
+        );
+
+        // Allocated an object from the empty slab
+        let result = unsafe { Cache::allocate_from_empty(&raw mut cache) };
+        assert!(result.is_ok(), "Expected Ok but got {result:?}");
+
+        // Verify the allocated [SlabObject]
+        let object = result.unwrap();
+        assert_eq!(
+            only_slab, object.source,
+            "`source` of the [SlabObject] should be `only_slab`",
+        );
+        assert_eq!(
+            unsafe { (*only_slab).slot0.0 },
+            object.object.addr(),
+            "`object` of the [SlabObject] should be the `slot0` of `only_slab`"
+        );
+        assert_eq!(
+            &TestObjectXL::default(),
+            object.get_ref(),
+            "The allocated object should have the default value"
+        );
+
+        // Verify `only_slab`
+        unsafe {
+            header_tests::assert_slab_state_consistency(only_slab);
+            assert_eq!(
+                1,
+                (*only_slab).used_count,
+                "Incorrect `used_count` for `only_slab`"
+            );
+            assert_eq!(
+                1,
+                (*only_slab).used_bitmap[0],
+                "Incorrect `used_bitmap` for `only_slab`"
+            )
+        }
+
+        // Verify `slabs_partial` and `slabs_empty`
+        assert!(
+            cache.slabs_partial.is_null(),
+            "`slabs_partial` should be null"
+        );
+        assert!(cache.slabs_empty.is_null(), "`slabs_empty` should be null");
+
+        // Verify `slabs_full`
+        assert!(
+            !cache.slabs_full.is_null(),
+            "`slabs_full` should not be null"
+        );
+        assert_eq!(
+            1,
+            size_of_list(cache.slabs_full),
+            "Incorrect size for `slabs_full`"
+        );
+        assert!(
+            contains_node(cache.slabs_full, only_slab),
+            "`slabs_full` should contain the `only_slab`"
+        );
+        assert_list_doubly_linked(cache.slabs_full);
+
+        // Simple drop the [SlabObject].
+        // The Behavior of dropping is outside the scope of this test.
+        drop(object);
+        unsafe { release_memory(addrs, cache.slab_layout) };
+    }
+
+    #[test]
+    fn allocate_from_empty_with_empty_and_partial_multi_slots_slabs() {
         type T = TestObject;
         let mut cache = new_test_default::<T>();
         let addrs = acquire_memory(cache.slab_layout, 3);
@@ -680,6 +784,11 @@ mod cache_tests {
         let slab0_object =
             unsafe { SlabHeader::allocate_object(slab0) }.expect("Failed to allocate from `slab0`");
         cache.slabs_partial = slab0;
+
+        assert!(
+            unsafe { (*slab0).total_slots > 1 },
+            "Slab for this test should have a `total_slots` greater than one"
+        );
 
         // Add two more empty slabs to `cache` through `grow`
         let slab1 =
@@ -740,7 +849,10 @@ mod cache_tests {
         assert!(cache.slabs_full.is_null(), "`slab_full` should be null");
 
         // Verify `slabs_empty`
-        assert!(!cache.slabs_empty.is_null(), "`slab_empty` should not be null");
+        assert!(
+            !cache.slabs_empty.is_null(),
+            "`slab_empty` should not be null"
+        );
         assert_eq!(
             1,
             size_of_list(cache.slabs_empty),
