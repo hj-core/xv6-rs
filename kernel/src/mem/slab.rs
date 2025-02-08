@@ -71,29 +71,19 @@ where
 
         let result = SlabHeader::allocate_object(old_head_empty)?;
 
-        // Update the `slabs_empty`
+        // Update `slabs_empty`
         let new_head_empty = (*old_head_empty).next;
         if !new_head_empty.is_null() {
             (*new_head_empty).prev = null_mut();
         }
         (*cache).slabs_empty = new_head_empty;
+        (*old_head_empty).next = null_mut();
 
+        // Append `old_head_empty` to the other list, depending on whether it is full
         if SlabHeader::is_full(old_head_empty) {
-            let new_head_full = old_head_empty;
-            let old_head_full = (*cache).slabs_full;
-            (*new_head_full).next = old_head_full;
-            if !old_head_full.is_null() {
-                (*old_head_full).prev = new_head_full;
-            }
-            (*cache).slabs_full = new_head_full;
+            (*cache).slabs_full = Cache::push_front((*cache).slabs_full, old_head_empty);
         } else {
-            let new_head_partial = old_head_empty;
-            let old_head_partial = (*cache).slabs_partial;
-            (*new_head_partial).next = old_head_partial;
-            if !old_head_partial.is_null() {
-                (*old_head_partial).prev = new_head_partial;
-            }
-            (*cache).slabs_partial = new_head_partial;
+            (*cache).slabs_partial = Cache::push_front((*cache).slabs_partial, old_head_empty);
         }
         Ok(result)
     }
