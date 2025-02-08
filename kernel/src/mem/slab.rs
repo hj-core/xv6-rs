@@ -98,6 +98,40 @@ where
         Ok(result)
     }
 
+    /// Pushes `node` to the front of `head` and returns the new head.
+    /// The `node` should be isolated, i.e., not linked to other nodes.
+    ///
+    /// # SAFETY:
+    /// * `head` should be a valid pointer if it is not null.
+    /// * `node` should be a valid pointer if it is not null.
+    unsafe fn push_front(head: *mut SlabHeader<T>, node: *mut SlabHeader<T>) -> *mut SlabHeader<T> {
+        if node.is_null() {
+            return head;
+        };
+
+        // SAFETY:
+        // * Dereferencing `node` is safe because it must be valid if it is not null.
+        if unsafe { !(*node).prev.is_null() } {
+            panic!("`node` is not isolated: it has its `prev` linked")
+        }
+        if unsafe { !(*node).next.is_null() } {
+            panic!("`node` is not isolated: it has its `next` linked")
+        }
+
+        if head.is_null() {
+            return node;
+        };
+
+        // SAFETY:
+        // * Dereferencing `node` and `head` is safe because they must be valid
+        //   if they are not null.
+        unsafe {
+            (*node).next = head;
+            (*head).prev = node;
+        }
+        node
+    }
+
     /// Returns true if the attempt to deallocate the [SlabObject] succeeds,
     /// or else returns the corresponding error.
     ///
@@ -447,12 +481,15 @@ enum Error {
 #[cfg(test)]
 mod cache_tests {
     extern crate alloc;
+    extern crate std;
     use super::*;
     use crate::mem::PAGE_SIZE;
     use alloc::format;
     use alloc::vec::Vec;
     use header_tests::assert_slab_empty;
     use header_tests::assert_slab_state_consistency;
+    use std::panic::catch_unwind;
+    use std::panic::resume_unwind;
     use test_utils::*;
 
     fn new_test_default<T: Default>() -> Cache<T> {
@@ -463,6 +500,158 @@ mod cache_tests {
             slabs_partial: null_mut(),
             slabs_empty: null_mut(),
         }
+    }
+
+    #[test]
+    fn push_front_with_null_head_and_node_return_null() {
+        type T = u8;
+        let result = unsafe { Cache::<T>::push_front(null_mut(), null_mut()) };
+        assert!(result.is_null(), "Expected null ptr but got {result:?}")
+    }
+
+    #[test]
+    fn push_front_with_valid_head_and_null_node_return_head() {
+        type T = u8;
+        let layout = Layout::from_size_align(PAGE_SIZE.0, align_of::<SlabHeader<T>>())
+            .expect("Failed to create `layout`");
+        let addrs = acquire_memory(layout, 2);
+
+        // Craft a two-slab list
+        let head =
+            unsafe { SlabHeader::<T>::new(null_mut(), Bytes(layout.size()), addrs[0].into()) }
+                .expect("Failed to create `head`");
+        let next =
+            unsafe { SlabHeader::<T>::new(null_mut(), Bytes(layout.size()), addrs[1].into()) }
+                .expect("Failed to create `next`");
+        unsafe {
+            (*head).next = next;
+            (*next).prev = head;
+        }
+
+        // Exercise `push_front`
+        let new_head = unsafe { Cache::<T>::push_front(head, null_mut()) };
+
+        // Verify `new_head`
+        assert_eq!(new_head, head, "`new_head` should be the original `head`");
+        assert_eq!(2, size_of_list(new_head), "Incorrect size for `new_head`");
+        assert!(
+            contains_node(new_head, head),
+            "`new_head` should contains `head`"
+        );
+        assert!(
+            contains_node(new_head, next),
+            "`new_head` should contains `next`"
+        );
+        assert_list_doubly_linked(new_head);
+
+        // Teardown
+        unsafe { release_memory(addrs, layout) }
+    }
+
+    #[test]
+    fn push_front_with_valid_head_and_node_return_node() {
+        type T = u8;
+        let layout = Layout::from_size_align(PAGE_SIZE.0, align_of::<SlabHeader<T>>())
+            .expect("Failed to create `layout`");
+        let addrs = acquire_memory(layout, 3);
+
+        // Craft a two-slab list
+        let head =
+            unsafe { SlabHeader::<T>::new(null_mut(), Bytes(layout.size()), addrs[0].into()) }
+                .expect("Failed to create `head`");
+        let next =
+            unsafe { SlabHeader::<T>::new(null_mut(), Bytes(layout.size()), addrs[1].into()) }
+                .expect("Failed to create `next`");
+        unsafe {
+            (*head).next = next;
+            (*next).prev = head;
+        }
+
+        // Craft the node to be inserted
+        let node =
+            unsafe { SlabHeader::<T>::new(null_mut(), Bytes(layout.size()), addrs[2].into()) }
+                .expect("Failed to create `head`");
+
+        // Exercise `push_front`
+        let new_head = unsafe { Cache::push_front(head, node) };
+
+        // Verify the returned head
+        assert_eq!(node, new_head, "`new_head` should be the inserted `node`");
+        assert_eq!(3, size_of_list(new_head), "Incorrect size for `new_head`");
+        assert!(
+            contains_node(new_head, node),
+            "`new_head` should contains `node`"
+        );
+        assert!(
+            contains_node(new_head, head),
+            "`new_head` should contains `head`"
+        );
+        assert!(
+            contains_node(new_head, next),
+            "`new_head` should contains `next`"
+        );
+        assert_list_doubly_linked(new_head);
+
+        // Teardown
+        unsafe { release_memory(addrs, layout) }
+    }
+
+    #[test]
+    #[should_panic(expected = "`node` is not isolated: it has its `prev` linked")]
+    fn push_front_with_prev_linked_node_should_panic() {
+        type T = u8;
+        let layout = Layout::from_size_align(PAGE_SIZE.0, align_of::<SlabHeader<T>>())
+            .expect("Failed to create `layout`");
+        let addrs = acquire_memory(layout, 2);
+
+        // Craft a node with its `prev` linked
+        let node =
+            unsafe { SlabHeader::<T>::new(null_mut(), Bytes(layout.size()), addrs[0].into()) }
+                .expect("Failed to create `node`");
+        let prev =
+            unsafe { SlabHeader::<T>::new(null_mut(), Bytes(layout.size()), addrs[1].into()) }
+                .expect("Failed to create `prev`");
+        unsafe {
+            (*node).prev = prev;
+            (*prev).next = node;
+        }
+
+        // Exercise `push_front`
+        let result = catch_unwind(|| unsafe { Cache::push_front(null_mut(), node) });
+        assert!(result.is_err(), "Expected Err but got {result:?}");
+
+        // Teardown and rethrow the error
+        unsafe { release_memory(addrs, layout) }
+        resume_unwind(result.err().unwrap())
+    }
+
+    #[test]
+    #[should_panic(expected = "`node` is not isolated: it has its `next` linked")]
+    fn push_front_with_next_linked_node_should_panic() {
+        type T = u8;
+        let layout = Layout::from_size_align(PAGE_SIZE.0, align_of::<SlabHeader<T>>())
+            .expect("Failed to create `layout`");
+        let addrs = acquire_memory(layout, 2);
+
+        // Craft a node with its `prev` linked
+        let node =
+            unsafe { SlabHeader::<T>::new(null_mut(), Bytes(layout.size()), addrs[0].into()) }
+                .expect("Failed to create `node`");
+        let next =
+            unsafe { SlabHeader::<T>::new(null_mut(), Bytes(layout.size()), addrs[1].into()) }
+                .expect("Failed to create `next`");
+        unsafe {
+            (*node).next = next;
+            (*next).prev = node;
+        }
+
+        // Exercise `push_front`
+        let result = catch_unwind(|| unsafe { Cache::push_front(null_mut(), node) });
+        assert!(result.is_err(), "Expected Err but got {result:?}");
+
+        // Teardown and rethrow the error
+        unsafe { release_memory(addrs, layout) }
+        resume_unwind(result.err().unwrap())
     }
 
     #[test]
