@@ -450,6 +450,7 @@ mod cache_tests {
     use super::*;
     use crate::mem::PAGE_SIZE;
     use alloc::format;
+    use alloc::vec::Vec;
     use header_tests::assert_slab_empty;
     use header_tests::assert_slab_state_consistency;
     use test_utils::*;
@@ -791,82 +792,154 @@ mod cache_tests {
         let mut cache = new_test_default::<T>();
 
         let addrs = acquire_memory(cache.slab_layout, 10);
+        let mut new_slabs = Vec::new();
+
+        // Grow the first empty slab
         {
             let result = unsafe { Cache::grow(&raw mut cache, addrs[0].into()) };
-            assert!(result.is_ok_and(|ptr| ptr.addr() == addrs[0].addr()));
-            assert!(cache.slabs_full.is_null());
-            assert!(cache.slabs_partial.is_null());
+            assert!(
+                result.is_ok(),
+                "Failed at first grow: expected Ok but got {result:?}"
+            );
 
-            let head_empty = cache.slabs_empty;
-            assert_slab_empty(head_empty);
-            assert_eq!(&raw mut cache, unsafe { (*head_empty).source });
-            assert_eq!(addrs[0].addr(), head_empty.addr());
+            let slab0 = result.unwrap();
+            new_slabs.push(slab0);
 
-            let prev = unsafe { (*head_empty).prev };
-            assert!(prev.is_null());
+            // Verify the returned header
+            assert_eq!(
+                addrs[0].addr(),
+                slab0.addr(),
+                "Failed at first grow: Incorrect address of `slab0`"
+            );
+            assert_slab_empty(slab0);
 
-            let next = unsafe { (*head_empty).next };
-            assert!(next.is_null());
+            // Verify `slabs_full` and `slabs_partial`
+            assert!(
+                cache.slabs_full.is_null(),
+                "Failed at first grow: `slabs_full` should be null"
+            );
+            assert!(
+                cache.slabs_partial.is_null(),
+                "Failed at first grow: `slabs_partial` should be null"
+            );
+
+            // Verify `slabs_empty`
+            assert!(
+                !cache.slabs_empty.is_null(),
+                "Failed at first grow: `slabs_empty` should not be null"
+            );
+            assert_eq!(
+                1,
+                size_of_list(cache.slabs_empty),
+                "Failed at first grow: Incorrect size for `slabs_empty`"
+            );
+            assert!(
+                contains_node(cache.slabs_empty, slab0),
+                "Failed at first grow: `slabs_empty` should contain `slab0`"
+            );
+            assert_list_doubly_linked(cache.slabs_empty);
         }
 
+        // Grow the second empty slab
         {
             let result = unsafe { Cache::grow(&raw mut cache, addrs[1].into()) };
-            assert!(result.is_ok_and(|ptr| ptr.addr() == addrs[1].addr()));
-            assert!(cache.slabs_full.is_null());
-            assert!(cache.slabs_partial.is_null());
+            assert!(
+                result.is_ok(),
+                "Failed at second grow: expected Ok but got {result:?}"
+            );
 
-            let head_empty = cache.slabs_empty;
-            assert_slab_empty(head_empty);
-            assert_eq!(&raw mut cache, unsafe { (*head_empty).source });
-            assert_eq!(addrs[1].addr(), head_empty.addr());
+            let slab1 = result.unwrap();
+            new_slabs.push(slab1);
 
-            let prev = unsafe { (*head_empty).prev };
-            assert!(prev.is_null());
+            // Verify the returned header
+            assert_eq!(
+                addrs[1].addr(),
+                slab1.addr(),
+                "Failed at second grow: Incorrect address of `slab1`"
+            );
+            assert_slab_empty(slab1);
 
-            let next = unsafe { (*head_empty).next };
-            assert!(!next.is_null());
-            assert_eq!(addrs[0].addr(), next.addr());
+            // Verify `slabs_full` and `slabs_partial`
+            assert!(
+                cache.slabs_full.is_null(),
+                "Failed at second grow: `slabs_full` should be null"
+            );
+            assert!(
+                cache.slabs_partial.is_null(),
+                "Failed at second grow: `slabs_partial` should be null"
+            );
 
-            let next_prev = unsafe { (*next).prev };
-            assert_eq!(head_empty, next_prev);
-            let next_next = unsafe { (*next).next };
-            assert!(next_next.is_null());
+            // Verify `slabs_empty`
+            assert!(
+                !cache.slabs_empty.is_null(),
+                "Failed at second grow: `slabs_empty` should not be null"
+            );
+            assert_eq!(
+                2,
+                size_of_list(cache.slabs_empty),
+                "Failed at second grow: Incorrect size for `slabs_empty`"
+            );
+            assert!(
+                contains_node(cache.slabs_empty, new_slabs[0],),
+                "Failed at second grow: `slabs_empty` should contain `slab0`"
+            );
+            assert!(
+                contains_node(cache.slabs_empty, new_slabs[1],),
+                "Failed at second grow: `slabs_empty` should contain `slab1`"
+            );
+            assert_list_doubly_linked(cache.slabs_empty);
         }
 
+        // Grow the remaining slabs
         {
             for i in 2..addrs.len() {
                 let result = unsafe { Cache::grow(&raw mut cache, addrs[i].into()) };
-                assert!(result.is_ok_and(|ptr| ptr.addr() == addrs[i].addr()));
-                assert!(cache.slabs_full.is_null());
-                assert!(cache.slabs_partial.is_null());
+                assert!(
+                    result.is_ok(),
+                    "Failed at other grows: expected Ok but got {result:?}"
+                );
+                let slab = result.unwrap();
+                new_slabs.push(slab);
 
-                let head_empty = cache.slabs_empty;
-                assert_slab_empty(head_empty);
-                assert_eq!(&raw mut cache, unsafe { (*head_empty).source });
-                assert_eq!(addrs[i].addr(), head_empty.addr());
+                // Verify the returned header
+                assert_eq!(
+                    addrs[i].addr(),
+                    slab.addr(),
+                    "Failed at other grows: Incorrect address of `slab{i}`"
+                );
+                assert_slab_empty(slab);
             }
 
-            let mut count = addrs.len();
-            let mut prev = null_mut();
-            let mut curr = cache.slabs_empty;
-            while !curr.is_null() {
-                count -= 1;
-                assert_eq!(addrs[count].addr(), curr.addr());
-                prev = curr;
-                curr = unsafe { (*curr).next };
-            }
-            assert_eq!(0, count);
-            assert_eq!(addrs[0].addr(), prev.addr());
+            // Verify `slabs_full` and `slabs_partial`
+            assert!(
+                cache.slabs_full.is_null(),
+                "Failed at other grows: `slabs_full` should be null"
+            );
+            assert!(
+                cache.slabs_partial.is_null(),
+                "Failed at other grows: `slabs_partial` should be null"
+            );
 
-            while !prev.is_null() {
-                assert_eq!(addrs[count].addr(), prev.addr());
-                curr = prev;
-                prev = unsafe { (*prev).prev };
-                count += 1;
+            // Verify `slabs_empty`
+            assert!(
+                !cache.slabs_empty.is_null(),
+                "Failed at other grows: `slabs_empty` should not be null"
+            );
+            assert_eq!(
+                addrs.len(),
+                size_of_list(cache.slabs_empty),
+                "Failed at other grows: Incorrect size for `slabs_empty`"
+            );
+            for i in 0..new_slabs.len() {
+                assert!(
+                    contains_node(cache.slabs_empty, new_slabs[i]),
+                    "Failed at other grows: `slabs_empty` should contain `slab{i}`"
+                )
             }
-            assert_eq!(addrs.len(), count);
-            assert_eq!(addrs[addrs.len() - 1].addr(), curr.addr());
+            assert_list_doubly_linked(cache.slabs_empty);
         }
+
+        drop(new_slabs);
         unsafe { release_memory(addrs, cache.slab_layout) }
     }
 
