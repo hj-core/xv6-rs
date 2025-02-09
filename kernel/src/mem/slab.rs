@@ -160,6 +160,46 @@ where
         (head, new_head)
     }
 
+    /// Attempts to allocate an object from one of the partial slabs.
+    ///
+    /// Returns a [SlabObject] wrapping the allocated object [T] if the attempt succeeds,
+    /// or returns the corresponding [Error] if it fails.
+    /// Furthermore, it is guaranteed that if an [Error] is returned, the states of `cache`
+    /// remain unmodified.
+    ///
+    /// # SAFETY:
+    /// * `cache` must be a valid pointer.
+    /// * Clients need to apply thread-safe measures to protect the `cache` from concurrent access.
+    unsafe fn allocate_from_partial(cache: *mut Cache<T>) -> Result<SlabObject<T>, Error> {
+        assert!(!cache.is_null(), "`cache` should not be null");
+
+        if (*cache).slabs_partial.is_null() {
+            return Err(AllocateFromNullSlab);
+        }
+
+        let result = SlabHeader::allocate_object((*cache).slabs_partial)?;
+
+        // Update list heads if the slab became full
+        if SlabHeader::is_full((*cache).slabs_partial) {
+            let (detached_node, new_head_partial) = Cache::pop_front((*cache).slabs_partial);
+            (*cache).slabs_partial = new_head_partial;
+            (*cache).slabs_full = Cache::push_front((*cache).slabs_full, detached_node);
+        }
+
+        // EXCEPTION SAFETY:
+        // * `is_full` and `pop_front` are not going to panic:
+        //   - As long as `slabs_partial` is updated correctly, it will be either null
+        //     or a valid pointer without its `prev` linked.
+        //   - We have checked that `slabs_partial` is not null.
+        // * `push_front` is not going to panic:
+        //   - `detached_node` is isolated as long as `pop_front` is implemented correctly.
+        //   - As long as `slabs_full` is updated correctly, it will be either null
+        //     or a valid pointer without its `prev` linked.
+        // * Therefore, if the allocation from `slabs_partial` is [Ok], we can reach this code
+        //   and resume `cache` to a valid state.
+        Ok(result)
+    }
+
     /// Returns true if the attempt to deallocate the [SlabObject] succeeds,
     /// or else returns the corresponding error.
     ///
@@ -1170,6 +1210,376 @@ mod cache_tests {
         // The Behavior of dropping is not the scope of this test.
         drop(slab0_object);
         drop(slab2_object);
+        unsafe { release_memory(addrs, cache.slab_layout) }
+    }
+
+    #[test]
+    #[should_panic(expected = "`cache` should not be null")]
+    fn allocate_from_partial_with_null_cache_should_panic() {
+        type T = u128;
+        let _ = unsafe { Cache::<T>::allocate_from_partial(null_mut()) };
+    }
+
+    #[test]
+    fn allocate_from_partial_when_no_partial_slabs_return_null_err() {
+        // Craft a [Cache] that has a full slab and an empty slab.
+        type T = TestObjectXL;
+        let mut cache = new_test_default::<T>();
+        let addrs = acquire_memory(cache.slab_layout, 2);
+
+        let empty_slab = unsafe {
+            SlabHeader::new(
+                &raw mut cache,
+                Bytes(cache.slab_layout.size()),
+                addrs[0].into(),
+            )
+        }
+        .expect("Failed to create `empty_slab`");
+        cache.slabs_empty = empty_slab;
+
+        let full_slab = unsafe {
+            SlabHeader::new(
+                &raw mut cache,
+                Bytes(cache.slab_layout.size()),
+                addrs[1].into(),
+            )
+        }
+        .expect("Failed to create `full_slab`");
+        let _object = unsafe { SlabHeader::allocate_object(full_slab) }
+            .expect("Failed to allocate object from `full_slab`");
+        assert!(
+            unsafe { SlabHeader::is_full(full_slab) },
+            "`full_slab` should be full; otherwise, this test is incorrect"
+        );
+        cache.slabs_full = full_slab;
+
+        // Exercise `allocate_from_partial` and verify the returned result
+        let result = unsafe { Cache::allocate_from_partial(&raw mut cache) };
+        assert!(
+            result.is_err(),
+            "Expected Err(AllocateFromNullSlab) but got {result:?}"
+        );
+        let err = result.unwrap_err();
+        assert!(
+            matches!(err, AllocateFromNullSlab),
+            "Expected `AllocateFromNullSlab` but got {err:?}"
+        );
+
+        // Teardown
+        drop(_object);
+        unsafe { release_memory(addrs, cache.slab_layout) }
+    }
+
+    #[test]
+    fn allocate_from_partial_when_single_partial_slab_with_multi_free_slots() {
+        // Craft a [Cache] with single partial slab which has multiple free slots remaining
+        type T = TestObject;
+        let mut cache = new_test_default::<T>();
+
+        let addrs = acquire_memory(cache.slab_layout, 1);
+        let only_slab = unsafe {
+            SlabHeader::new(
+                &raw mut cache,
+                Bytes(cache.slab_layout.size()),
+                addrs[0].into(),
+            )
+        }
+        .expect("Failed to create `only_slab`");
+
+        let _object = unsafe { SlabHeader::allocate_object(only_slab) }
+            .expect("Failed to allocate `_object` from `only_slab`");
+        let _object2 = unsafe { SlabHeader::allocate_object(only_slab) }
+            .expect("Failed to allocate `_object2` from `only_slab`");
+
+        let free_slots = unsafe { (*only_slab).total_slots - (*only_slab).used_count };
+        assert!(
+            free_slots > 1,
+            "`only_slab` should have multiple free slots remaining; otherwise, this test is incorrect"
+        );
+        cache.slabs_partial = only_slab;
+
+        // Exercise `allocate_from_partial`
+        let result = unsafe { Cache::allocate_from_partial(&raw mut cache) };
+        assert!(
+            result.is_ok(),
+            "Incorrect allocation result: expected Ok but got {result:?}"
+        );
+
+        // Verify the returned object
+        let object = result.unwrap();
+        assert_eq!(
+            only_slab, object.source,
+            "Incorrect `source` for the allocated [SlabObject]"
+        );
+        let allocated_object_addrs = unsafe { allocated_object_addrs(only_slab) };
+        assert_eq!(
+            3,
+            allocated_object_addrs.len(),
+            "Incorrect number of allocated objects from the `only_slab`"
+        );
+        assert!(
+            allocated_object_addrs.contains(&object.object.addr()),
+            "The returned object doesn't match any allocated objects"
+        );
+        assert_eq!(
+            &T::default(),
+            object.get_ref(),
+            "The allocated object should have the default value"
+        );
+
+        // Verify `only_slab`
+        unsafe { assert_slab_state_consistency(only_slab) };
+        assert_eq!(
+            3,
+            unsafe { (*only_slab).used_count },
+            "Incorrect `used_count` for the `only_slab`"
+        );
+
+        // Verify `slabs_full` and `slabs_empty`
+        assert_eq!(null_mut(), cache.slabs_full, "`slabs_full` should be null");
+        assert_eq!(
+            null_mut(),
+            cache.slabs_empty,
+            "`slabs_empty` should be null"
+        );
+
+        // Verify `slabs_partial`
+        assert_eq!(
+            only_slab, cache.slabs_partial,
+            "`slabs_partial` should be the `only_slab`"
+        );
+        assert_eq!(
+            1,
+            size_of_list(cache.slabs_partial),
+            "`slabs_partial` should have a size of one"
+        );
+        assert_list_doubly_linked(cache.slabs_partial);
+
+        // Teardown
+        drop(object);
+        drop(_object);
+        drop(_object2);
+        unsafe { release_memory(addrs, cache.slab_layout) }
+    }
+
+    #[test]
+    fn allocate_from_partial_when_single_partial_slab_with_single_free_slot() {
+        // Craft a [Cache] with a single partial slab with single free slot remaining
+        type T = u8;
+        let slab_size = size_of::<SlabHeader<T>>() + 2 * size_of::<T>();
+        let layout = Layout::from_size_align(slab_size, align_of::<SlabHeader<T>>())
+            .expect("Failed to create layout");
+
+        let mut cache = new_test_default::<T>();
+        cache.slab_layout = layout;
+        let addrs = acquire_memory(cache.slab_layout, 1);
+
+        let only_slab =
+            unsafe { SlabHeader::new(&raw mut cache, Bytes(layout.size()), addrs[0].into()) }
+                .expect("Failed to create `only_slab`");
+        assert_eq!(
+            2,
+            unsafe { (*only_slab).total_slots },
+            "Test slab should have a `total_slots` of two; otherwise, this test is incorrect"
+        );
+        let _object = unsafe { SlabHeader::allocate_object(only_slab) }
+            .expect("Failed to allocate `_object`");
+        cache.slabs_partial = only_slab;
+
+        // Exercise `allocate_from_partial`
+        let result = unsafe { Cache::allocate_from_partial(&raw mut cache) };
+        assert!(
+            result.is_ok(),
+            "Incorrect allocation result: expected Ok but got {result:?}"
+        );
+
+        // Verify the returned object
+        let object = result.unwrap();
+        assert_eq!(
+            only_slab, object.source,
+            "Incorrect `source` for the allocated [SlabObject]"
+        );
+        let allocated_object_addrs = unsafe { allocated_object_addrs(only_slab) };
+        assert_eq!(
+            2,
+            allocated_object_addrs.len(),
+            "Incorrect number of allocated objects from the `only_slab`"
+        );
+        assert!(
+            allocated_object_addrs.contains(&object.object.addr()),
+            "The allocated object doesn't match any allocated objects"
+        );
+        assert_eq!(
+            &T::default(),
+            object.get_ref(),
+            "The allocated object should have the default value"
+        );
+
+        // Verify `slabs_empty` and `slabs_partial`
+        assert_eq!(
+            null_mut(),
+            cache.slabs_empty,
+            "`slabs_empty` should be null"
+        );
+        assert_eq!(
+            null_mut(),
+            cache.slabs_partial,
+            "`slabs_partial` should be null"
+        );
+
+        // Verify `slabs_full`
+        assert_eq!(
+            only_slab, cache.slabs_full,
+            "`slabs_full` should be the `only_slab`"
+        );
+        assert_eq!(
+            1,
+            size_of_list(cache.slabs_full),
+            "`slabs_full` should have a size of one"
+        );
+        assert_list_doubly_linked(cache.slabs_full);
+
+        // Teardown
+        drop(object);
+        drop(_object);
+        unsafe { release_memory(addrs, cache.slab_layout) }
+    }
+
+    #[test]
+    fn allocate_from_partial_when_multi_partial_slabs_with_single_free_slot() {
+        // Craft a [Cache] consists of a full slab, an empty slab and two partial slabs.
+        // Each partial slab has only one free slot remaining.
+        type T = u8;
+        let slab_size = size_of::<SlabHeader<T>>() + 2 * size_of::<T>();
+        let layout = Layout::from_size_align(slab_size, align_of::<SlabHeader<T>>())
+            .expect("Failed to create layout");
+
+        let mut cache = new_test_default::<T>();
+        cache.slab_layout = layout;
+        let addrs = acquire_memory(cache.slab_layout, 4);
+
+        let empty_slab =
+            unsafe { SlabHeader::new(&raw mut cache, Bytes(layout.size()), addrs[0].into()) }
+                .expect("Failed to create `empty_slab`");
+        assert_eq!(
+            2,
+            unsafe { (*empty_slab).total_slots },
+            "Test slab should have a `total_slots` of two; otherwise, this test is incorrect"
+        );
+        cache.slabs_empty = empty_slab;
+
+        let partial_slab1 =
+            unsafe { SlabHeader::new(&raw mut cache, Bytes(layout.size()), addrs[1].into()) }
+                .expect("Failed to create `partial_slab1`");
+        let _object1 = unsafe { SlabHeader::allocate_object(partial_slab1) }
+            .expect("Failed to allocate object from `partial_slab1`");
+
+        let partial_slab2 =
+            unsafe { SlabHeader::new(&raw mut cache, Bytes(layout.size()), addrs[2].into()) }
+                .expect("Failed to create `partial_slab2`");
+        let _object2 = unsafe { SlabHeader::allocate_object(partial_slab2) }
+            .expect("Failed to allocate object from `partial_slab2`");
+
+        unsafe {
+            (*partial_slab1).next = partial_slab2;
+            (*partial_slab2).prev = partial_slab1;
+        }
+        cache.slabs_partial = partial_slab1;
+
+        let full_slab =
+            unsafe { SlabHeader::new(&raw mut cache, Bytes(layout.size()), addrs[3].into()) }
+                .expect("Failed to create `full_slab`");
+        let _object3 = unsafe { SlabHeader::allocate_object(full_slab) }
+            .expect("Failed to allocate object from `full_slab`");
+        let _object4 = unsafe { SlabHeader::allocate_object(full_slab) }
+            .expect("Failed to allocate another object from `full_slab`");
+        cache.slabs_full = full_slab;
+
+        // Exercise `allocate_from_partial`
+        let result = unsafe { Cache::allocate_from_partial(&raw mut cache) };
+        assert!(
+            result.is_ok(),
+            "Incorrect allocation result: expected Ok but got {result:?}"
+        );
+
+        // Verify the returned object
+        let object = result.unwrap();
+        assert!(
+            object.source == partial_slab1 || object.source == partial_slab2,
+            "Incorrect `source` for the allocated [SlabObject]: it should be either `partial_slab1` or `partial_slab2`"
+        );
+        let mut allocated_object_addrs = Vec::new();
+        unsafe {
+            allocated_object_addrs.append(&mut test_utils::allocated_object_addrs(full_slab));
+            allocated_object_addrs.append(&mut test_utils::allocated_object_addrs(partial_slab1));
+            allocated_object_addrs.append(&mut test_utils::allocated_object_addrs(partial_slab2));
+            allocated_object_addrs.append(&mut test_utils::allocated_object_addrs(empty_slab));
+        }
+        assert_eq!(
+            5,
+            allocated_object_addrs.len(),
+            "Incorrect number of the total allocated objects from `cache`"
+        );
+        assert!(
+            allocated_object_addrs.contains(&object.object.addr()),
+            "The allocated object doesn't match any allocated objects"
+        );
+        assert_eq!(
+            &T::default(),
+            object.get_ref(),
+            "The allocated object should have the default value"
+        );
+
+        // Verify `slabs_empty`
+        assert_eq!(
+            empty_slab, cache.slabs_empty,
+            "`slabs_empty` should be the `empty_slab`"
+        );
+        assert_eq!(
+            1,
+            size_of_list(cache.slabs_empty),
+            "`slabs_empty` should have a size of one"
+        );
+        assert_list_doubly_linked(cache.slabs_empty);
+
+        // Verify `slabs_partial`
+        assert!(
+            cache.slabs_partial == partial_slab1 || cache.slabs_partial == partial_slab2,
+            "`slabs_partial` should be either `partial_slab1` and `partial_slab2`"
+        );
+        assert_ne!(
+            cache.slabs_partial, object.source,
+            "`slabs_partial` should not be the `source` of the allocated [SlabObject]"
+        );
+        assert_eq!(
+            1,
+            size_of_list(cache.slabs_partial),
+            "`slabs_partial` should have a size of one"
+        );
+        assert_list_doubly_linked(cache.slabs_partial);
+
+        // Verify `slabs_full`
+        assert_eq!(
+            2,
+            size_of_list(cache.slabs_full),
+            "`slabs_full` should have a size of two"
+        );
+        assert!(
+            contains_node(cache.slabs_full, full_slab),
+            "`slabs_full` should contain the `full_slab`"
+        );
+        assert!(
+            contains_node(cache.slabs_full, object.source),
+            "`slabs_full` should contain the `source` of the allocated [SlabObject]"
+        );
+        assert_list_doubly_linked(cache.slabs_full);
+
+        // Teardown
+        drop(object);
+        drop(_object1);
+        drop(_object2);
+        drop(_object3);
+        drop(_object4);
         unsafe { release_memory(addrs, cache.slab_layout) }
     }
 
