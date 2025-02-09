@@ -114,6 +114,29 @@ where
         node
     }
 
+    /// Detaches the first node from `head` and returns the detached node and the new head.
+    ///
+    /// # SAFETY:
+    /// * `head` should be a valid pointer if it is not null.
+    /// * `head` should not have its `prev` linked if it is not null.
+    unsafe fn pop_front(head: *mut SlabHeader<T>) -> (*mut SlabHeader<T>, *mut SlabHeader<T>) {
+        if head.is_null() {
+            return (null_mut(), null_mut());
+        }
+        assert!(
+            (*head).prev.is_null(),
+            "`head` should not have its `prev` linked"
+        );
+
+        let new_head = (*head).next;
+        if !new_head.is_null() {
+            (*new_head).prev = null_mut();
+        }
+        (*head).next = null_mut();
+
+        (head, new_head)
+    }
+
     /// Returns true if the attempt to deallocate the [SlabObject] succeeds,
     /// or else returns the corresponding error.
     ///
@@ -634,6 +657,140 @@ mod cache_tests {
         // Teardown and rethrow the error
         unsafe { release_memory(addrs, layout) }
         resume_unwind(result.err().unwrap())
+    }
+
+    #[test]
+    fn pop_front_with_null_head_return_nulls() {
+        type T = u8;
+        let (node, new_head) = unsafe { Cache::<T>::pop_front(null_mut()) };
+        assert!(
+            node.is_null(),
+            "Expected null detached node but got {node:?}"
+        );
+        assert!(
+            new_head.is_null(),
+            "Expected null new head but got {new_head:?}"
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "`head` should not have its `prev` linked")]
+    fn pop_front_with_prev_linked_head_should_panic() {
+        type T = u8;
+        let layout = Layout::from_size_align(PAGE_SIZE.0, align_of::<SlabHeader<T>>())
+            .expect("Failed to create `layout`");
+        let addrs = acquire_memory(layout, 2);
+
+        // Craft a head with its `prev` linked
+        let head =
+            unsafe { SlabHeader::<T>::new(null_mut(), Bytes(layout.size()), addrs[0].into()) }
+                .expect("Failed to create `head`");
+        let prev =
+            unsafe { SlabHeader::<T>::new(null_mut(), Bytes(layout.size()), addrs[1].into()) }
+                .expect("Failed to create `prev`");
+        unsafe {
+            (*head).prev = prev;
+            (*prev).next = head;
+        }
+
+        // Exercise `pop_front`
+        let result = catch_unwind(|| unsafe { Cache::pop_front(head) });
+        assert!(result.is_err(), "Expected Err but got {result:?}");
+
+        // Teardown and rethrow the error
+        unsafe { release_memory(addrs, layout) }
+        resume_unwind(result.err().unwrap())
+    }
+
+    #[test]
+    fn pop_front_with_single_node_head_return_head_and_null() {
+        type T = u8;
+        let layout = Layout::from_size_align(PAGE_SIZE.0, align_of::<SlabHeader<T>>())
+            .expect("Failed to create `layout`");
+        let addrs = acquire_memory(layout, 1);
+
+        // Craft a single node head
+        let head =
+            unsafe { SlabHeader::<T>::new(null_mut(), Bytes(layout.size()), addrs[0].into()) }
+                .expect("Failed to create `head`");
+
+        // Exercise `pop_front` and verify the return
+        let (node, new_head) = unsafe { Cache::<T>::pop_front(head) };
+        assert_eq!(node, head, "The detached node should be the original head");
+        assert_eq!(
+            null_mut(),
+            unsafe { (*node).prev },
+            "The detached should not have its `prev` linked"
+        );
+        assert_eq!(
+            null_mut(),
+            unsafe { (*node).next },
+            "The detached should not have its `next` linked"
+        );
+        assert!(new_head.is_null(), "`new_head` should be null");
+
+        // Teardown
+        unsafe { release_memory(addrs, layout) }
+    }
+
+    #[test]
+    fn pop_front_with_multi_nodes_head_return_head_and_next() {
+        type T = u8;
+        let layout = Layout::from_size_align(PAGE_SIZE.0, align_of::<SlabHeader<T>>())
+            .expect("Failed to create `layout`");
+        let addrs = acquire_memory(layout, 3);
+
+        // Craft a node with its `prev` linked
+        let head =
+            unsafe { SlabHeader::<T>::new(null_mut(), Bytes(layout.size()), addrs[0].into()) }
+                .expect("Failed to create `head`");
+        let next =
+            unsafe { SlabHeader::<T>::new(null_mut(), Bytes(layout.size()), addrs[1].into()) }
+                .expect("Failed to create `next`");
+        let next_next =
+            unsafe { SlabHeader::<T>::new(null_mut(), Bytes(layout.size()), addrs[2].into()) }
+                .expect("Failed to create `next_next`");
+        unsafe {
+            (*head).next = next;
+            (*next).prev = head;
+            (*next).next = next_next;
+            (*next_next).prev = next;
+        }
+
+        // Exercise `pop_front`
+        let (node, new_head) = unsafe { Cache::pop_front(head) };
+
+        // Verify the returned node
+        assert_eq!(node, head, "The detached node should be the original head");
+        assert_eq!(
+            null_mut(),
+            unsafe { (*new_head).prev },
+            "The detached should not have its `prev` linked"
+        );
+        assert_eq!(
+            null_mut(),
+            unsafe { (*node).next },
+            "The detached should not have its `next` linked"
+        );
+
+        // Verify the returned `new_head`
+        assert_eq!(
+            next, new_head,
+            "`new_head` should be the `next` of the original `head`"
+        );
+        assert_eq!(
+            2,
+            size_of_list(new_head),
+            "Incorrect size for the `new_head`"
+        );
+        assert!(
+            contains_node(new_head, next_next),
+            "`new_head` should contain the `next_next`"
+        );
+        assert_list_doubly_linked(new_head);
+
+        // Teardown
+        unsafe { release_memory(addrs, layout) }
     }
 
     #[test]
