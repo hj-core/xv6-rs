@@ -66,15 +66,14 @@ where
     unsafe fn allocate_from_empty(cache: *mut Cache<T>) -> Result<SlabObject<T>, Error> {
         assert!(!cache.is_null(), "`cache` should not be null");
 
-        let old_head_empty = (*cache).slabs_empty;
-        if old_head_empty.is_null() {
+        if (*cache).slabs_empty.is_null() {
             return Err(AllocateFromNullSlab);
         }
 
-        let result = SlabHeader::allocate_object(old_head_empty)?;
+        let result = SlabHeader::allocate_object((*cache).slabs_empty)?;
 
         // Update list heads
-        let (detached_node, new_head_empty) = Cache::pop_front(old_head_empty);
+        let (detached_node, new_head_empty) = Cache::pop_front((*cache).slabs_empty);
         (*cache).slabs_empty = new_head_empty;
 
         if SlabHeader::is_full(detached_node) {
@@ -84,13 +83,14 @@ where
         }
 
         // EXCEPTION SAFETY:
-        // * `pop_front` is not going to panic:
-        //   1. As long as `slabs_empty` is updated correctly, it will be either null or
-        //      a valid pointer without its `prev` linked.
+        // * `is_full` and `pop_front` is not going to panic:
+        //   - As long as `slabs_empty` is updated correctly, it will be either null
+        //     or a valid pointer without its `prev` linked.
+        //   - We have checked that `slabs_empty` is not null.
         // * `push_front` is not going to panic:
-        //   1. `detached_node` is isolated as long as `pop_front` is implemented correctly;
-        //   2. As long as `slabs_full` and `slabs_partial` are updated correctly, they will
-        //      be either null or valid pointers without their `prev` linked.
+        //   - `detached_node` is isolated as long as `pop_front` is implemented correctly.
+        //   - As long as `slabs_full` and `slabs_partial` are updated correctly, they 
+        //     will be either null or valid pointers without their `prev` linked.
         // * Therefore, if the allocation from `old_head_empty` is `Ok`, we can reach this code
         //   and resume `cache` to a valid state.
         Ok(result)
