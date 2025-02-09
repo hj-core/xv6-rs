@@ -71,20 +71,26 @@ where
 
         let result = SlabHeader::allocate_object(old_head_empty)?;
 
-        // Update `slabs_empty`
-        let new_head_empty = (*old_head_empty).next;
-        if !new_head_empty.is_null() {
-            (*new_head_empty).prev = null_mut();
-        }
+        // Update list heads
+        let (detached_node, new_head_empty) = Cache::pop_front(old_head_empty);
         (*cache).slabs_empty = new_head_empty;
-        (*old_head_empty).next = null_mut();
 
-        // Append `old_head_empty` to the other list, depending on whether it is full
-        if SlabHeader::is_full(old_head_empty) {
-            (*cache).slabs_full = Cache::push_front((*cache).slabs_full, old_head_empty);
+        if SlabHeader::is_full(detached_node) {
+            (*cache).slabs_full = Cache::push_front((*cache).slabs_full, detached_node);
         } else {
-            (*cache).slabs_partial = Cache::push_front((*cache).slabs_partial, old_head_empty);
+            (*cache).slabs_partial = Cache::push_front((*cache).slabs_partial, detached_node);
         }
+        
+        // EXCEPTION SAFETY:
+        // * `pop_front` is not going to panic:
+        //   1. As long as `slabs_empty` is updated correctly, it will be either null or
+        //      a valid pointer without its `prev` linked.
+        // * `push_front` is not going to panic:
+        //   1. `detached_node` is isolated as long as `pop_front` is implemented correctly;
+        //   2. As long as `slabs_full` and `slabs_partial` are updated correctly, they will
+        //      be either null or valid pointers without their `prev` linked.
+        // * Therefore, if the allocation from `old_head_empty` is `Ok`, we can reach this code
+        //   and resume `cache` to a valid state.
         Ok(result)
     }
 
