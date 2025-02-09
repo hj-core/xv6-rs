@@ -2,16 +2,16 @@
 // Understanding the Linux Virtual Memory Manager by Mel Gorman, Chapter 8
 // https://pdos.csail.mit.edu/~sbw/links/gorman_book.pdf
 
-use crate::mem::slab::Error::{
-    AllocateFromFullSlab, AllocateFromNullSlab, SlabNotAligned, SlabTooSmall,
-    ZeroSizeTypeNotSupported,
-};
 use core::alloc::Layout;
 use core::marker::PhantomData;
 use core::marker::PhantomPinned;
 use core::ptr;
 use core::ptr::null_mut;
 use wrapper::{Address, Bytes};
+use Error::{
+    AllocateFromFullSlab, AllocateFromNullSlab, SlabNotAligned, SlabTooSmall,
+    ZeroSizeTypeNotSupported,
+};
 
 const CACHE_NAME_LENGTH: usize = 16;
 const SLAB_USED_BITMAP_SIZE: usize = 4;
@@ -53,8 +53,8 @@ where
     /// Attempts to allocate an object from one of the empty slabs.
     ///
     /// Returns a [SlabObject] wrapping the allocated object [T] if the attempt succeeds,
-    /// or returns the corresponding error if it fails.
-    /// Furthermore, it is guaranteed that if an [Err] is returned, the states of `cache`
+    /// or returns the corresponding [Error] if it fails.
+    /// Furthermore, it is guaranteed that if an [Error] is returned, the states of `cache`
     /// remain unmodified.
     ///
     /// The allocated object has the default value of [T], and clients can access it through
@@ -98,12 +98,16 @@ where
         if node.is_null() {
             return head;
         };
-        if !(*node).prev.is_null() {
-            panic!("`node` is not isolated: it has its `prev` linked")
-        }
-        if !(*node).next.is_null() {
-            panic!("`node` is not isolated: it has its `next` linked")
-        }
+        assert_eq!(
+            null_mut(),
+            (*node).prev,
+            "`node` is not isolated: it has its `prev` linked"
+        );
+        assert_eq!(
+            null_mut(),
+            (*node).next,
+            "`node` is not isolated: it has its `next` linked"
+        );
 
         if head.is_null() {
             return node;
