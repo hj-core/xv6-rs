@@ -98,13 +98,10 @@ where
         if node.is_null() {
             return head;
         };
-
-        // SAFETY:
-        // * Dereferencing `node` is safe because it must be valid if it is not null.
-        if unsafe { !(*node).prev.is_null() } {
+        if !(*node).prev.is_null() {
             panic!("`node` is not isolated: it has its `prev` linked")
         }
-        if unsafe { !(*node).next.is_null() } {
+        if !(*node).next.is_null() {
             panic!("`node` is not isolated: it has its `next` linked")
         }
 
@@ -112,13 +109,8 @@ where
             return node;
         };
 
-        // SAFETY:
-        // * Dereferencing `node` and `head` is safe because they must be valid
-        //   if they are not null.
-        unsafe {
-            (*node).next = head;
-            (*head).prev = node;
-        }
+        (*node).next = head;
+        (*head).prev = node;
         node
     }
 
