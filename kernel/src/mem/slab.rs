@@ -1801,4 +1801,18 @@ mod test_utils {
         }
         !curr.is_null()
     }
+
+    /// Collects the addresses of active objects allocated from this slab.
+    ///
+    /// # SAFETY:
+    /// `header` must be a valid pointer.
+    pub unsafe fn allocated_object_addrs<T: Default>(header: *mut SlabHeader<T>) -> Vec<usize> {
+        (0..(*header).total_slots)
+            .filter(|&i| {
+                let (index, shift) = (i / 64, i % 64);
+                (*header).used_bitmap[index] & (1 << shift) > 0
+            })
+            .map(|i| ((*header).slot0 + (*header).slot_size * i).0)
+            .collect()
+    }
 }
