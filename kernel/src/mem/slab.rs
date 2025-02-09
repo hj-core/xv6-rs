@@ -89,11 +89,11 @@ where
     }
 
     /// Pushes `node` to the front of `head` and returns the new head.
-    /// The `node` should be isolated, i.e., not linked to other nodes.
     ///
     /// # SAFETY:
     /// * `head` should be a valid pointer if it is not null.
     /// * `node` should be a valid pointer if it is not null.
+    /// * `node` should be isolated if it is not null, i.e., not linked to other nodes.
     unsafe fn push_front(head: *mut SlabHeader<T>, node: *mut SlabHeader<T>) -> *mut SlabHeader<T> {
         if node.is_null() {
             return head;
