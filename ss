@@ -4,7 +4,7 @@ import sys
 
 
 def main():
-    shortcuts = [shortcut0, shortcut1, shortcut2, shortcut3, shortcut4, shortcut5]
+    shortcuts = [shortcut0, shortcut1, shortcut2, shortcut3, shortcut4, shortcut5, shortcut6]
     match len(sys.argv):
         case 1:
             shortcuts[0]()
@@ -43,6 +43,11 @@ def shortcut4():
 
 def shortcut5():
     if miri_test():
+        exit(1)
+
+
+def shortcut6():
+    if cargo_build_debug() or cargo_build_release() or cargo_test() or miri_test() or git_commit():
         exit(1)
 
 
@@ -94,6 +99,12 @@ def qemu_gdb_boot(profile: str = "debug", smp: int = 1, mem_in_mb: int = 128) ->
 
 def remove_dump() -> int:
     cmd = "rm dump.txt"
+    echo_cmd(cmd)
+    return subprocess.run(cmd, shell=True).returncode
+
+
+def git_commit() -> int:
+    cmd = "git commit"
     echo_cmd(cmd)
     return subprocess.run(cmd, shell=True).returncode
 
