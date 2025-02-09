@@ -64,6 +64,8 @@ where
     /// * `cache` must be a valid pointer.
     /// * Clients need to apply thread-safe measures to protect the `cache` from concurrent access.
     unsafe fn allocate_from_empty(cache: *mut Cache<T>) -> Result<SlabObject<T>, Error> {
+        assert!(!cache.is_null(), "`cache` should not be null");
+
         let old_head_empty = (*cache).slabs_empty;
         if old_head_empty.is_null() {
             return Err(AllocateFromNullSlab);
@@ -80,7 +82,7 @@ where
         } else {
             (*cache).slabs_partial = Cache::push_front((*cache).slabs_partial, detached_node);
         }
-        
+
         // EXCEPTION SAFETY:
         // * `pop_front` is not going to panic:
         //   1. As long as `slabs_empty` is updated correctly, it will be either null or
@@ -841,6 +843,13 @@ mod cache_tests {
 
         // Teardown
         unsafe { release_memory(addrs, layout) }
+    }
+
+    #[test]
+    #[should_panic(expected = "`cache` should not be null")]
+    fn allocate_from_empty_with_null_cache_should_panic() {
+        type T = u64;
+        let _ = unsafe { Cache::<T>::allocate_from_empty(null_mut()) };
     }
 
     #[test]
