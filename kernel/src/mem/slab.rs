@@ -89,8 +89,8 @@ where
         //   - We have checked that `slabs_empty` is not null.
         // * `push_front` is not going to panic:
         //   - `detached_node` is isolated as long as `pop_front` is implemented correctly.
-        //   - As long as `slabs_full` and `slabs_partial` are updated correctly, they 
-        //     will be either null or valid pointers without their `prev` linked.
+        //   - As long as `slabs_full` and `slabs_partial` are updated correctly, they will be
+        //     either null or valid pointers without their `prev` linked.
         // * Therefore, if the allocation from `old_head_empty` is `Ok`, we can reach this code
         //   and resume `cache` to a valid state.
         Ok(result)
@@ -146,8 +146,10 @@ where
         if head.is_null() {
             return (null_mut(), null_mut());
         }
-        assert!(
-            (*head).prev.is_null(),
+
+        assert_eq!(
+            null_mut(),
+            (*head).prev,
             "`head` should not have its `prev` linked"
         );
 
