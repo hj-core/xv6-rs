@@ -645,11 +645,11 @@ mod cache_tests {
         assert_eq!(new_head, head, "`new_head` should be the original `head`");
         assert_eq!(2, size_of_list(new_head), "Incorrect size for `new_head`");
         assert!(
-            contains_node(new_head, head),
+            unsafe { contains_node(new_head, head) },
             "`new_head` should contains `head`"
         );
         assert!(
-            contains_node(new_head, next),
+            unsafe { contains_node(new_head, next) },
             "`new_head` should contains `next`"
         );
         assert_list_doubly_linked(new_head);
@@ -689,15 +689,15 @@ mod cache_tests {
         assert_eq!(node, new_head, "`new_head` should be the inserted `node`");
         assert_eq!(3, size_of_list(new_head), "Incorrect size for `new_head`");
         assert!(
-            contains_node(new_head, node),
+            unsafe { contains_node(new_head, node) },
             "`new_head` should contains `node`"
         );
         assert!(
-            contains_node(new_head, head),
+            unsafe { contains_node(new_head, head) },
             "`new_head` should contains `head`"
         );
         assert!(
-            contains_node(new_head, next),
+            unsafe { contains_node(new_head, next) },
             "`new_head` should contains `next`"
         );
         assert_list_doubly_linked(new_head);
@@ -889,7 +889,7 @@ mod cache_tests {
             "Incorrect size for the `new_head`"
         );
         assert!(
-            contains_node(new_head, next_next),
+            unsafe { contains_node(new_head, next_next) },
             "`new_head` should contain the `next_next`"
         );
         assert_list_doubly_linked(new_head);
@@ -1013,7 +1013,7 @@ mod cache_tests {
             "Incorrect size for `slabs_partial`"
         );
         assert!(
-            contains_node(cache.slabs_partial, only_slab),
+            unsafe { contains_node(cache.slabs_partial, only_slab) },
             "`slabs_partial` should contain the `only_slab`"
         );
         assert_list_doubly_linked(cache.slabs_partial);
@@ -1097,7 +1097,7 @@ mod cache_tests {
             "Incorrect size for `slabs_full`"
         );
         assert!(
-            contains_node(cache.slabs_full, only_slab),
+            unsafe { contains_node(cache.slabs_full, only_slab) },
             "`slabs_full` should contain the `only_slab`"
         );
         assert_list_doubly_linked(cache.slabs_full);
@@ -1201,7 +1201,7 @@ mod cache_tests {
             "Incorrect size for `slabs_empty`"
         );
         assert!(
-            contains_node(cache.slabs_empty, slab1),
+            unsafe { contains_node(cache.slabs_empty, slab1) },
             "`slabs_empty` should contain `slab1`"
         );
         assert_list_doubly_linked(cache.slabs_empty);
@@ -1217,11 +1217,11 @@ mod cache_tests {
             "Incorrect size for `slabs_partial`"
         );
         assert!(
-            contains_node(cache.slabs_partial, slab0),
+            unsafe { contains_node(cache.slabs_partial, slab0) },
             "`slabs_partial` should contain `slab0`"
         );
         assert!(
-            contains_node(cache.slabs_partial, slab2),
+            unsafe { contains_node(cache.slabs_partial, slab2) },
             "`slabs_partial` should contain `slab2`"
         );
         assert_list_doubly_linked(cache.slabs_partial);
@@ -1585,11 +1585,11 @@ mod cache_tests {
             "`slabs_full` should have a size of two"
         );
         assert!(
-            contains_node(cache.slabs_full, full_slab),
+            unsafe { contains_node(cache.slabs_full, full_slab) },
             "`slabs_full` should contain the `full_slab`"
         );
         assert!(
-            contains_node(cache.slabs_full, object.source),
+            unsafe { contains_node(cache.slabs_full, object.source) },
             "`slabs_full` should contain the `source` of the allocated [SlabObject]"
         );
         assert_list_doubly_linked(cache.slabs_full);
@@ -1651,7 +1651,7 @@ mod cache_tests {
                 "Failed at first grow: Incorrect size for `slabs_empty`"
             );
             assert!(
-                contains_node(cache.slabs_empty, slab0),
+                unsafe { contains_node(cache.slabs_empty, slab0) },
                 "Failed at first grow: `slabs_empty` should contain `slab0`"
             );
             assert_list_doubly_linked(cache.slabs_empty);
@@ -1697,11 +1697,11 @@ mod cache_tests {
                 "Failed at second grow: Incorrect size for `slabs_empty`"
             );
             assert!(
-                contains_node(cache.slabs_empty, new_slabs[0],),
+                unsafe { contains_node(cache.slabs_empty, new_slabs[0],) },
                 "Failed at second grow: `slabs_empty` should contain `slab0`"
             );
             assert!(
-                contains_node(cache.slabs_empty, new_slabs[1],),
+                unsafe { contains_node(cache.slabs_empty, new_slabs[1],) },
                 "Failed at second grow: `slabs_empty` should contain `slab1`"
             );
             assert_list_doubly_linked(cache.slabs_empty);
@@ -1749,7 +1749,7 @@ mod cache_tests {
             );
             for i in 0..new_slabs.len() {
                 assert!(
-                    contains_node(cache.slabs_empty, new_slabs[i]),
+                    unsafe { contains_node(cache.slabs_empty, new_slabs[i]) },
                     "Failed at other grows: `slabs_empty` should contain `slab{i}`"
                 )
             }
@@ -2224,7 +2224,15 @@ mod test_utils {
         result
     }
 
-    pub fn contains_node<T: Default>(head: *mut SlabHeader<T>, node: *mut SlabHeader<T>) -> bool {
+    /// Returns whether list `head` contains `node`.
+    ///
+    /// # SAFETY:
+    /// * `head` must be a valid pointer.
+    /// * `node` must be a valid pointer.
+    pub unsafe fn contains_node<T: Default>(
+        head: *mut SlabHeader<T>,
+        node: *mut SlabHeader<T>,
+    ) -> bool {
         let mut curr = head;
         while !curr.is_null() && curr != node {
             curr = unsafe { (*curr).next };
