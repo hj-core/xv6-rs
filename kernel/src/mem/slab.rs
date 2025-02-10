@@ -43,11 +43,22 @@ where
     ///
     /// The allocated object has the default value of [T], and clients can access it through
     /// the [SlabObject].
+    /// Furthermore, it is guaranteed that if an [Error] is returned, the states of `cache`
+    /// remain unmodified.
     ///
     /// # SAFETY:
-    /// * todo!()
-    unsafe fn allocate_object(_cache: *mut Cache<T>) -> Result<SlabObject<T>, Error> {
-        todo!()
+    /// * `cache` must be a valid pointer.
+    /// * Clients need to apply thread-safe measures to protect the `cache` from concurrent access.
+    unsafe fn allocate_object(cache: *mut Cache<T>) -> Result<SlabObject<T>, Error> {
+        assert!(!cache.is_null(), "`cache` should not be null");
+
+        if !(*cache).slabs_partial.is_null() {
+            Self::allocate_from_partial(cache)
+        } else if !(*cache).slabs_empty.is_null() {
+            Self::allocate_from_empty(cache)
+        } else {
+            Err(AllocateFromNullSlab)
+        }
     }
 
     /// Attempts to allocate an object from one of the empty slabs.
@@ -885,6 +896,13 @@ mod cache_tests {
 
         // Teardown
         unsafe { release_memory(addrs, layout) }
+    }
+
+    #[test]
+    #[should_panic(expected = "`cache` should not be null")]
+    fn allocate_object_with_null_cache_should_panic() {
+        type T = TestObject;
+        let _ = unsafe { Cache::<T>::allocate_object(null_mut()) };
     }
 
     #[test]
