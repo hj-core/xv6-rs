@@ -643,7 +643,11 @@ mod cache_tests {
 
         // Verify `new_head`
         assert_eq!(new_head, head, "`new_head` should be the original `head`");
-        assert_eq!(2, size_of_list(new_head), "Incorrect size for `new_head`");
+        assert_eq!(
+            2,
+            unsafe { size_of_list(new_head) },
+            "Incorrect size for `new_head`"
+        );
         assert!(
             unsafe { contains_node(new_head, head) },
             "`new_head` should contains `head`"
@@ -687,7 +691,11 @@ mod cache_tests {
 
         // Verify the returned head
         assert_eq!(node, new_head, "`new_head` should be the inserted `node`");
-        assert_eq!(3, size_of_list(new_head), "Incorrect size for `new_head`");
+        assert_eq!(
+            3,
+            unsafe { size_of_list(new_head) },
+            "Incorrect size for `new_head`"
+        );
         assert!(
             unsafe { contains_node(new_head, node) },
             "`new_head` should contains `node`"
@@ -885,7 +893,7 @@ mod cache_tests {
         );
         assert_eq!(
             2,
-            size_of_list(new_head),
+            unsafe { size_of_list(new_head) },
             "Incorrect size for the `new_head`"
         );
         assert!(
@@ -1009,7 +1017,7 @@ mod cache_tests {
         );
         assert_eq!(
             1,
-            size_of_list(cache.slabs_partial),
+            unsafe { size_of_list(cache.slabs_partial) },
             "Incorrect size for `slabs_partial`"
         );
         assert!(
@@ -1093,7 +1101,7 @@ mod cache_tests {
         );
         assert_eq!(
             1,
-            size_of_list(cache.slabs_full),
+            unsafe { size_of_list(cache.slabs_full) },
             "Incorrect size for `slabs_full`"
         );
         assert!(
@@ -1197,7 +1205,7 @@ mod cache_tests {
         );
         assert_eq!(
             1,
-            size_of_list(cache.slabs_empty),
+            unsafe { size_of_list(cache.slabs_empty) },
             "Incorrect size for `slabs_empty`"
         );
         assert!(
@@ -1213,7 +1221,7 @@ mod cache_tests {
         );
         assert_eq!(
             2,
-            size_of_list(cache.slabs_partial),
+            unsafe { size_of_list(cache.slabs_partial) },
             "Incorrect size for `slabs_partial`"
         );
         assert!(
@@ -1370,7 +1378,7 @@ mod cache_tests {
         );
         assert_eq!(
             1,
-            size_of_list(cache.slabs_partial),
+            unsafe { size_of_list(cache.slabs_partial) },
             "`slabs_partial` should have a size of one"
         );
         assert_list_doubly_linked(cache.slabs_partial);
@@ -1454,7 +1462,7 @@ mod cache_tests {
         );
         assert_eq!(
             1,
-            size_of_list(cache.slabs_full),
+            unsafe { size_of_list(cache.slabs_full) },
             "`slabs_full` should have a size of one"
         );
         assert_list_doubly_linked(cache.slabs_full);
@@ -1557,7 +1565,7 @@ mod cache_tests {
         );
         assert_eq!(
             1,
-            size_of_list(cache.slabs_empty),
+            unsafe { size_of_list(cache.slabs_empty) },
             "`slabs_empty` should have a size of one"
         );
         assert_list_doubly_linked(cache.slabs_empty);
@@ -1573,7 +1581,7 @@ mod cache_tests {
         );
         assert_eq!(
             1,
-            size_of_list(cache.slabs_partial),
+            unsafe { size_of_list(cache.slabs_partial) },
             "`slabs_partial` should have a size of one"
         );
         assert_list_doubly_linked(cache.slabs_partial);
@@ -1581,7 +1589,7 @@ mod cache_tests {
         // Verify `slabs_full`
         assert_eq!(
             2,
-            size_of_list(cache.slabs_full),
+            unsafe { size_of_list(cache.slabs_full) },
             "`slabs_full` should have a size of two"
         );
         assert!(
@@ -1647,7 +1655,7 @@ mod cache_tests {
             );
             assert_eq!(
                 1,
-                size_of_list(cache.slabs_empty),
+                unsafe { size_of_list(cache.slabs_empty) },
                 "Failed at first grow: Incorrect size for `slabs_empty`"
             );
             assert!(
@@ -1693,7 +1701,7 @@ mod cache_tests {
             );
             assert_eq!(
                 2,
-                size_of_list(cache.slabs_empty),
+                unsafe { size_of_list(cache.slabs_empty) },
                 "Failed at second grow: Incorrect size for `slabs_empty`"
             );
             assert!(
@@ -1744,7 +1752,7 @@ mod cache_tests {
             );
             assert_eq!(
                 addrs.len(),
-                size_of_list(cache.slabs_empty),
+                unsafe { size_of_list(cache.slabs_empty) },
                 "Failed at other grows: Incorrect size for `slabs_empty`"
             );
             for i in 0..new_slabs.len() {
@@ -2214,7 +2222,11 @@ mod test_utils {
         }
     }
 
-    pub fn size_of_list<T: Default>(head: *mut SlabHeader<T>) -> usize {
+    /// Returns the size of the list starting from `head`.
+    ///
+    /// # SAFETY:
+    /// * `head` must be a valid pointer.
+    pub unsafe fn size_of_list<T: Default>(head: *mut SlabHeader<T>) -> usize {
         let mut result = 0;
         let mut curr = head;
         while !curr.is_null() {
@@ -2224,7 +2236,7 @@ mod test_utils {
         result
     }
 
-    /// Returns whether list `head` contains `node`.
+    /// Returns whether the list starting from `head` contains `node`.
     ///
     /// # SAFETY:
     /// * `head` must be a valid pointer.
