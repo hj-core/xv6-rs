@@ -2147,6 +2147,7 @@ mod test_utils {
     use alloc::alloc::{alloc, dealloc};
     use alloc::vec::Vec;
     use core::alloc::Layout;
+    use core::ptr::null_mut;
 
     #[derive(Debug, PartialEq)]
     pub struct TestObject {
@@ -2203,9 +2204,8 @@ mod test_utils {
     }
 
     pub fn assert_list_doubly_linked<T: Default>(head: *mut SlabHeader<T>) {
-        if head.is_null() {
-            return;
-        }
+        assert_ne!(null_mut(), head, "`head` should not be null");
+
         let head_prev = unsafe { (*head).prev };
         assert!(head_prev.is_null(), "`prev` of `head` should be null");
 
