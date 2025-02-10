@@ -656,7 +656,7 @@ mod cache_tests {
             unsafe { contains_node(new_head, next) },
             "`new_head` should contains `next`"
         );
-        assert_list_doubly_linked(new_head);
+        unsafe { assert_list_doubly_linked(new_head) };
 
         // Teardown
         unsafe { release_memory(addrs, layout) }
@@ -708,7 +708,7 @@ mod cache_tests {
             unsafe { contains_node(new_head, next) },
             "`new_head` should contains `next`"
         );
-        assert_list_doubly_linked(new_head);
+        unsafe { assert_list_doubly_linked(new_head) };
 
         // Teardown
         unsafe { release_memory(addrs, layout) }
@@ -900,7 +900,7 @@ mod cache_tests {
             unsafe { contains_node(new_head, next_next) },
             "`new_head` should contain the `next_next`"
         );
-        assert_list_doubly_linked(new_head);
+        unsafe { assert_list_doubly_linked(new_head) };
 
         // Teardown
         unsafe { release_memory(addrs, layout) }
@@ -1024,7 +1024,7 @@ mod cache_tests {
             unsafe { contains_node(cache.slabs_partial, only_slab) },
             "`slabs_partial` should contain the `only_slab`"
         );
-        assert_list_doubly_linked(cache.slabs_partial);
+        unsafe { assert_list_doubly_linked(cache.slabs_partial) };
 
         // Verify `slabs_full` and `slabs_empty`
         assert!(cache.slabs_full.is_null(), "`slabs_full` should be null");
@@ -1108,7 +1108,7 @@ mod cache_tests {
             unsafe { contains_node(cache.slabs_full, only_slab) },
             "`slabs_full` should contain the `only_slab`"
         );
-        assert_list_doubly_linked(cache.slabs_full);
+        unsafe { assert_list_doubly_linked(cache.slabs_full) };
 
         // Simple drop the [SlabObject].
         // The Behavior of dropping is outside the scope of this test.
@@ -1212,7 +1212,7 @@ mod cache_tests {
             unsafe { contains_node(cache.slabs_empty, slab1) },
             "`slabs_empty` should contain `slab1`"
         );
-        assert_list_doubly_linked(cache.slabs_empty);
+        unsafe { assert_list_doubly_linked(cache.slabs_empty) };
 
         // Verify the `slabs_partial` of `cache`
         assert!(
@@ -1232,7 +1232,7 @@ mod cache_tests {
             unsafe { contains_node(cache.slabs_partial, slab2) },
             "`slabs_partial` should contain `slab2`"
         );
-        assert_list_doubly_linked(cache.slabs_partial);
+        unsafe { assert_list_doubly_linked(cache.slabs_partial) };
 
         // Simple drop the [SlabObject]s.
         // The Behavior of dropping is not the scope of this test.
@@ -1381,7 +1381,7 @@ mod cache_tests {
             unsafe { size_of_list(cache.slabs_partial) },
             "`slabs_partial` should have a size of one"
         );
-        assert_list_doubly_linked(cache.slabs_partial);
+        unsafe { assert_list_doubly_linked(cache.slabs_partial) };
 
         // Teardown
         drop(object);
@@ -1465,7 +1465,7 @@ mod cache_tests {
             unsafe { size_of_list(cache.slabs_full) },
             "`slabs_full` should have a size of one"
         );
-        assert_list_doubly_linked(cache.slabs_full);
+        unsafe { assert_list_doubly_linked(cache.slabs_full) };
 
         // Teardown
         drop(object);
@@ -1568,7 +1568,7 @@ mod cache_tests {
             unsafe { size_of_list(cache.slabs_empty) },
             "`slabs_empty` should have a size of one"
         );
-        assert_list_doubly_linked(cache.slabs_empty);
+        unsafe { assert_list_doubly_linked(cache.slabs_empty) };
 
         // Verify `slabs_partial`
         assert!(
@@ -1584,7 +1584,7 @@ mod cache_tests {
             unsafe { size_of_list(cache.slabs_partial) },
             "`slabs_partial` should have a size of one"
         );
-        assert_list_doubly_linked(cache.slabs_partial);
+        unsafe { assert_list_doubly_linked(cache.slabs_partial) };
 
         // Verify `slabs_full`
         assert_eq!(
@@ -1600,7 +1600,7 @@ mod cache_tests {
             unsafe { contains_node(cache.slabs_full, object.source) },
             "`slabs_full` should contain the `source` of the allocated [SlabObject]"
         );
-        assert_list_doubly_linked(cache.slabs_full);
+        unsafe { assert_list_doubly_linked(cache.slabs_full) };
 
         // Teardown
         drop(object);
@@ -1662,7 +1662,7 @@ mod cache_tests {
                 unsafe { contains_node(cache.slabs_empty, slab0) },
                 "Failed at first grow: `slabs_empty` should contain `slab0`"
             );
-            assert_list_doubly_linked(cache.slabs_empty);
+            unsafe { assert_list_doubly_linked(cache.slabs_empty) };
         }
 
         // Grow the second empty slab
@@ -1712,7 +1712,7 @@ mod cache_tests {
                 unsafe { contains_node(cache.slabs_empty, new_slabs[1],) },
                 "Failed at second grow: `slabs_empty` should contain `slab1`"
             );
-            assert_list_doubly_linked(cache.slabs_empty);
+            unsafe { assert_list_doubly_linked(cache.slabs_empty) };
         }
 
         // Grow the remaining slabs
@@ -1761,7 +1761,7 @@ mod cache_tests {
                     "Failed at other grows: `slabs_empty` should contain `slab{i}`"
                 )
             }
-            assert_list_doubly_linked(cache.slabs_empty);
+            unsafe { assert_list_doubly_linked(cache.slabs_empty) };
         }
 
         drop(new_slabs);
@@ -2203,7 +2203,11 @@ mod test_utils {
         }
     }
 
-    pub fn assert_list_doubly_linked<T: Default>(head: *mut SlabHeader<T>) {
+    /// Asserts whether the `head` represents a doubly linked list.
+    ///
+    /// # SAFETY:
+    /// * `head` must be a valid pointer.
+    pub unsafe fn assert_list_doubly_linked<T: Default>(head: *mut SlabHeader<T>) {
         assert_ne!(null_mut(), head, "`head` should not be null");
 
         let head_prev = unsafe { (*head).prev };
