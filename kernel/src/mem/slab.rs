@@ -6,12 +6,13 @@ use core::alloc::Layout;
 use core::marker::PhantomData;
 use core::marker::PhantomPinned;
 use core::ptr;
-use core::ptr::null_mut;
-use wrapper::{Address, Bytes};
+use core::ptr::{null_mut, NonNull};
 use Error::{
     AllocateFromFullSlab, AllocateFromNullSlab, SlabNotAligned, SlabTooSmall,
     ZeroSizeTypeNotSupported,
 };
+
+type ByteSize = usize;
 
 const CACHE_NAME_LENGTH: usize = 16;
 const SLAB_USED_BITMAP_SIZE: usize = 4;
@@ -109,13 +110,11 @@ where
         Ok(result)
     }
 
-    /// Pushes `node` to the front of `head` and returns the new head.
+    /// `push_front` pushes the `node` to the front of `head` and returns the new head.
     ///
     /// # SAFETY:
-    /// * `head` should be a valid pointer if it is not null.
-    /// * `head` should not have its `prev` linked if it is not null.
-    /// * `node` should be a valid pointer if it is not null.
-    /// * `node` should be isolated if it is not null, i.e., not linked to other nodes.
+    /// * `head` should be either null or a valid pointer that doesn't have its `prev` linked.
+    /// * `node` should be either null or a valid pointer that is isolated, i.e., not linked to other nodes.
     unsafe fn push_front(head: *mut SlabHeader<T>, node: *mut SlabHeader<T>) -> *mut SlabHeader<T> {
         if !head.is_null() {
             assert_eq!(
@@ -244,12 +243,12 @@ where
     ///
     /// # THREAD SAFETY:
     /// * This method is **NOT** thread-safe.
-    unsafe fn grow(cache: *mut Cache<T>, addr0: Address) -> Result<*mut SlabHeader<T>, Error> {
+    unsafe fn grow(cache: *mut Cache<T>, addr0: NonNull<u8>) -> Result<*mut SlabHeader<T>, Error> {
         // SAFETY:
         // * Dereferencing `cache` is safe because it is a valid pointer.
         // * [Layout] implements [Copy] so there is no ownership transfer.
         let layout = unsafe { (*cache).slab_layout };
-        if addr0.0 % layout.align() != 0 {
+        if addr0.align_offset(layout.align()) != 0 {
             return Err(SlabNotAligned);
         }
 
@@ -261,7 +260,7 @@ where
         // * We are safe to dereference `slab_empty` and update it in place if it is not null.
         // * In light of the above, this unsafe block is considered safe.
         unsafe {
-            let result = SlabHeader::new(cache, Bytes(layout.size()), addr0)?;
+            let result = SlabHeader::new(cache, layout.size(), addr0)?;
 
             let old_head = (*cache).slabs_empty;
             if !old_head.is_null() {
@@ -290,8 +289,8 @@ where
     /// [SlabHeader]s within the same [Cache].slabs_* are doubly linked.
     next: *mut SlabHeader<T>,
     total_slots: usize,
-    slot0: Address,
-    slot_size: Bytes,
+    slot0: NonNull<u8>,
+    slot_size: ByteSize,
     /// Each bit represents slot usage (0: unused, 1: used).
     /// The bits are packed: the first u64 represents slots 0-63,
     /// the second u64 represents slots 64-127, and so on.
@@ -317,30 +316,32 @@ where
     ///   to the new slab's use.
     unsafe fn new(
         cache: *mut Cache<T>,
-        slab_size: Bytes,
-        addr0: Address,
+        slab_size: ByteSize,
+        addr0: NonNull<u8>,
     ) -> Result<*mut Self, Error> {
         if size_of::<T>() == 0 {
             return Err(ZeroSizeTypeNotSupported);
         }
 
-        if addr0.0 % align_of::<SlabHeader<T>>() != 0 {
+        if addr0.align_offset(align_of::<SlabHeader<T>>()) != 0 {
             return Err(SlabNotAligned);
         }
 
-        let header_size = Bytes(size_of::<SlabHeader<T>>());
-        let slot_size = Bytes(size_of::<T>());
-        let slot0_offset = Self::compute_slot0_offset(addr0, header_size);
+        let header_size: ByteSize = size_of::<SlabHeader<T>>();
+        let slot_size: ByteSize = size_of::<T>();
+        let slot0_offset = Self::compute_slot0_offset(addr0.addr().get(), header_size);
         let min_size = slot0_offset + slot_size;
 
-        if slab_size.0 < min_size.0 {
+        if slab_size < min_size {
             return Err(SlabTooSmall);
         }
 
-        let total_slots = (slab_size.0 - slot0_offset.0) / slot_size.0;
-        let slot0 = addr0 + slot0_offset;
+        let total_slots = (slab_size - slot0_offset) / slot_size;
+        // SAFETY:
+        // * todo!()
+        let slot0 = addr0.add(slot0_offset);
 
-        let header = SlabHeader {
+        let header = Self {
             source: cache,
             prev: null_mut(),
             next: null_mut(),
@@ -353,7 +354,7 @@ where
             _pinned: PhantomPinned,
         };
 
-        let result: *mut SlabHeader<T> = addr0.into();
+        let result: *mut SlabHeader<T> = addr0.as_ptr().cast();
         // SAFETY:
         // * We are safe to write the newly created header to `result` because
         //   1. We have checked the alignment requirement.
@@ -367,15 +368,15 @@ where
 
     /// Offset from the [SlabHeader]'s address to slot 0.
     /// This offset has considered the alignment requirement of object [T].
-    fn compute_slot0_offset(addr0: Address, header_size: Bytes) -> Bytes {
-        let header_end = (addr0 + header_size).0;
+    fn compute_slot0_offset(addr0: usize, header_size: ByteSize) -> ByteSize {
+        let header_end = addr0 + header_size;
         let object_align = align_of::<T>();
-        let padding = if header_end % object_align == 0 {
+        let padding: ByteSize = if header_end % object_align == 0 {
             0
         } else {
             object_align - (header_end % object_align)
         };
-        header_size + Bytes(padding)
+        header_size + padding
     }
 
     /// Attempts to allocate an object from the underlying slab.
@@ -409,7 +410,11 @@ where
         //   2. Each slot is properly aligned and large enough to contain an object of type T.
         //   3. The computed `slot_index` for this object should be correct.
         let object_ptr = unsafe {
-            let ptr: *mut T = ((*header).slot0 + (*header).slot_size * slot_index).into();
+            let ptr: *mut T = (*header)
+                .slot0
+                .add((*header).slot_size * slot_index)
+                .as_ptr()
+                .cast();
             ptr.write(new_object);
             ptr
         };
@@ -422,7 +427,7 @@ where
         Ok(result)
     }
 
-    /// Returns whether the slab this [SlabHeader] refers to is full.
+    /// `is_full` returns whether the underlying slab is full.
     ///
     /// # SAFETY:
     /// * `header` must be a valid pointer.
@@ -430,41 +435,44 @@ where
         (*header).used_count == (*header).total_slots
     }
 
-    /// Attempts to mark the first free slot as used.
+    /// `use_first_free_slot` attempts to mark the first free slot as used.
     ///
-    /// Returns the index of the free slot if the attempt succeeds,
-    /// or returns the corresponding [Error] if it fails.
-    /// Furthermore, it is guaranteed that if an [Err] is returned, the states of `header`
-    /// remain unmodified.
+    /// The index of the free slot is returned if the attempt succeeds,
+    /// or an [Err] is returned if it fails.
+    /// Furthermore, it is guaranteed that if an [Err] is returned,
+    /// the `header` remains unmodified.
     ///
     /// # SAFETY:
     /// * `header` must be a valid pointer.
     unsafe fn use_first_free_slot(header: *mut SlabHeader<T>) -> Result<usize, Error> {
-        // SAFETY:
-        // * We are safe to deference `header` and mutate its fields in place because
-        //   it is a valid pointer.
-        let mut result = 0;
-        for map in (*header).used_bitmap.iter_mut() {
-            if *map == 0xffff_ffff_ffff_ffff {
-                result += 64;
-                continue;
-            }
-
-            let shift = map.trailing_ones() as usize;
-            result += shift;
-
-            if result < (*header).total_slots {
-                *map |= 1 << shift;
-                (*header).used_count += 1;
-                return Ok(result);
-            }
+        let first_free_slot = SlabHeader::<T>::first_free_slot(&(*header).used_bitmap);
+        if (*header).total_slots <= first_free_slot {
+            return Err(AllocateFromNullSlab);
         }
 
-        assert!(
-            SlabHeader::is_full(header),
-            "`used_bitmap` is inconsistent with fn `is_full`"
-        );
-        Err(AllocateFromFullSlab)
+        (*header).used_count += 1;
+        SlabHeader::<T>::alter_used_bit(&mut (*header).used_bitmap, first_free_slot);
+        Ok(first_free_slot)
+    }
+
+    fn first_free_slot(used_bitmap: &[u64; SLAB_USED_BITMAP_SIZE]) -> usize {
+        let mut result = 0;
+        for &segment in used_bitmap.iter() {
+            if segment != 0xffff_ffff_ffff_ffff {
+                result += segment.trailing_ones() as usize;
+                break;
+            }
+            result += 64;
+        }
+        result
+    }
+
+    fn alter_used_bit(used_bitmap: &mut [u64; SLAB_USED_BITMAP_SIZE], slot_index: usize) {
+        if MAX_SLOTS_PER_SLAB <= slot_index {
+            panic!("`slot_index` should be less than the `MAX_SLOTS_PER_SLAB`");
+        }
+        let (index, shift) = (slot_index / 64, slot_index % 64);
+        used_bitmap[index] ^= 1 << shift;
     }
 
     /// Attempts to deallocate the `object` from the slab the `header` refers to.
@@ -566,19 +574,18 @@ mod cache_tests {
     extern crate alloc;
     extern crate std;
     use super::*;
-    use crate::mem::PAGE_SIZE;
-    use alloc::format;
+    use alloc::vec;
     use alloc::vec::Vec;
-    use header_tests::assert_slab_empty;
-    use header_tests::assert_slab_state_consistency;
-    use std::panic::catch_unwind;
-    use std::panic::resume_unwind;
     use test_utils::*;
 
     fn new_test_default<T: Default>() -> Cache<T> {
         Cache::<T> {
             name: ['c'; CACHE_NAME_LENGTH],
-            slab_layout: Layout::from_size_align(PAGE_SIZE.0, align_of::<SlabHeader<T>>()).unwrap(),
+            slab_layout: Layout::from_size_align(
+                safe_slab_size::<T>(2),
+                align_of::<SlabHeader<T>>(),
+            )
+            .expect("Failed to create the `slab_layout`"),
             slabs_full: null_mut(),
             slabs_partial: null_mut(),
             slabs_empty: null_mut(),
@@ -589,52 +596,41 @@ mod cache_tests {
     fn push_front_with_null_head_and_node_return_null() {
         type T = u8;
         let result = unsafe { Cache::<T>::push_front(null_mut(), null_mut()) };
-        assert!(result.is_null(), "Expected null ptr but got {result:?}")
+        assert_eq!(null_mut(), result, "The new head should be null")
     }
 
     #[test]
     #[should_panic(expected = "`head` should not have its `prev` linked")]
     fn push_front_with_prev_linked_head_should_panic() {
+        // Create a `head` with its `prev` linked
         type T = u8;
-        let layout = Layout::from_size_align(PAGE_SIZE.0, align_of::<SlabHeader<T>>())
-            .expect("Failed to create `layout`");
-        let addrs = acquire_memory(layout, 2);
+        let slab_layout =
+            Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
+                .expect("Failed to create `slab_layout`");
+        let mut slab_man = SlabMan::<T>::new(slab_layout);
 
-        // Craft a head with its `prev` linked
-        let head =
-            unsafe { SlabHeader::<T>::new(null_mut(), Bytes(layout.size()), addrs[0].into()) }
-                .expect("Failed to create `head`");
-        let prev =
-            unsafe { SlabHeader::<T>::new(null_mut(), Bytes(layout.size()), addrs[1].into()) }
-                .expect("Failed to create `prev`");
+        let head = slab_man.new_test_slab(null_mut());
+        let prev = slab_man.new_test_slab(null_mut());
         unsafe {
             (*head).prev = prev;
             (*prev).next = head;
         }
 
         // Exercise `push_front`
-        let result = catch_unwind(|| unsafe { Cache::push_front(head, null_mut()) });
-        assert!(result.is_err(), "Expected Err but got {result:?}");
-
-        // Teardown and rethrow the error
-        unsafe { release_memory(addrs, layout) }
-        resume_unwind(result.err().unwrap())
+        unsafe { Cache::push_front(head, null_mut()) };
     }
 
     #[test]
     fn push_front_with_valid_head_and_null_node_return_head() {
+        // Create a `head` containing two nodes
         type T = u8;
-        let layout = Layout::from_size_align(PAGE_SIZE.0, align_of::<SlabHeader<T>>())
-            .expect("Failed to create `layout`");
-        let addrs = acquire_memory(layout, 2);
+        let slab_layout =
+            Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
+                .expect("Failed to create `slab_layout`");
+        let mut slab_man = SlabMan::new(slab_layout);
 
-        // Craft a two-slab list
-        let head =
-            unsafe { SlabHeader::<T>::new(null_mut(), Bytes(layout.size()), addrs[0].into()) }
-                .expect("Failed to create `head`");
-        let next =
-            unsafe { SlabHeader::<T>::new(null_mut(), Bytes(layout.size()), addrs[1].into()) }
-                .expect("Failed to create `next`");
+        let head = slab_man.new_test_slab(null_mut());
+        let next = slab_man.new_test_slab(null_mut());
         unsafe {
             (*head).next = next;
             (*next).prev = head;
@@ -643,228 +639,184 @@ mod cache_tests {
         // Exercise `push_front`
         let new_head = unsafe { Cache::<T>::push_front(head, null_mut()) };
 
-        // Verify `new_head`
-        assert_eq!(new_head, head, "`new_head` should be the original `head`");
+        // Verify the new head
+        assert_eq!(new_head, head, "The new head should be the original `head`");
         assert_eq!(
             2,
             unsafe { size_of_list(new_head) },
-            "Incorrect size for `new_head`"
+            "The new head should contain two nodes"
         );
         assert!(
             unsafe { contains_node(new_head, head) },
-            "`new_head` should contains `head`"
+            "The new head should contain the `head`"
         );
         assert!(
             unsafe { contains_node(new_head, next) },
-            "`new_head` should contains `next`"
+            "The new head should contain the `next`"
         );
-        unsafe { assert_list_doubly_linked(new_head) };
-
-        // Teardown
-        unsafe { release_memory(addrs, layout) }
+        unsafe { verify_list_doubly_linked(new_head) };
     }
 
     #[test]
     fn push_front_with_valid_head_and_node_return_node() {
+        // Create a `head` containing two nodes
         type T = u8;
-        let layout = Layout::from_size_align(PAGE_SIZE.0, align_of::<SlabHeader<T>>())
-            .expect("Failed to create `layout`");
-        let addrs = acquire_memory(layout, 3);
+        let slab_layout =
+            Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
+                .expect("Failed to create `slab_layout`");
+        let mut slab_man = SlabMan::<T>::new(slab_layout);
 
-        // Craft a two-slab list
-        let head =
-            unsafe { SlabHeader::<T>::new(null_mut(), Bytes(layout.size()), addrs[0].into()) }
-                .expect("Failed to create `head`");
-        let next =
-            unsafe { SlabHeader::<T>::new(null_mut(), Bytes(layout.size()), addrs[1].into()) }
-                .expect("Failed to create `next`");
+        let head = slab_man.new_test_slab(null_mut());
+        let next = slab_man.new_test_slab(null_mut());
         unsafe {
             (*head).next = next;
             (*next).prev = head;
         }
 
-        // Craft the node to be inserted
-        let node =
-            unsafe { SlabHeader::<T>::new(null_mut(), Bytes(layout.size()), addrs[2].into()) }
-                .expect("Failed to create `head`");
+        // Create the `node` to be inserted
+        let node = slab_man.new_test_slab(null_mut());
 
         // Exercise `push_front`
         let new_head = unsafe { Cache::push_front(head, node) };
 
-        // Verify the returned head
-        assert_eq!(node, new_head, "`new_head` should be the inserted `node`");
+        // Verify the new head
+        assert_eq!(node, new_head, "The new head should be the `node`");
         assert_eq!(
             3,
             unsafe { size_of_list(new_head) },
-            "Incorrect size for `new_head`"
+            "The new head should contain three nodes"
         );
         assert!(
             unsafe { contains_node(new_head, node) },
-            "`new_head` should contains `node`"
+            "The new head should contains `node`"
         );
         assert!(
             unsafe { contains_node(new_head, head) },
-            "`new_head` should contains `head`"
+            "The new head should contain `head`"
         );
         assert!(
             unsafe { contains_node(new_head, next) },
-            "`new_head` should contains `next`"
+            "The new head should contain `next`"
         );
-        unsafe { assert_list_doubly_linked(new_head) };
-
-        // Teardown
-        unsafe { release_memory(addrs, layout) }
+        unsafe { verify_list_doubly_linked(new_head) };
     }
 
     #[test]
     #[should_panic(expected = "`node` is not isolated: it has its `prev` linked")]
     fn push_front_with_prev_linked_node_should_panic() {
+        // Create a `node` with its `prev` linked
         type T = u8;
-        let layout = Layout::from_size_align(PAGE_SIZE.0, align_of::<SlabHeader<T>>())
-            .expect("Failed to create `layout`");
-        let addrs = acquire_memory(layout, 2);
+        let slab_layout =
+            Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
+                .expect("Failed to create `slab_layout`");
+        let mut slab_man = SlabMan::<T>::new(slab_layout);
 
-        // Craft a node with its `prev` linked
-        let node =
-            unsafe { SlabHeader::<T>::new(null_mut(), Bytes(layout.size()), addrs[0].into()) }
-                .expect("Failed to create `node`");
-        let prev =
-            unsafe { SlabHeader::<T>::new(null_mut(), Bytes(layout.size()), addrs[1].into()) }
-                .expect("Failed to create `prev`");
+        let node = slab_man.new_test_slab(null_mut());
+        let prev = slab_man.new_test_slab(null_mut());
         unsafe {
             (*node).prev = prev;
             (*prev).next = node;
         }
 
         // Exercise `push_front`
-        let result = catch_unwind(|| unsafe { Cache::push_front(null_mut(), node) });
-        assert!(result.is_err(), "Expected Err but got {result:?}");
-
-        // Teardown and rethrow the error
-        unsafe { release_memory(addrs, layout) }
-        resume_unwind(result.err().unwrap())
+        unsafe { Cache::push_front(null_mut(), node) };
     }
 
     #[test]
     #[should_panic(expected = "`node` is not isolated: it has its `next` linked")]
     fn push_front_with_next_linked_node_should_panic() {
+        // Create a `node` with its `next` linked
         type T = u8;
-        let layout = Layout::from_size_align(PAGE_SIZE.0, align_of::<SlabHeader<T>>())
-            .expect("Failed to create `layout`");
-        let addrs = acquire_memory(layout, 2);
+        let slab_layout =
+            Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
+                .expect("Failed to create `slab_layout`");
+        let mut slab_man = SlabMan::<T>::new(slab_layout);
 
-        // Craft a node with its `prev` linked
-        let node =
-            unsafe { SlabHeader::<T>::new(null_mut(), Bytes(layout.size()), addrs[0].into()) }
-                .expect("Failed to create `node`");
-        let next =
-            unsafe { SlabHeader::<T>::new(null_mut(), Bytes(layout.size()), addrs[1].into()) }
-                .expect("Failed to create `next`");
+        let node = slab_man.new_test_slab(null_mut());
+        let next = slab_man.new_test_slab(null_mut());
         unsafe {
             (*node).next = next;
             (*next).prev = node;
         }
 
         // Exercise `push_front`
-        let result = catch_unwind(|| unsafe { Cache::push_front(null_mut(), node) });
-        assert!(result.is_err(), "Expected Err but got {result:?}");
-
-        // Teardown and rethrow the error
-        unsafe { release_memory(addrs, layout) }
-        resume_unwind(result.err().unwrap())
+        unsafe { Cache::push_front(null_mut(), node) };
     }
 
     #[test]
     fn pop_front_with_null_head_return_nulls() {
         type T = u8;
         let (node, new_head) = unsafe { Cache::<T>::pop_front(null_mut()) };
-        assert!(
-            node.is_null(),
-            "Expected null detached node but got {node:?}"
+        assert_eq!(
+            null_mut(),
+            node,
+            "The detached node should be null but got {node:?}"
         );
-        assert!(
-            new_head.is_null(),
-            "Expected null new head but got {new_head:?}"
+        assert_eq!(
+            null_mut(),
+            new_head,
+            "The new head should be null but got {new_head:?}"
         );
     }
 
     #[test]
     #[should_panic(expected = "`head` should not have its `prev` linked")]
     fn pop_front_with_prev_linked_head_should_panic() {
+        // Create a `head` with its `prev` linked
         type T = u8;
-        let layout = Layout::from_size_align(PAGE_SIZE.0, align_of::<SlabHeader<T>>())
-            .expect("Failed to create `layout`");
-        let addrs = acquire_memory(layout, 2);
+        let slab_layout =
+            Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
+                .expect("Failed to create `slab_layout`");
+        let mut slab_man = SlabMan::<T>::new(slab_layout);
 
-        // Craft a head with its `prev` linked
-        let head =
-            unsafe { SlabHeader::<T>::new(null_mut(), Bytes(layout.size()), addrs[0].into()) }
-                .expect("Failed to create `head`");
-        let prev =
-            unsafe { SlabHeader::<T>::new(null_mut(), Bytes(layout.size()), addrs[1].into()) }
-                .expect("Failed to create `prev`");
+        let head = slab_man.new_test_slab(null_mut());
+        let prev = slab_man.new_test_slab(null_mut());
         unsafe {
             (*head).prev = prev;
             (*prev).next = head;
         }
 
         // Exercise `pop_front`
-        let result = catch_unwind(|| unsafe { Cache::pop_front(head) });
-        assert!(result.is_err(), "Expected Err but got {result:?}");
-
-        // Teardown and rethrow the error
-        unsafe { release_memory(addrs, layout) }
-        resume_unwind(result.err().unwrap())
+        unsafe { Cache::pop_front(head) };
     }
 
     #[test]
     fn pop_front_with_single_node_head_return_head_and_null() {
+        // Create a `head` containing a single node
         type T = u8;
-        let layout = Layout::from_size_align(PAGE_SIZE.0, align_of::<SlabHeader<T>>())
-            .expect("Failed to create `layout`");
-        let addrs = acquire_memory(layout, 1);
+        let slab_layout =
+            Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
+                .expect("Failed to create `slab_layout`");
+        let mut slab_man = SlabMan::new(slab_layout);
 
-        // Craft a single node head
-        let head =
-            unsafe { SlabHeader::<T>::new(null_mut(), Bytes(layout.size()), addrs[0].into()) }
-                .expect("Failed to create `head`");
+        let head = slab_man.new_test_slab(null_mut());
 
-        // Exercise `pop_front` and verify the return
+        // Exercise `pop_front`
         let (node, new_head) = unsafe { Cache::<T>::pop_front(head) };
-        assert_eq!(node, head, "The detached node should be the original head");
-        assert_eq!(
-            null_mut(),
-            unsafe { (*node).prev },
-            "The detached should not have its `prev` linked"
-        );
-        assert_eq!(
-            null_mut(),
-            unsafe { (*node).next },
-            "The detached should not have its `next` linked"
-        );
-        assert!(new_head.is_null(), "`new_head` should be null");
 
-        // Teardown
-        unsafe { release_memory(addrs, layout) }
+        // Verify the detached node
+        assert_eq!(
+            node, head,
+            "The detached node should be the original `head`"
+        );
+        unsafe { verify_node_isolated(node) };
+
+        // Verify the new head
+        assert_eq!(null_mut(), new_head, "The new head should be null");
     }
 
     #[test]
     fn pop_front_with_multi_nodes_head_return_head_and_next() {
+        // Create a `head` containing three nodes
         type T = u8;
-        let layout = Layout::from_size_align(PAGE_SIZE.0, align_of::<SlabHeader<T>>())
-            .expect("Failed to create `layout`");
-        let addrs = acquire_memory(layout, 3);
+        let slab_layout =
+            Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
+                .expect("Failed to create `slab_layout`");
+        let mut slab_man = SlabMan::<T>::new(slab_layout);
 
-        // Craft a node with its `prev` linked
-        let head =
-            unsafe { SlabHeader::<T>::new(null_mut(), Bytes(layout.size()), addrs[0].into()) }
-                .expect("Failed to create `head`");
-        let next =
-            unsafe { SlabHeader::<T>::new(null_mut(), Bytes(layout.size()), addrs[1].into()) }
-                .expect("Failed to create `next`");
-        let next_next =
-            unsafe { SlabHeader::<T>::new(null_mut(), Bytes(layout.size()), addrs[2].into()) }
-                .expect("Failed to create `next_next`");
+        let head = slab_man.new_test_slab(null_mut());
+        let next = slab_man.new_test_slab(null_mut());
+        let next_next = slab_man.new_test_slab(null_mut());
         unsafe {
             (*head).next = next;
             (*next).prev = head;
@@ -875,37 +827,25 @@ mod cache_tests {
         // Exercise `pop_front`
         let (node, new_head) = unsafe { Cache::pop_front(head) };
 
-        // Verify the returned node
+        // Verify the detached node
         assert_eq!(node, head, "The detached node should be the original head");
-        assert_eq!(
-            null_mut(),
-            unsafe { (*new_head).prev },
-            "The detached should not have its `prev` linked"
-        );
-        assert_eq!(
-            null_mut(),
-            unsafe { (*node).next },
-            "The detached should not have its `next` linked"
-        );
+        unsafe { verify_node_isolated(node) };
 
-        // Verify the returned `new_head`
+        // Verify the new head
         assert_eq!(
             next, new_head,
-            "`new_head` should be the `next` of the original `head`"
+            "The new head should be the `next` of the original `head`"
         );
         assert_eq!(
             2,
             unsafe { size_of_list(new_head) },
-            "Incorrect size for the `new_head`"
+            "The new head should contain two nodes"
         );
         assert!(
             unsafe { contains_node(new_head, next_next) },
-            "`new_head` should contain the `next_next`"
+            "The new head should contain the `next_next`"
         );
-        unsafe { assert_list_doubly_linked(new_head) };
-
-        // Teardown
-        unsafe { release_memory(addrs, layout) }
+        unsafe { verify_list_doubly_linked(new_head) };
     }
 
     #[test]
@@ -924,323 +864,224 @@ mod cache_tests {
 
     #[test]
     fn allocate_from_empty_when_no_empty_slabs_return_null_err() {
+        // Create a `cache` containing a partial slab
         type T = u128;
         let mut cache = new_test_default::<T>();
-        let addrs = acquire_memory(cache.slab_layout, 1);
+        let mut slab_man = SlabMan::new(cache.slab_layout);
 
-        // Manually craft a partial slab and store it to `slabs_partial` of `cache`
-        let _slab = unsafe {
-            SlabHeader::new(
-                &raw mut cache,
-                Bytes(cache.slab_layout.size()),
-                addrs[0].into(),
-            )
-        }
-        .expect("Failed to craft `_slab`");
-        let _object =
-            unsafe { SlabHeader::allocate_object(_slab) }.expect("Failed to allocate from `_slab`");
-        cache.slabs_partial = _slab;
+        let only_slab = slab_man.new_test_slab(&raw mut cache);
+        let _slab_object1 = unsafe { SlabHeader::allocate_object(only_slab) }
+            .expect("Failed to allocate object from the `only_slab`");
+        cache.slabs_partial = only_slab;
 
-        // Verify the allocation
+        // Exercise `allocate_from_empty` and verify the result
         let result = unsafe { Cache::allocate_from_empty(&raw mut cache) };
         assert!(
             result.is_err(),
-            "Expected Err(AllocateFromNullSlab) but got {result:?}"
+            "The result should be Err(AllocateFromNullSlab) but got {result:?}"
         );
-
         let err = result.unwrap_err();
-        let expected_err = AllocateFromNullSlab;
         assert!(
             matches!(err, AllocateFromNullSlab),
-            "Expected {expected_err:?}, got {err:?});"
+            "The error should be {:?} but got {err:?});",
+            AllocateFromNullSlab,
         );
 
-        // Simple drop the [SlabObject].
-        // The Behavior of dropping is not the scope of this test.
-        drop(_object);
-        unsafe { release_memory(addrs, cache.slab_layout) };
+        // Verify the `cache`
+        unsafe { verify_cache_invariants(&raw mut cache) };
+
+        let slabs_after = unsafe { cache_slabs(&raw mut cache) };
+        assert_eq!(
+            vec![only_slab],
+            slabs_after,
+            "The `cache` should have the same slabs before and after"
+        );
+
+        let allocated_objects_after = unsafe { cache_allocated_addrs(&raw mut cache) };
+        assert_eq!(
+            vec![_slab_object1.object.addr()],
+            allocated_objects_after,
+            "The `cache` should have the same objects allocated before and after"
+        );
+
+        // Teardown
+        drop(_slab_object1);
     }
 
     #[test]
     fn allocate_from_empty_with_single_empty_multi_slots_slab() {
-        // Set up a [Cache] with single empty slab
+        // Create a `cache` containing a single empty slab that has multiple slots
         type T = TestObject;
         let mut cache = new_test_default::<T>();
+        let mut slab_man = SlabMan::new(cache.slab_layout);
 
-        let addrs = acquire_memory(cache.slab_layout, 1);
-        let only_slab = unsafe { Cache::grow(&raw mut cache, addrs[0].into()) }
-            .expect("Failed to grow `cache`");
-
+        let only_slab = slab_man.new_test_slab(&raw mut cache);
+        cache.slabs_empty = only_slab;
         assert!(
             unsafe { (*only_slab).total_slots > 1 },
             "Slab for this test should have a `total_slots` greater than one"
         );
 
-        // Allocated an object from the empty slab
+        // Exercise `allocate_from_empty` and verify the result
         let result = unsafe { Cache::allocate_from_empty(&raw mut cache) };
-        assert!(result.is_ok(), "Expected Ok but got {result:?}");
+        assert!(result.is_ok(), "The result should be Ok but got {result:?}");
 
         // Verify the allocated [SlabObject]
-        let object = result.unwrap();
+        let slab_object = result.unwrap();
         assert_eq!(
-            only_slab, object.source,
-            "`source` of the [SlabObject] should be `only_slab`",
-        );
-        assert_eq!(
-            unsafe { (*only_slab).slot0.0 },
-            object.object.addr(),
-            "`object` of the [SlabObject] should be the `slot0` of `only_slab`"
+            only_slab, slab_object.source,
+            "`source` of the allocated [SlabObject] should be the `only_slab`",
         );
         assert_eq!(
             &TestObject::default(),
-            object.get_ref(),
-            "The allocated object should have the default value"
+            slab_object.get_ref(),
+            "The object behind the allocated [SlabObject] should have the default value"
         );
 
-        // Verify `only_slab`
-        unsafe {
-            assert_slab_state_consistency(only_slab);
-            assert_eq!(
-                1,
-                (*only_slab).used_count,
-                "Incorrect `used_count` for `only_slab`"
-            );
-            assert_eq!(
-                1,
-                (*only_slab).used_bitmap[0],
-                "Incorrect `used_bitmap` for `only_slab`"
-            )
-        }
+        // Verify the `cache`
+        unsafe { verify_cache_invariants(&raw mut cache) };
 
-        // Verify `slabs_partial`
-        assert!(
-            !cache.slabs_partial.is_null(),
-            "`slabs_partial` should not be null"
-        );
+        let slabs_after = unsafe { cache_slabs(&raw mut cache) };
         assert_eq!(
-            1,
-            unsafe { size_of_list(cache.slabs_partial) },
-            "Incorrect size for `slabs_partial`"
+            vec![only_slab],
+            slabs_after,
+            "The `cache` should have the same slabs before and after"
         );
-        assert!(
-            unsafe { contains_node(cache.slabs_partial, only_slab) },
-            "`slabs_partial` should contain the `only_slab`"
+
+        let allocated_objects_after = unsafe { cache_allocated_addrs(&raw mut cache) };
+        assert_eq!(
+            vec![slab_object.object.addr()],
+            allocated_objects_after,
+            "The `cache` should only have the object behind the `slab_object` allocated"
         );
-        unsafe { assert_list_doubly_linked(cache.slabs_partial) };
 
-        // Verify `slabs_full` and `slabs_empty`
-        assert!(cache.slabs_full.is_null(), "`slabs_full` should be null");
-        assert!(cache.slabs_empty.is_null(), "`slabs_empty` should be null");
-
-        // Simple drop the [SlabObject].
-        // The Behavior of dropping is outside the scope of this test.
-        drop(object);
-        unsafe { release_memory(addrs, cache.slab_layout) };
+        // Teardown
+        drop(slab_object);
     }
 
     #[test]
     fn allocate_from_empty_with_single_empty_single_slot_slab() {
-        type T = TestObjectXL;
+        // Create a `cache` containing a single empty slab that has only one slot
+        type T = TestObject;
+        let slab_layout =
+            Layout::from_size_align(safe_slab_size::<T>(1), align_of::<SlabHeader<T>>())
+                .expect("Failed to create `slab_layout`");
+
         let mut cache = new_test_default::<T>();
-        let addrs = acquire_memory(cache.slab_layout, 1);
+        cache.slab_layout = slab_layout;
+        let mut slab_man = SlabMan::new(cache.slab_layout);
 
-        let only_slab = unsafe { Cache::grow(&raw mut cache, addrs[0].into()) }
-            .expect("Failed to grow `cache`");
-
+        let only_slab = slab_man.new_test_slab(&raw mut cache);
+        cache.slabs_empty = only_slab;
         assert_eq!(
             1,
             unsafe { (*only_slab).total_slots },
             "Slab for this test should have a `total_slots` of one"
         );
 
-        // Allocated an object from the empty slab
+        // Exercise `allocate_from_empty` and verify the result
         let result = unsafe { Cache::allocate_from_empty(&raw mut cache) };
-        assert!(result.is_ok(), "Expected Ok but got {result:?}");
+        assert!(result.is_ok(), "The result should be Ok but got {result:?}");
 
         // Verify the allocated [SlabObject]
-        let object = result.unwrap();
+        let slab_object = result.unwrap();
         assert_eq!(
-            only_slab, object.source,
-            "`source` of the [SlabObject] should be `only_slab`",
-        );
-        assert_eq!(
-            unsafe { (*only_slab).slot0.0 },
-            object.object.addr(),
-            "`object` of the [SlabObject] should be the `slot0` of `only_slab`"
+            only_slab, slab_object.source,
+            "`source` of the allocated [SlabObject] should be the `only_slab`",
         );
         assert_eq!(
-            &TestObjectXL::default(),
-            object.get_ref(),
-            "The allocated object should have the default value"
+            &TestObject::default(),
+            slab_object.get_ref(),
+            "The object behind the allocated [SlabObject] should have the default value"
         );
 
-        // Verify `only_slab`
-        unsafe {
-            assert_slab_state_consistency(only_slab);
-            assert_eq!(
-                1,
-                (*only_slab).used_count,
-                "Incorrect `used_count` for `only_slab`"
-            );
-            assert_eq!(
-                1,
-                (*only_slab).used_bitmap[0],
-                "Incorrect `used_bitmap` for `only_slab`"
-            )
-        }
+        // Verify the `cache`
+        unsafe { verify_cache_invariants(&raw mut cache) };
 
-        // Verify `slabs_partial` and `slabs_empty`
-        assert!(
-            cache.slabs_partial.is_null(),
-            "`slabs_partial` should be null"
-        );
-        assert!(cache.slabs_empty.is_null(), "`slabs_empty` should be null");
-
-        // Verify `slabs_full`
-        assert!(
-            !cache.slabs_full.is_null(),
-            "`slabs_full` should not be null"
-        );
+        let slabs_after = unsafe { cache_slabs(&raw mut cache) };
         assert_eq!(
-            1,
-            unsafe { size_of_list(cache.slabs_full) },
-            "Incorrect size for `slabs_full`"
+            vec![only_slab],
+            slabs_after,
+            "The `cache` should have the same slabs before and after"
         );
-        assert!(
-            unsafe { contains_node(cache.slabs_full, only_slab) },
-            "`slabs_full` should contain the `only_slab`"
-        );
-        unsafe { assert_list_doubly_linked(cache.slabs_full) };
 
-        // Simple drop the [SlabObject].
-        // The Behavior of dropping is outside the scope of this test.
-        drop(object);
-        unsafe { release_memory(addrs, cache.slab_layout) };
+        let allocated_objects_after = unsafe { cache_allocated_addrs(&raw mut cache) };
+        assert_eq!(
+            vec![slab_object.object.addr()],
+            allocated_objects_after,
+            "The `cache` should only have the object behind the [SlabObject] allocated"
+        );
+
+        // Teardown
+        drop(slab_object);
     }
 
     #[test]
     fn allocate_from_empty_with_empty_and_partial_multi_slots_slabs() {
+        // Create a `cache` containing one partial slab and two empty slabs
         type T = TestObject;
         let mut cache = new_test_default::<T>();
-        let addrs = acquire_memory(cache.slab_layout, 3);
+        let mut slab_man = SlabMan::new(cache.slab_layout);
 
-        // Manually craft a partial slab and assign it to `slabs_partial`
-        let slab0 = unsafe {
-            SlabHeader::new(
-                &raw mut cache,
-                Bytes(cache.slab_layout.size()),
-                addrs[0].into(),
-            )
+        let slab0 = slab_man.new_test_slab(&raw mut cache);
+        let slab1 = slab_man.new_test_slab(&raw mut cache);
+        unsafe {
+            (*slab0).next = slab1;
+            (*slab1).prev = slab0;
         }
-        .expect("Failed to craft `slab0`");
-        let slab0_object =
-            unsafe { SlabHeader::allocate_object(slab0) }.expect("Failed to allocate from `slab0`");
-        cache.slabs_partial = slab0;
+        cache.slabs_empty = slab0;
+
+        let slab2 = slab_man.new_test_slab(&raw mut cache);
+        let _slab_object1 = unsafe { SlabHeader::allocate_object(slab2) }
+            .expect("Failed to allocate object from `slab2`");
+        cache.slabs_partial = slab2;
 
         assert!(
-            unsafe { (*slab0).total_slots > 1 },
+            unsafe { (*slab2).total_slots > 1 },
             "Slab for this test should have a `total_slots` greater than one"
         );
 
-        // Add two more empty slabs to `cache` through `grow`
-        let slab1 =
-            unsafe { Cache::grow(&raw mut cache, addrs[1].into()) }.expect("Failed to get `slab1`");
-        let slab2 =
-            unsafe { Cache::grow(&raw mut cache, addrs[2].into()) }.expect("Failed to get `slab2`");
-
-        // Allocate an object through `allocate_from_empty`
+        // Exercise `allocate_from_empty` and verify the result
         let result = unsafe { Cache::allocate_from_empty(&raw mut cache) };
-        assert!(result.is_ok(), "Expected Ok but got {result:?}");
+        assert!(result.is_ok(), "The result should be Ok but got {result:?}");
 
-        // Verify the allocated object
-        let slab2_object = result.unwrap();
-        assert_eq!(
-            slab2, slab2_object.source,
-            "`source` of `slab2_object` should be `slab2`"
-        );
-        assert_eq!(
-            unsafe { (*slab2).slot0.0 },
-            slab2_object.object.addr(),
-            "`object` of `slab2_object` should be the `slot0` of `slab2`"
+        // Verify the allocated [SlabObject]
+        let slab_object = result.unwrap();
+        assert!(
+            slab_object.source == slab0 || slab_object.source == slab1,
+            "`source` of the allocated [SlabObject] should be either `slab0` or `slab1`"
         );
         assert_eq!(
             &TestObject::default(),
-            slab2_object.get_ref(),
-            "The allocated object behind `slab2_object` should have the default value"
+            slab_object.get_ref(),
+            "The object behind the allocated [SlabObject] should have the default value"
         );
 
-        // Verify `slab0`
-        unsafe {
-            assert_slab_state_consistency(slab0);
-            assert_eq!(1, (*slab0).used_count, "Incorrect `used_count` for `slab0`");
-            assert_eq!(
-                1,
-                (*slab0).used_bitmap[0],
-                "Incorrect `used_bitmap` for `slab0`"
-            );
-        }
+        // Verify the `cache`
+        unsafe { verify_cache_invariants(&raw mut cache) };
 
-        // Verify `slab1`
-        unsafe {
-            assert_slab_state_consistency(slab1);
-            assert_eq!(0, (*slab1).used_count, "Incorrect `used_count` for `slab1`");
-        }
-
-        // Verify `slab2`
-        unsafe {
-            assert_slab_state_consistency(slab2);
-            assert_eq!(1, (*slab2).used_count, "Incorrect `used_count` for `slab2`");
-            assert_eq!(
-                1,
-                (*slab2).used_bitmap[0],
-                "Incorrect `used_bitmap` for `slab2`"
-            )
-        }
-
-        // Verify `slabs_full`
-        assert!(cache.slabs_full.is_null(), "`slab_full` should be null");
-
-        // Verify `slabs_empty`
-        assert!(
-            !cache.slabs_empty.is_null(),
-            "`slab_empty` should not be null"
-        );
+        let mut slabs_before = vec![slab0, slab1, slab2];
+        slabs_before.sort();
+        let mut slabs_after = unsafe { cache_slabs(&raw mut cache) };
+        slabs_after.sort();
         assert_eq!(
-            1,
-            unsafe { size_of_list(cache.slabs_empty) },
-            "Incorrect size for `slabs_empty`"
+            slabs_after, slabs_before,
+            "The `cache` should have the same slabs before and after"
         );
-        assert!(
-            unsafe { contains_node(cache.slabs_empty, slab1) },
-            "`slabs_empty` should contain `slab1`"
-        );
-        unsafe { assert_list_doubly_linked(cache.slabs_empty) };
 
-        // Verify the `slabs_partial` of `cache`
-        assert!(
-            !cache.slabs_partial.is_null(),
-            "`slabs_partial` should not be null"
-        );
+        let mut expected_allocated_objects =
+            vec![slab_object.object.addr(), _slab_object1.object.addr()];
+        expected_allocated_objects.sort();
+        let mut actual_allocated_objects = unsafe { cache_allocated_addrs(&raw mut cache) };
+        actual_allocated_objects.sort();
         assert_eq!(
-            2,
-            unsafe { size_of_list(cache.slabs_partial) },
-            "Incorrect size for `slabs_partial`"
+            expected_allocated_objects, actual_allocated_objects,
+            "The `cache` should have the expected objects allocated"
         );
-        assert!(
-            unsafe { contains_node(cache.slabs_partial, slab0) },
-            "`slabs_partial` should contain `slab0`"
-        );
-        assert!(
-            unsafe { contains_node(cache.slabs_partial, slab2) },
-            "`slabs_partial` should contain `slab2`"
-        );
-        unsafe { assert_list_doubly_linked(cache.slabs_partial) };
 
-        // Simple drop the [SlabObject]s.
-        // The Behavior of dropping is not the scope of this test.
-        drop(slab0_object);
-        drop(slab2_object);
-        unsafe { release_memory(addrs, cache.slab_layout) }
+        // Teardown
+        drop(slab_object);
+        drop(_slab_object1);
     }
 
     #[test]
@@ -1252,567 +1093,445 @@ mod cache_tests {
 
     #[test]
     fn allocate_from_partial_when_no_partial_slabs_return_null_err() {
-        // Craft a [Cache] that has a full slab and an empty slab.
-        type T = TestObjectXL;
-        let mut cache = new_test_default::<T>();
-        let addrs = acquire_memory(cache.slab_layout, 2);
+        // Create a `cache` that contains a full slab and an empty slab.
+        type T = TestObject;
+        let slab_layout =
+            Layout::from_size_align(safe_slab_size::<T>(1), align_of::<SlabHeader<T>>())
+                .expect("Failed to create `slab_layout`");
 
-        let empty_slab = unsafe {
-            SlabHeader::new(
-                &raw mut cache,
-                Bytes(cache.slab_layout.size()),
-                addrs[0].into(),
-            )
-        }
-        .expect("Failed to create `empty_slab`");
+        let mut cache = new_test_default::<T>();
+        cache.slab_layout = slab_layout;
+        let mut slab_man = SlabMan::new(cache.slab_layout);
+
+        let empty_slab = slab_man.new_test_slab(&raw mut cache);
         cache.slabs_empty = empty_slab;
 
-        let full_slab = unsafe {
-            SlabHeader::new(
-                &raw mut cache,
-                Bytes(cache.slab_layout.size()),
-                addrs[1].into(),
-            )
-        }
-        .expect("Failed to create `full_slab`");
-        let _object = unsafe { SlabHeader::allocate_object(full_slab) }
+        let full_slab = slab_man.new_test_slab(&raw mut cache);
+        let _slab_object1 = unsafe { SlabHeader::allocate_object(full_slab) }
             .expect("Failed to allocate object from `full_slab`");
-        assert!(
-            unsafe { SlabHeader::is_full(full_slab) },
-            "`full_slab` should be full; otherwise, this test is incorrect"
-        );
         cache.slabs_full = full_slab;
+
+        assert_eq!(
+            1,
+            unsafe { (*full_slab).total_slots },
+            "Slab for this test should have a `total_slots` of one"
+        );
 
         // Exercise `allocate_from_partial` and verify the returned result
         let result = unsafe { Cache::allocate_from_partial(&raw mut cache) };
         assert!(
             result.is_err(),
-            "Expected Err(AllocateFromNullSlab) but got {result:?}"
+            "The result should be Err(AllocateFromNullSlab) but got {result:?}"
         );
         let err = result.unwrap_err();
         assert!(
             matches!(err, AllocateFromNullSlab),
-            "Expected `AllocateFromNullSlab` but got {err:?}"
+            "The error should be {:?} but got {err:?}",
+            AllocateFromNullSlab,
+        );
+
+        // Verify the `cache`
+        unsafe { verify_cache_invariants(&raw mut cache) };
+
+        let mut slab_before = vec![empty_slab, full_slab];
+        slab_before.sort();
+        let mut slab_after = unsafe { cache_slabs(&raw mut cache) };
+        slab_after.sort();
+        assert_eq!(
+            slab_before, slab_after,
+            "The `cache` should have the same slabs before and after"
+        );
+
+        let allocated_objects_after = unsafe { cache_allocated_addrs(&raw mut cache) };
+        assert_eq!(
+            vec![_slab_object1.object.addr()],
+            allocated_objects_after,
+            "The `cache` should only have the object behind the `slab_object` allocated"
         );
 
         // Teardown
-        drop(_object);
-        unsafe { release_memory(addrs, cache.slab_layout) }
+        drop(_slab_object1);
     }
 
     #[test]
     fn allocate_from_partial_when_single_partial_slab_with_multi_free_slots() {
-        // Craft a [Cache] with single partial slab which has multiple free slots remaining
+        // Create a `cache` containing a single partial slab, which has multiple free slots remaining
         type T = TestObject;
+        let slab_layout =
+            Layout::from_size_align(safe_slab_size::<T>(4), align_of::<SlabHeader<T>>())
+                .expect("Failed to create `slab_layout`");
+
         let mut cache = new_test_default::<T>();
+        cache.slab_layout = slab_layout;
+        let mut slab_man = SlabMan::new(cache.slab_layout);
 
-        let addrs = acquire_memory(cache.slab_layout, 1);
-        let only_slab = unsafe {
-            SlabHeader::new(
-                &raw mut cache,
-                Bytes(cache.slab_layout.size()),
-                addrs[0].into(),
-            )
-        }
-        .expect("Failed to create `only_slab`");
-
-        let _object = unsafe { SlabHeader::allocate_object(only_slab) }
-            .expect("Failed to allocate `_object` from `only_slab`");
-        let _object2 = unsafe { SlabHeader::allocate_object(only_slab) }
-            .expect("Failed to allocate `_object2` from `only_slab`");
+        let only_slab = slab_man.new_test_slab(&raw mut cache);
+        let _slab_object1 = unsafe { SlabHeader::allocate_object(only_slab) }
+            .expect("Failed to allocate `_slab_object1` from `only_slab`");
+        let _slab_object2 = unsafe { SlabHeader::allocate_object(only_slab) }
+            .expect("Failed to allocate `_slab_object2` from `only_slab`");
 
         let free_slots = unsafe { (*only_slab).total_slots - (*only_slab).used_count };
         assert!(
-            free_slots > 1,
-            "`only_slab` should have multiple free slots remaining; otherwise, this test is incorrect"
-        );
+                free_slots > 1,
+                "`only_slab` should have multiple free slots remaining; otherwise, this test is incorrect"
+            );
         cache.slabs_partial = only_slab;
 
-        // Exercise `allocate_from_partial`
+        // Exercise `allocate_from_partial` and verify the result
         let result = unsafe { Cache::allocate_from_partial(&raw mut cache) };
-        assert!(
-            result.is_ok(),
-            "Incorrect allocation result: expected Ok but got {result:?}"
-        );
+        assert!(result.is_ok(), "The result should be Ok but got {result:?}");
 
-        // Verify the returned object
-        let object = result.unwrap();
+        // Verify the allocated [SlabObject]
+        let slab_object = result.unwrap();
         assert_eq!(
-            only_slab, object.source,
-            "Incorrect `source` for the allocated [SlabObject]"
-        );
-        let allocated_object_addrs = unsafe { allocated_object_addrs(only_slab) };
-        assert_eq!(
-            3,
-            allocated_object_addrs.len(),
-            "Incorrect number of allocated objects from the `only_slab`"
-        );
-        assert!(
-            allocated_object_addrs.contains(&object.object.addr()),
-            "The returned object doesn't match any allocated objects"
+            only_slab, slab_object.source,
+            "`source` of the allocated [SlabObject] should be the `only_slab`"
         );
         assert_eq!(
             &T::default(),
-            object.get_ref(),
-            "The allocated object should have the default value"
+            slab_object.get_ref(),
+            "The object behind the allocated [SlabObject] should have the default value"
         );
 
-        // Verify `only_slab`
-        unsafe { assert_slab_state_consistency(only_slab) };
+        // Verify the `cache`
+        unsafe { verify_cache_invariants(&raw mut cache) };
+
+        let slabs_after = unsafe { cache_slabs(&raw mut cache) };
         assert_eq!(
-            3,
-            unsafe { (*only_slab).used_count },
-            "Incorrect `used_count` for the `only_slab`"
+            vec![only_slab],
+            slabs_after,
+            "The `cache` should have the same slabs before and after"
         );
 
-        // Verify `slabs_full` and `slabs_empty`
-        assert_eq!(null_mut(), cache.slabs_full, "`slabs_full` should be null");
+        let mut expected_allocated_objects = vec![
+            slab_object.object.addr(),
+            _slab_object1.object.addr(),
+            _slab_object2.object.addr(),
+        ];
+        expected_allocated_objects.sort();
+        let mut allocated_objects_after = unsafe { cache_allocated_addrs(&raw mut cache) };
+        allocated_objects_after.sort();
         assert_eq!(
-            null_mut(),
-            cache.slabs_empty,
-            "`slabs_empty` should be null"
+            expected_allocated_objects, allocated_objects_after,
+            "The `cache` should have the expected objects allocated"
         );
-
-        // Verify `slabs_partial`
-        assert_eq!(
-            only_slab, cache.slabs_partial,
-            "`slabs_partial` should be the `only_slab`"
-        );
-        assert_eq!(
-            1,
-            unsafe { size_of_list(cache.slabs_partial) },
-            "`slabs_partial` should have a size of one"
-        );
-        unsafe { assert_list_doubly_linked(cache.slabs_partial) };
 
         // Teardown
-        drop(object);
-        drop(_object);
-        drop(_object2);
-        unsafe { release_memory(addrs, cache.slab_layout) }
+        drop(slab_object);
+        drop(_slab_object1);
+        drop(_slab_object2);
     }
 
     #[test]
     fn allocate_from_partial_when_single_partial_slab_with_single_free_slot() {
-        // Craft a [Cache] with a single partial slab with single free slot remaining
-        type T = u8;
-        let slab_size = size_of::<SlabHeader<T>>() + 2 * size_of::<T>();
-        let layout = Layout::from_size_align(slab_size, align_of::<SlabHeader<T>>())
-            .expect("Failed to create layout");
+        // Create a `cache` containing a single partial slab, which has a single free slot remaining
+        type T = TestObject;
+        let slab_size = safe_slab_size::<T>(2);
+        let slab_layout = Layout::from_size_align(slab_size, align_of::<SlabHeader<T>>())
+            .expect("Failed to create `slab_layout`");
 
         let mut cache = new_test_default::<T>();
-        cache.slab_layout = layout;
-        let addrs = acquire_memory(cache.slab_layout, 1);
+        cache.slab_layout = slab_layout;
+        let mut slab_man = SlabMan::new(cache.slab_layout);
 
-        let only_slab =
-            unsafe { SlabHeader::new(&raw mut cache, Bytes(layout.size()), addrs[0].into()) }
-                .expect("Failed to create `only_slab`");
+        let only_slab = slab_man.new_test_slab(&raw mut cache);
+        let slab_object1 = unsafe { SlabHeader::allocate_object(only_slab) }
+            .expect("Failed to allocate object from the `only_slab`");
+        cache.slabs_partial = only_slab;
+
         assert_eq!(
             2,
             unsafe { (*only_slab).total_slots },
             "Test slab should have a `total_slots` of two; otherwise, this test is incorrect"
         );
-        let _object = unsafe { SlabHeader::allocate_object(only_slab) }
-            .expect("Failed to allocate `_object`");
-        cache.slabs_partial = only_slab;
 
-        // Exercise `allocate_from_partial`
+        // Exercise `allocate_from_partial` and verify the result
         let result = unsafe { Cache::allocate_from_partial(&raw mut cache) };
-        assert!(
-            result.is_ok(),
-            "Incorrect allocation result: expected Ok but got {result:?}"
-        );
+        assert!(result.is_ok(), "The result should be Ok but got {result:?}");
 
-        // Verify the returned object
-        let object = result.unwrap();
+        // Verify the allocated [SlabObject]
+        let slab_object = result.unwrap();
         assert_eq!(
-            only_slab, object.source,
-            "Incorrect `source` for the allocated [SlabObject]"
-        );
-        let allocated_object_addrs = unsafe { allocated_object_addrs(only_slab) };
-        assert_eq!(
-            2,
-            allocated_object_addrs.len(),
-            "Incorrect number of allocated objects from the `only_slab`"
-        );
-        assert!(
-            allocated_object_addrs.contains(&object.object.addr()),
-            "The allocated object doesn't match any allocated objects"
+            only_slab, slab_object.source,
+            "`source` of the allocated [SlabObject] should be the `only_slab`"
         );
         assert_eq!(
             &T::default(),
-            object.get_ref(),
-            "The allocated object should have the default value"
+            slab_object.get_ref(),
+            "The object behind the [SlabObject] should have the default value"
         );
 
-        // Verify `slabs_empty` and `slabs_partial`
+        // Verify the `cache`
+        unsafe { verify_cache_invariants(&raw mut cache) };
+
+        let slabs_after = unsafe { cache_slabs(&raw mut cache) };
         assert_eq!(
-            null_mut(),
-            cache.slabs_empty,
-            "`slabs_empty` should be null"
-        );
-        assert_eq!(
-            null_mut(),
-            cache.slabs_partial,
-            "`slabs_partial` should be null"
+            vec![only_slab],
+            slabs_after,
+            "The `cache` should have the same slabs before and after"
         );
 
-        // Verify `slabs_full`
+        let mut expected_allocated_objects =
+            vec![slab_object.object.addr(), slab_object1.object.addr()];
+        expected_allocated_objects.sort();
+        let mut allocated_objects_after = unsafe { cache_allocated_addrs(&raw mut cache) };
+        allocated_objects_after.sort();
         assert_eq!(
-            only_slab, cache.slabs_full,
-            "`slabs_full` should be the `only_slab`"
+            expected_allocated_objects, allocated_objects_after,
+            "The `cache` should have the expected objects allocated"
         );
-        assert_eq!(
-            1,
-            unsafe { size_of_list(cache.slabs_full) },
-            "`slabs_full` should have a size of one"
-        );
-        unsafe { assert_list_doubly_linked(cache.slabs_full) };
 
         // Teardown
-        drop(object);
-        drop(_object);
-        unsafe { release_memory(addrs, cache.slab_layout) }
+        drop(slab_object);
+        drop(slab_object1);
     }
 
     #[test]
     fn allocate_from_partial_when_multi_partial_slabs_with_single_free_slot() {
-        // Craft a [Cache] consists of a full slab, an empty slab and two partial slabs.
+        // Create a `cache` containing a full slab, an empty slab and two partial slabs.
         // Each partial slab has only one free slot remaining.
-        type T = u8;
-        let slab_size = size_of::<SlabHeader<T>>() + 2 * size_of::<T>();
-        let layout = Layout::from_size_align(slab_size, align_of::<SlabHeader<T>>())
-            .expect("Failed to create layout");
+        type T = TestObject;
+        let slab_size = safe_slab_size::<T>(2);
+        let slab_layout = Layout::from_size_align(slab_size, align_of::<SlabHeader<T>>())
+            .expect("Failed to create `slab_layout`");
 
         let mut cache = new_test_default::<T>();
-        cache.slab_layout = layout;
-        let addrs = acquire_memory(cache.slab_layout, 4);
+        cache.slab_layout = slab_layout;
+        let mut slab_man = SlabMan::new(cache.slab_layout);
 
-        let empty_slab =
-            unsafe { SlabHeader::new(&raw mut cache, Bytes(layout.size()), addrs[0].into()) }
-                .expect("Failed to create `empty_slab`");
+        let empty_slab = slab_man.new_test_slab(&raw mut cache);
+        cache.slabs_empty = empty_slab;
+
         assert_eq!(
             2,
             unsafe { (*empty_slab).total_slots },
             "Test slab should have a `total_slots` of two; otherwise, this test is incorrect"
         );
-        cache.slabs_empty = empty_slab;
 
-        let partial_slab1 =
-            unsafe { SlabHeader::new(&raw mut cache, Bytes(layout.size()), addrs[1].into()) }
-                .expect("Failed to create `partial_slab1`");
-        let _object1 = unsafe { SlabHeader::allocate_object(partial_slab1) }
+        let partial_slab1 = slab_man.new_test_slab(&raw mut cache);
+        let _slab_object1 = unsafe { SlabHeader::allocate_object(partial_slab1) }
             .expect("Failed to allocate object from `partial_slab1`");
-
-        let partial_slab2 =
-            unsafe { SlabHeader::new(&raw mut cache, Bytes(layout.size()), addrs[2].into()) }
-                .expect("Failed to create `partial_slab2`");
-        let _object2 = unsafe { SlabHeader::allocate_object(partial_slab2) }
+        let partial_slab2 = slab_man.new_test_slab(&raw mut cache);
+        let _slab_object2 = unsafe { SlabHeader::allocate_object(partial_slab2) }
             .expect("Failed to allocate object from `partial_slab2`");
-
         unsafe {
             (*partial_slab1).next = partial_slab2;
             (*partial_slab2).prev = partial_slab1;
         }
         cache.slabs_partial = partial_slab1;
 
-        let full_slab =
-            unsafe { SlabHeader::new(&raw mut cache, Bytes(layout.size()), addrs[3].into()) }
-                .expect("Failed to create `full_slab`");
-        let _object3 = unsafe { SlabHeader::allocate_object(full_slab) }
+        let full_slab = slab_man.new_test_slab(&raw mut cache);
+        let _slab_object3 = unsafe { SlabHeader::allocate_object(full_slab) }
             .expect("Failed to allocate object from `full_slab`");
-        let _object4 = unsafe { SlabHeader::allocate_object(full_slab) }
+        let _slab_object4 = unsafe { SlabHeader::allocate_object(full_slab) }
             .expect("Failed to allocate another object from `full_slab`");
         cache.slabs_full = full_slab;
 
-        // Exercise `allocate_from_partial`
+        // Exercise `allocate_from_partial` and verify the result
         let result = unsafe { Cache::allocate_from_partial(&raw mut cache) };
-        assert!(
-            result.is_ok(),
-            "Incorrect allocation result: expected Ok but got {result:?}"
-        );
+        assert!(result.is_ok(), "The result should be Ok but got {result:?}");
 
-        // Verify the returned object
-        let object = result.unwrap();
+        // Verify the allocated [SlabObject]
+        let slab_object = result.unwrap();
         assert!(
-            object.source == partial_slab1 || object.source == partial_slab2,
-            "Incorrect `source` for the allocated [SlabObject]: it should be either `partial_slab1` or `partial_slab2`"
-        );
-        let mut allocated_object_addrs = Vec::new();
-        unsafe {
-            allocated_object_addrs.append(&mut test_utils::allocated_object_addrs(full_slab));
-            allocated_object_addrs.append(&mut test_utils::allocated_object_addrs(partial_slab1));
-            allocated_object_addrs.append(&mut test_utils::allocated_object_addrs(partial_slab2));
-            allocated_object_addrs.append(&mut test_utils::allocated_object_addrs(empty_slab));
-        }
-        assert_eq!(
-            5,
-            allocated_object_addrs.len(),
-            "Incorrect number of the total allocated objects from `cache`"
-        );
-        assert!(
-            allocated_object_addrs.contains(&object.object.addr()),
-            "The allocated object doesn't match any allocated objects"
-        );
+                slab_object.source == partial_slab1 || slab_object.source == partial_slab2,
+                "`source` of the allocated [SlabObject] should be either `partial_slab1` or `partial_slab2`"
+            );
         assert_eq!(
             &T::default(),
-            object.get_ref(),
+            slab_object.get_ref(),
             "The allocated object should have the default value"
         );
 
-        // Verify `slabs_empty`
-        assert_eq!(
-            empty_slab, cache.slabs_empty,
-            "`slabs_empty` should be the `empty_slab`"
-        );
-        assert_eq!(
-            1,
-            unsafe { size_of_list(cache.slabs_empty) },
-            "`slabs_empty` should have a size of one"
-        );
-        unsafe { assert_list_doubly_linked(cache.slabs_empty) };
+        // Verify the `cache`
+        unsafe { verify_cache_invariants(&raw mut cache) };
 
-        // Verify `slabs_partial`
-        assert!(
-            cache.slabs_partial == partial_slab1 || cache.slabs_partial == partial_slab2,
-            "`slabs_partial` should be either `partial_slab1` and `partial_slab2`"
-        );
-        assert_ne!(
-            cache.slabs_partial, object.source,
-            "`slabs_partial` should not be the `source` of the allocated [SlabObject]"
-        );
+        let mut slabs_before = vec![empty_slab, partial_slab1, partial_slab2, full_slab];
+        slabs_before.sort();
+        let mut slabs_after = unsafe { cache_slabs(&raw mut cache) };
+        slabs_after.sort();
         assert_eq!(
-            1,
-            unsafe { size_of_list(cache.slabs_partial) },
-            "`slabs_partial` should have a size of one"
+            slabs_before, slabs_after,
+            "The `cache` should have the same slabs before and after"
         );
-        unsafe { assert_list_doubly_linked(cache.slabs_partial) };
 
-        // Verify `slabs_full`
+        let mut expected_allocated_objects = vec![
+            slab_object.object.addr(),
+            _slab_object1.object.addr(),
+            _slab_object2.object.addr(),
+            _slab_object3.object.addr(),
+            _slab_object4.object.addr(),
+        ];
+        expected_allocated_objects.sort();
+        let mut actual_allocated_objects = unsafe { cache_allocated_addrs(&raw mut cache) };
+        actual_allocated_objects.sort();
         assert_eq!(
-            2,
-            unsafe { size_of_list(cache.slabs_full) },
-            "`slabs_full` should have a size of two"
+            expected_allocated_objects, actual_allocated_objects,
+            "The `cache` should have the expected objects allocated"
         );
-        assert!(
-            unsafe { contains_node(cache.slabs_full, full_slab) },
-            "`slabs_full` should contain the `full_slab`"
-        );
-        assert!(
-            unsafe { contains_node(cache.slabs_full, object.source) },
-            "`slabs_full` should contain the `source` of the allocated [SlabObject]"
-        );
-        unsafe { assert_list_doubly_linked(cache.slabs_full) };
 
         // Teardown
-        drop(object);
-        drop(_object1);
-        drop(_object2);
-        drop(_object3);
-        drop(_object4);
-        unsafe { release_memory(addrs, cache.slab_layout) }
+        drop(slab_object);
+        drop(_slab_object1);
+        drop(_slab_object2);
+        drop(_slab_object3);
+        drop(_slab_object4);
     }
 
     #[test]
     fn grow_succeeds_update_slabs_empty() {
+        // Create a `cache` without any slabs
         type T = u64;
         let mut cache = new_test_default::<T>();
 
         let addrs = acquire_memory(cache.slab_layout, 10);
         let mut new_slabs = Vec::new();
 
-        // Grow the first empty slab
+        // The first `grow`
         {
-            let result = unsafe { Cache::grow(&raw mut cache, addrs[0].into()) };
+            // Verify the result
+            let result = unsafe { Cache::grow(&raw mut cache, NonNull::new_unchecked(addrs[0])) };
             assert!(
                 result.is_ok(),
-                "Failed at first grow: expected Ok but got {result:?}"
+                "The result of the first grow should be Ok but got {result:?}"
             );
-
             let slab0 = result.unwrap();
             new_slabs.push(slab0);
 
-            // Verify the returned header
+            // Verify the `cache`
+            unsafe { verify_cache_invariants(&raw mut cache) };
+            new_slabs.sort();
+            let mut slabs_after = unsafe { cache_slabs(&raw mut cache) };
+            slabs_after.sort();
             assert_eq!(
-                addrs[0].addr(),
-                slab0.addr(),
-                "Failed at first grow: Incorrect address of `slab0`"
-            );
-            assert_slab_empty(slab0);
-
-            // Verify `slabs_full` and `slabs_partial`
-            assert!(
-                cache.slabs_full.is_null(),
-                "Failed at first grow: `slabs_full` should be null"
-            );
-            assert!(
-                cache.slabs_partial.is_null(),
-                "Failed at first grow: `slabs_partial` should be null"
-            );
-
-            // Verify `slabs_empty`
-            assert!(
-                !cache.slabs_empty.is_null(),
-                "Failed at first grow: `slabs_empty` should not be null"
+                new_slabs, slabs_after,
+                "`cache` should only contain the first grown slab"
             );
             assert_eq!(
-                1,
-                unsafe { size_of_list(cache.slabs_empty) },
-                "Failed at first grow: Incorrect size for `slabs_empty`"
-            );
-            assert!(
-                unsafe { contains_node(cache.slabs_empty, slab0) },
-                "Failed at first grow: `slabs_empty` should contain `slab0`"
-            );
-            unsafe { assert_list_doubly_linked(cache.slabs_empty) };
+                0,
+                unsafe { cache_allocated_addrs(&raw mut cache).len() },
+                "`cache` should have no object allocated"
+            )
         }
 
-        // Grow the second empty slab
+        // The second `grow`
         {
-            let result = unsafe { Cache::grow(&raw mut cache, addrs[1].into()) };
+            // Verify the result
+            let result = unsafe { Cache::grow(&raw mut cache, NonNull::new_unchecked(addrs[1])) };
             assert!(
                 result.is_ok(),
-                "Failed at second grow: expected Ok but got {result:?}"
+                "The result of the second grow should be Ok but got {result:?}"
             );
-
             let slab1 = result.unwrap();
             new_slabs.push(slab1);
 
-            // Verify the returned header
+            // Verify the `cache`
+            unsafe { verify_cache_invariants(&raw mut cache) };
+            new_slabs.sort();
+            let mut slabs_after = unsafe { cache_slabs(&raw mut cache) };
+            slabs_after.sort();
             assert_eq!(
-                addrs[1].addr(),
-                slab1.addr(),
-                "Failed at second grow: Incorrect address of `slab1`"
-            );
-            assert_slab_empty(slab1);
-
-            // Verify `slabs_full` and `slabs_partial`
-            assert!(
-                cache.slabs_full.is_null(),
-                "Failed at second grow: `slabs_full` should be null"
-            );
-            assert!(
-                cache.slabs_partial.is_null(),
-                "Failed at second grow: `slabs_partial` should be null"
-            );
-
-            // Verify `slabs_empty`
-            assert!(
-                !cache.slabs_empty.is_null(),
-                "Failed at second grow: `slabs_empty` should not be null"
+                new_slabs, slabs_after,
+                "`cache` should only contain the first two grown slabs"
             );
             assert_eq!(
-                2,
-                unsafe { size_of_list(cache.slabs_empty) },
-                "Failed at second grow: Incorrect size for `slabs_empty`"
-            );
-            assert!(
-                unsafe { contains_node(cache.slabs_empty, new_slabs[0],) },
-                "Failed at second grow: `slabs_empty` should contain `slab0`"
-            );
-            assert!(
-                unsafe { contains_node(cache.slabs_empty, new_slabs[1],) },
-                "Failed at second grow: `slabs_empty` should contain `slab1`"
-            );
-            unsafe { assert_list_doubly_linked(cache.slabs_empty) };
+                0,
+                unsafe { cache_allocated_addrs(&raw mut cache).len() },
+                "`cache` should have no object allocated"
+            )
         }
 
-        // Grow the remaining slabs
+        // The remaining `grow`s
         {
             for i in 2..addrs.len() {
-                let result = unsafe { Cache::grow(&raw mut cache, addrs[i].into()) };
+                let result =
+                    unsafe { Cache::grow(&raw mut cache, NonNull::new_unchecked(addrs[i])) };
                 assert!(
                     result.is_ok(),
-                    "Failed at other grows: expected Ok but got {result:?}"
+                    "The result of each remaining `grow` should be Ok but got {result:?}"
                 );
                 let slab = result.unwrap();
                 new_slabs.push(slab);
-
-                // Verify the returned header
-                assert_eq!(
-                    addrs[i].addr(),
-                    slab.addr(),
-                    "Failed at other grows: Incorrect address of `slab{i}`"
-                );
-                assert_slab_empty(slab);
             }
 
-            // Verify `slabs_full` and `slabs_partial`
-            assert!(
-                cache.slabs_full.is_null(),
-                "Failed at other grows: `slabs_full` should be null"
-            );
-            assert!(
-                cache.slabs_partial.is_null(),
-                "Failed at other grows: `slabs_partial` should be null"
-            );
-
-            // Verify `slabs_empty`
-            assert!(
-                !cache.slabs_empty.is_null(),
-                "Failed at other grows: `slabs_empty` should not be null"
+            // Verify the `cache`
+            unsafe { verify_cache_invariants(&raw mut cache) };
+            new_slabs.sort();
+            let mut slabs_after = unsafe { cache_slabs(&raw mut cache) };
+            slabs_after.sort();
+            assert_eq!(
+                new_slabs, slabs_after,
+                "`cache` should only contain all the grown empty slabs"
             );
             assert_eq!(
-                addrs.len(),
-                unsafe { size_of_list(cache.slabs_empty) },
-                "Failed at other grows: Incorrect size for `slabs_empty`"
-            );
-            for i in 0..new_slabs.len() {
-                assert!(
-                    unsafe { contains_node(cache.slabs_empty, new_slabs[i]) },
-                    "Failed at other grows: `slabs_empty` should contain `slab{i}`"
-                )
-            }
-            unsafe { assert_list_doubly_linked(cache.slabs_empty) };
+                0,
+                unsafe { cache_allocated_addrs(&raw mut cache).len() },
+                "`cache` should have no object allocated"
+            )
         }
 
+        // Teardown
         drop(new_slabs);
-        unsafe { release_memory(addrs, cache.slab_layout) }
+        unsafe { release_memory(&addrs, cache.slab_layout) }
     }
 
     #[test]
     fn grow_with_insufficient_size_return_size_err() {
+        // Create a `cache` without any slabs
         type T = u64;
+        let small_layout =
+            Layout::from_size_align(size_of::<SlabHeader<T>>(), align_of::<SlabHeader<u64>>())
+                .unwrap();
+
         let mut cache = new_test_default::<T>();
-        {
-            let small_layout =
-                Layout::from_size_align(size_of::<SlabHeader<T>>(), align_of::<SlabHeader<u64>>())
-                    .unwrap();
-            cache.slab_layout = small_layout;
-        }
+        cache.slab_layout = small_layout;
         let addrs = acquire_memory(cache.slab_layout, 1);
 
-        let result = unsafe { Cache::grow(&raw mut cache, addrs[0].into()) };
-        let result_str = format!("{:?}", result);
+        // Exercise `grow` and verify the result
+        let result = unsafe { Cache::grow(&raw mut cache, NonNull::new_unchecked(addrs[0])) };
         assert!(
-            result.is_err_and(|err| matches!(err, SlabTooSmall)),
-            "Expected Err({SlabTooSmall:?}) but got {result_str}."
+            result.is_err(),
+            "The result should be Err(SlabTooSmall) but got {result:?}"
         );
-        assert!(cache.slabs_full.is_null());
-        assert!(cache.slabs_partial.is_null());
-        assert!(cache.slabs_empty.is_null());
+        let err = result.unwrap_err();
+        assert!(
+            matches!(err, SlabTooSmall),
+            "The error should be {:?} but got {err:?}",
+            SlabTooSmall,
+        );
 
-        unsafe { release_memory(addrs, cache.slab_layout) }
+        // No validation of the `cache` because it is ill-formed from the beginning
+
+        // Teardown
+        unsafe { release_memory(&addrs, cache.slab_layout) }
     }
 
     #[test]
     fn grow_with_wrong_align_return_align_err() {
+        // Create a `cache` without any slabs
         type T = u64;
         let mut cache = new_test_default::<T>();
-
         let addrs = acquire_memory(cache.slab_layout, 1);
 
-        let result = unsafe { Cache::grow(&raw mut cache, Address(addrs[0].addr() + 1)) };
-        let result_str = format!("{:?}", result);
+        // Exercise `grow` and verify the result
+        let result =
+            unsafe { Cache::grow(&raw mut cache, NonNull::new_unchecked(addrs[0].add(1))) };
         assert!(
-            result.is_err_and(|err| matches!(err, SlabNotAligned)),
-            "Expected Err({SlabNotAligned:?}) but got {result_str}."
+            result.is_err(),
+            "The result should be Err(SlabNotAligned) but got {result:?}"
         );
-        assert!(cache.slabs_full.is_null());
-        assert!(cache.slabs_partial.is_null());
-        assert!(cache.slabs_empty.is_null());
+        let err = result.unwrap_err();
+        assert!(
+            matches!(err, SlabNotAligned),
+            "The error should be {:?} but got {err:?}",
+            SlabNotAligned,
+        );
 
-        unsafe { release_memory(addrs, cache.slab_layout) }
+        // No validation of the `cache` because it is ill-formed from the beginning
+
+        // Teardown
+        unsafe { release_memory(&addrs, cache.slab_layout) }
     }
 }
 
@@ -1821,323 +1540,286 @@ mod header_tests {
     extern crate alloc;
 
     use super::*;
+    use crate::mem::slab::test_utils::{
+        safe_slab_size, verify_slab_invariants, SlabMan, TestObject,
+    };
+    use alloc::format;
+    use core::any::type_name;
 
-    mod object_ignorance {
-        use super::*;
-        use core::any::type_name;
+    #[test]
+    fn test_compute_slot0_offset() {
+        let expected: ByteSize = 5;
+        let addr0: usize = 0;
+        let header_size: ByteSize = 5;
+        assert_compute_slot0_offset::<u8>(expected, addr0, header_size);
 
-        #[test]
-        fn test_compute_slot0_offset() {
-            let expected = Bytes(5);
-            let addr0 = Address(0x0);
-            let header_size = Bytes(5);
-            assert_compute_slot0_offset::<u8>(expected, addr0, header_size);
+        let expected: ByteSize = 23;
+        let addr0: usize = 0x8000_fff1;
+        let header_size: ByteSize = 16;
+        assert_compute_slot0_offset::<u64>(expected, addr0, header_size);
 
-            let expected = Bytes(23);
-            let addr0 = Address(0x8000_fff1);
-            let header_size = Bytes(16);
-            assert_compute_slot0_offset::<u64>(expected, addr0, header_size);
+        let expected: ByteSize = 31;
+        let addr0: usize = 0x8000_fff1;
+        let header_size: ByteSize = 22;
+        assert_compute_slot0_offset::<u128>(expected, addr0, header_size);
 
-            let expected = Bytes(31);
-            let addr0 = Address(0x8000_fff1);
-            let header_size = Bytes(22);
-            assert_compute_slot0_offset::<u128>(expected, addr0, header_size);
+        let expected: ByteSize = 31;
+        let addr0: usize = 0x8000_fff1;
+        let header_size: ByteSize = 28;
+        assert_compute_slot0_offset::<u128>(expected, addr0, header_size);
 
-            let expected = Bytes(31);
-            let addr0 = Address(0x8000_fff1);
-            let header_size = Bytes(28);
-            assert_compute_slot0_offset::<u128>(expected, addr0, header_size);
-
-            let expected = Bytes(30);
-            let addr0 = Address(0x8000_fff2);
-            let header_size = Bytes(28);
-            assert_compute_slot0_offset::<u128>(expected, addr0, header_size);
-        }
-
-        fn assert_compute_slot0_offset<T: Default>(
-            expected: Bytes,
-            addr0: Address,
-            header_size: Bytes,
-        ) {
-            let actual = SlabHeader::<T>::compute_slot0_offset(addr0, header_size);
-            assert_eq!(
-                expected,
-                actual,
-                "addr0= {addr0:?}, header_size= {header_size:?}, type= {:?}",
-                type_name::<T>()
-            );
-        }
+        let expected: ByteSize = 30;
+        let addr0: usize = 0x8000_fff2;
+        let header_size: ByteSize = 28;
+        assert_compute_slot0_offset::<u128>(expected, addr0, header_size);
     }
 
-    mod empty_slab {
-        use super::*;
-        type T = u32;
-
-        fn new_test_empty() -> SlabHeader<T> {
-            SlabHeader {
-                source: null_mut(),
-                prev: null_mut(),
-                next: null_mut(),
-                used_bitmap: [0; SLAB_USED_BITMAP_SIZE],
-                used_count: 0,
-                slot0: Address(0),
-                slot_size: Bytes(0),
-                total_slots: 128,
-                _marker: PhantomData,
-                _pinned: PhantomPinned,
-            }
-        }
-
-        #[test]
-        fn new_test_empty_has_consistent_state() {
-            let mut header = new_test_empty();
-            unsafe { assert_slab_state_consistency(&raw mut header) };
-        }
-
-        #[test]
-        fn test_use_first_free_slot() {
-            let expected_return = Ok(0);
-            let mut expected_after = new_test_empty();
-            expected_after.used_bitmap[0] = 1;
-            expected_after.used_count = 1;
-
-            let mut before = new_test_empty();
-            unsafe {
-                assert_use_first_free_slot(
-                    expected_return,
-                    &raw mut expected_after,
-                    &raw mut before,
-                )
-            }
-        }
-    }
-
-    mod full_slab {
-        use super::*;
-        type T = u64;
-
-        fn new_test_full() -> SlabHeader<T> {
-            SlabHeader {
-                source: null_mut(),
-                prev: null_mut(),
-                next: null_mut(),
-                used_bitmap: [
-                    0xffff_ffff_ffff_ffff,
-                    0xffff_ffff_ffff_ffff,
-                    0xffff_ffff_ffff_ffff,
-                    0xff,
-                ],
-                used_count: 200,
-                slot0: Address(0),
-                slot_size: Bytes(0),
-                total_slots: 200,
-                _marker: PhantomData,
-                _pinned: PhantomPinned,
-            }
-        }
-
-        #[test]
-        fn new_test_full_has_consistent_state() {
-            let mut slab = new_test_full();
-            unsafe { assert_slab_state_consistency(&raw mut slab) };
-        }
-
-        fn new_test_full_max_slots() -> SlabHeader<T> {
-            SlabHeader {
-                source: null_mut(),
-                prev: null_mut(),
-                next: null_mut(),
-                used_bitmap: [0xffff_ffff_ffff_ffff; SLAB_USED_BITMAP_SIZE],
-                used_count: MAX_SLOTS_PER_SLAB,
-                slot0: Address(0),
-                slot_size: Bytes(0),
-                total_slots: MAX_SLOTS_PER_SLAB,
-                _marker: PhantomData,
-                _pinned: PhantomPinned,
-            }
-        }
-
-        #[test]
-        fn new_test_full_max_slots_has_consistent_state() {
-            let mut slab = new_test_full_max_slots();
-            unsafe { assert_slab_state_consistency(&raw mut slab) }
-        }
-
-        #[test]
-        fn test_use_first_free_slot() {
-            let expected_return = Err(AllocateFromFullSlab);
-            let mut expected_after = new_test_full();
-            let mut before = new_test_full();
-            unsafe {
-                assert_use_first_free_slot(
-                    expected_return,
-                    &raw mut expected_after,
-                    &raw mut before,
-                )
-            }
-        }
-
-        #[test]
-        fn test_use_first_free_slot_max_slots() {
-            let expected_return = Err(AllocateFromFullSlab);
-            let mut expected_after = new_test_full_max_slots();
-            let mut before = new_test_full_max_slots();
-            unsafe {
-                assert_use_first_free_slot(
-                    expected_return,
-                    &raw mut expected_after,
-                    &raw mut before,
-                )
-            }
-        }
-    }
-
-    mod partial_slab {
-        use super::*;
-        type T = u128;
-
-        fn new_test_partial() -> SlabHeader<T> {
-            SlabHeader {
-                source: null_mut(),
-                prev: null_mut(),
-                next: null_mut(),
-                used_bitmap: [
-                    0xffff_ffff_ffff_ffff,
-                    0x6030_0100_0000_08ff,
-                    0x0f09_0f86_ea70_0010,
-                    0x0,
-                ],
-                used_count: 100,
-                slot0: Address(0),
-                slot_size: Bytes(0),
-                total_slots: 188,
-                _marker: PhantomData,
-                _pinned: PhantomPinned,
-            }
-        }
-
-        #[test]
-        fn new_test_partial_has_consistent_state() {
-            let mut header = new_test_partial();
-            unsafe { assert_slab_state_consistency(&raw mut header) };
-        }
-
-        #[test]
-        fn test_use_first_free_slot() {
-            let expected_return = Ok(72);
-            let mut expected_after = new_test_partial();
-            expected_after.used_bitmap[1] |= 1 << 8;
-            expected_after.used_count += 1;
-
-            let mut before = new_test_partial();
-            unsafe {
-                assert_use_first_free_slot(
-                    expected_return,
-                    &raw mut expected_after,
-                    &raw mut before,
-                )
-            }
-        }
-    }
-
-    /// # SAFETY:
-    /// * `header1` and `header2` must be valid pointers.
-    unsafe fn assert_content_equal<T: Default>(
-        header1: *const SlabHeader<T>,
-        header2: *const SlabHeader<T>,
+    fn assert_compute_slot0_offset<T: Default>(
+        expected: ByteSize,
+        addr0: usize,
+        header_size: ByteSize,
     ) {
-        assert_eq!((*header1).prev, (*header2).prev, "prev");
-        assert_eq!((*header1).next, (*header2).next, "next");
+        let actual = SlabHeader::<T>::compute_slot0_offset(addr0, header_size);
         assert_eq!(
-            (*header1).used_bitmap,
-            (*header2).used_bitmap,
-            "used_bitmap"
-        );
-        assert_eq!((*header1).used_count, (*header2).used_count, "used_count");
-        assert_eq!((*header1).slot0, (*header2).slot0, "slot0");
-        assert_eq!((*header1).slot_size, (*header2).slot_size, "slot_size");
-        assert_eq!(
-            (*header1).total_slots,
-            (*header2).total_slots,
-            "total_slots"
+            expected,
+            actual,
+            "addr0= {addr0:?}, header_size= {header_size:?}, type= {:?}",
+            type_name::<T>()
         );
     }
 
-    /// # SAFETY:
-    /// * `header` must be a valid pointer.
-    pub unsafe fn assert_slab_state_consistency<T: Default>(header: *mut SlabHeader<T>) {
-        assert_ne!(0, size_of::<T>(), "Zero size type not supported");
-        assert!(0 < (*header).total_slots, "Zero total_slots");
-        assert_used_bitmap_count_consistency(header);
-        assert_used_bitmap_total_slots_consistency(header);
-    }
-
-    /// # SAFETY:
-    /// * `header` must be a valid pointer.
-    unsafe fn assert_used_bitmap_count_consistency<T: Default>(header: *const SlabHeader<T>) {
-        let count = (*header)
-            .used_bitmap
-            .iter()
-            .fold(0, |acc, &map| acc + (map.count_ones() as usize));
-        assert_eq!(
-            count,
-            (*header).used_count,
-            "used_bitmap {:?} inconsistent with used_count {}",
-            (*header).used_bitmap,
-            (*header).used_count
+    #[test]
+    fn test_first_free_slot() {
+        assert_first_free_slot(&[0; SLAB_USED_BITMAP_SIZE], 0);
+        assert_first_free_slot(&[0xffff_ffff_ffff_ffff; SLAB_USED_BITMAP_SIZE], 256);
+        assert_first_free_slot(&[0xffff_ffff_ffff_ffef, 0, 0, 0], 4);
+        assert_first_free_slot(
+            &[
+                0xffff_ffff_ffff_fffe,
+                0xffff_ffff_ffff_ffff,
+                0xffff_ffff_ffff_ffff,
+                0xffff_ffff_ffff_ffff,
+            ],
+            0,
+        );
+        assert_first_free_slot(
+            &[
+                0xffff_ffff_ffff_ffff,
+                0xbe90_d505_a7b5_5fd3,
+                0x3e68_6334_b578_70e0,
+                0xda4b_62b9_3338_480c,
+            ],
+            66,
+        );
+        assert_first_free_slot(
+            &[
+                0xffff_ffff_ffff_ffff,
+                0xffff_ffff_ffff_ffff,
+                0x3e68_6334_b578_ffff,
+                0xda4b_62b9_3338_480c,
+            ],
+            144,
+        );
+        assert_first_free_slot(
+            &[
+                0xffff_ffff_ffff_ffff,
+                0xffff_ffff_ffff_ffff,
+                0xffff_ffff_ffff_ffff,
+                0xda4b_62b9_ffff_ffff,
+            ],
+            225,
+        );
+        assert_first_free_slot(
+            &[
+                0xffff_ffff_ffff_ffff,
+                0xffff_ffff_ffff_ffff,
+                0xffff_ffff_ffff_ffff,
+                0x7fff_ffff_ffff_ffff,
+            ],
+            255,
         );
     }
 
-    /// # SAFETY:
-    /// * `header` must be a valid pointer.
-    unsafe fn assert_used_bitmap_total_slots_consistency<T: Default>(header: *const SlabHeader<T>) {
-        if (*header).total_slots == MAX_SLOTS_PER_SLAB {
-            return;
-        }
-
-        // Check that all the bits corresponding to slots after `total_slots` are zeros.
-        let map = (*header).used_bitmap[(*header).total_slots / 64];
-        let i = (*header).total_slots & 0x3f;
-        for shift in i..64 {
-            assert_eq!(
-                0,
-                map & (1 << shift),
-                "used_bitmap {:?} inconsistent with total_slots {}",
-                (*header).used_bitmap,
-                (*header).total_slots
-            );
-        }
+    fn assert_first_free_slot(used_bitmap: &[u64; SLAB_USED_BITMAP_SIZE], expected: usize) {
+        let actual = SlabHeader::<u8>::first_free_slot(used_bitmap);
+        assert_eq!(expected, actual, "used_bitmap= {used_bitmap:x?}")
     }
 
-    /// # SAFETY:
-    /// * `expected_after` and `before` must be valid pointers.
-    unsafe fn assert_use_first_free_slot<T: Default>(
-        expected_return: Result<usize, Error>,
-        expected_after: *mut SlabHeader<T>,
-        before: *mut SlabHeader<T>,
+    #[test]
+    #[should_panic(expected = "`slot_index` should be less than the `MAX_SLOTS_PER_SLAB`")]
+    fn alter_used_bit_with_index_equals_max_slots_per_slab_should_panic() {
+        SlabHeader::<u8>::alter_used_bit(&mut [0; SLAB_USED_BITMAP_SIZE], MAX_SLOTS_PER_SLAB);
+    }
+
+    #[test]
+    #[should_panic(expected = "`slot_index` should be less than the `MAX_SLOTS_PER_SLAB`")]
+    fn alter_used_bit_with_index_greater_than_max_slots_per_slab_should_panic() {
+        SlabHeader::<u8>::alter_used_bit(&mut [0; SLAB_USED_BITMAP_SIZE], MAX_SLOTS_PER_SLAB + 1);
+    }
+
+    #[test]
+    fn test_alter_used_bit_with_valid_input() {
+        assert_alter_used_bit(&mut [0, 0, 0, 0], 5, &mut [0x20, 0, 0, 0]);
+        assert_alter_used_bit(&mut [0x20, 0, 0, 0], 5, &mut [0, 0, 0, 0]);
+        assert_alter_used_bit(
+            &mut [0xffff_ffff_ffff_ffff; SLAB_USED_BITMAP_SIZE],
+            255,
+            &mut [
+                0xffff_ffff_ffff_ffff,
+                0xffff_ffff_ffff_ffff,
+                0xffff_ffff_ffff_ffff,
+                0x7fff_ffff_ffff_ffff,
+            ],
+        );
+        assert_alter_used_bit(
+            &mut [
+                0xffff_ffff_ffff_ffff,
+                0xbe90_d505_a7b5_5fd3,
+                0x3e68_6334_b578_70e0,
+                0xda4b_62b9_3338_480c,
+            ],
+            66,
+            &mut [
+                0xffff_ffff_ffff_ffff,
+                0xbe90_d505_a7b5_5fd7,
+                0x3e68_6334_b578_70e0,
+                0xda4b_62b9_3338_480c,
+            ],
+        );
+        assert_alter_used_bit(
+            &mut [
+                0xffff_ffff_ffff_ffff,
+                0xffff_ffff_ffff_ffff,
+                0x3e68_6334_b578_ffff,
+                0xda4b_62b9_3338_480c,
+            ],
+            147,
+            &mut [
+                0xffff_ffff_ffff_ffff,
+                0xffff_ffff_ffff_ffff,
+                0x3e68_6334_b570_ffff,
+                0xda4b_62b9_3338_480c,
+            ],
+        );
+    }
+
+    fn assert_alter_used_bit(
+        used_bitmap: &mut [u64; SLAB_USED_BITMAP_SIZE],
+        slot_index: usize,
+        expected_after: &mut [u64; SLAB_USED_BITMAP_SIZE],
     ) {
-        let actual_return = SlabHeader::use_first_free_slot(before);
+        let before_str = format!("{:?}", used_bitmap);
+        SlabHeader::<u8>::alter_used_bit(used_bitmap, slot_index);
         assert_eq!(
-            expected_return, actual_return,
-            "Expected {expected_return:?} but got {actual_return:?}",
+            expected_after, used_bitmap,
+            "before= {before_str}, slot_index= {slot_index}"
         );
-
-        let actual_after = before;
-        assert_content_equal(expected_after, actual_after);
     }
 
-    /// Asserts that `used_bitmap` and `used_count` describe an empty slab.
-    ///
-    /// # SAFETY:
-    /// * `header` must be a valid pointer.
-    pub fn assert_slab_empty<T: Default>(header: *const SlabHeader<T>) {
-        assert!(!header.is_null());
-        // SAFETY:
-        // * We are safe to dereference `header` and mutate it in place
-        //   because it is a valid pointer.
-        unsafe {
-            assert_eq!(0, (*header).used_count);
-            (*header).used_bitmap.iter().for_each(|&i| assert_eq!(0, i));
+    #[test]
+    fn header_after_use_first_free_slot_should_have_valid_state() {
+        type T = TestObject;
+        let slab_layout =
+            Layout::from_size_align(safe_slab_size::<T>(5), align_of::<SlabHeader<T>>())
+                .expect("Failed to create `slab_layout`");
+        let mut slab_man = SlabMan::new(slab_layout);
+
+        let test_slab = slab_man.new_test_slab(null_mut());
+        for i in unsafe { 0..(*test_slab).total_slots } {
+            let result = unsafe { SlabHeader::<T>::use_first_free_slot(test_slab) };
+            assert!(
+                result.is_ok(),
+                "The result should be Ok but got {result:?} at the {i:?} call"
+            );
+            assert_eq!(
+                i + 1,
+                unsafe { (*test_slab).used_count },
+                "The `used_count` should be {i:?} at the {i:?} call"
+            );
+            unsafe { verify_slab_invariants(test_slab, slab_layout.size()) };
+        }
+    }
+
+    #[test]
+    fn allocate_object_from_full_slab_should_return_err() {
+        // Create a full slab
+        type T = TestObject;
+        let slab_layout =
+            Layout::from_size_align(safe_slab_size::<T>(1), align_of::<SlabHeader<T>>())
+                .expect("Failed to create `slab_layout`");
+        let mut slab_man = SlabMan::new(slab_layout);
+
+        let full_slab = slab_man.new_test_slab(null_mut());
+        let _ = unsafe { SlabHeader::<T>::use_first_free_slot(full_slab) };
+        assert!(
+            unsafe { SlabHeader::<T>::is_full(full_slab) },
+            "`full_slab` should be full for the test to work correctly"
+        );
+
+        // Exercise `allocate_object` and verify the result
+        let result = unsafe { SlabHeader::<T>::allocate_object(full_slab) };
+        assert!(
+            result.is_err(),
+            "The result should be Err(AllocateFromFullSlab) but got {result:?}"
+        );
+        let err = result.unwrap_err();
+        assert!(
+            matches!(err, AllocateFromFullSlab),
+            "The err should be {:?} but got {err:?}",
+            AllocateFromNullSlab
+        );
+
+        // Verify the `full_slab`
+        unsafe { verify_slab_invariants(full_slab, slab_layout.size()) };
+        assert!(
+            unsafe { SlabHeader::<T>::is_full(full_slab) },
+            "The `full_slab` should remain full"
+        );
+    }
+
+    #[test]
+    fn allocate_object_success_should_return_object_with_default_value() {
+        // Create an empty slab
+        type T = TestObject;
+        let slab_layout =
+            Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
+                .expect("Failed to create `slab_layout`");
+        let mut slab_man = SlabMan::<T>::new(slab_layout);
+
+        let slab = slab_man.new_test_slab(null_mut());
+
+        // Exercise `allocate_object` and verify the result
+        let result = unsafe { SlabHeader::<T>::allocate_object(slab) };
+        assert!(result.is_ok(), "The result should be Ok but got {result:?}");
+        let slab_object = result.unwrap();
+        assert_eq!(
+            &T::default(),
+            slab_object.get_ref(),
+            "The object behind the allocated [SlabObject] should have the default value"
+        )
+    }
+
+    #[test]
+    fn header_after_success_allocate_object_should_have_valid_state() {
+        // Create an empty slab
+        type T = TestObject;
+        let slab_layout =
+            Layout::from_size_align(safe_slab_size::<T>(5), align_of::<SlabHeader<T>>())
+                .expect("Failed to create `slab_layout`");
+        let mut slab_man = SlabMan::<T>::new(slab_layout);
+
+        let slab = slab_man.new_test_slab(null_mut());
+
+        // Exercise `allocate_object` and verify
+        for i in unsafe { 0..(*slab).total_slots } {
+            let result = unsafe { SlabHeader::<T>::allocate_object(slab) };
+            assert!(result.is_ok(), "The result should be Ok but got {result:?}");
+            assert_eq!(
+                i + 1,
+                unsafe { (*slab).used_count },
+                "The `used_count` of `slab` should be {i:?} at the {i:?} call"
+            );
+            unsafe { verify_slab_invariants(slab, slab_layout.size()) };
         }
     }
 }
@@ -2145,11 +1827,11 @@ mod header_tests {
 #[cfg(test)]
 mod test_utils {
     extern crate alloc;
-    use crate::mem::slab::SlabHeader;
+    use super::*;
     use alloc::alloc::{alloc, dealloc};
     use alloc::vec::Vec;
     use core::alloc::Layout;
-    use core::ptr::null_mut;
+    use core::ptr::{null_mut, NonNull};
 
     #[derive(Debug, PartialEq)]
     pub struct TestObject {
@@ -2165,17 +1847,6 @@ mod test_utils {
                 y: 128,
                 z: 1024,
             }
-        }
-    }
-
-    #[derive(Debug, PartialEq)]
-    pub struct TestObjectXL {
-        x: [u8; 3072],
-    }
-
-    impl Default for TestObjectXL {
-        fn default() -> Self {
-            Self { x: [128; 3072] }
         }
     }
 
@@ -2199,32 +1870,9 @@ mod test_utils {
     ///
     /// # SAFETY:
     /// * Each `(ptr, layout)` pair must satisfy the safety contract of `dealloc`.
-    pub unsafe fn release_memory(ptrs: Vec<*mut u8>, layout: Layout) {
-        for ptr in ptrs {
+    pub unsafe fn release_memory(ptrs: &[*mut u8], layout: Layout) {
+        for &ptr in ptrs {
             unsafe { dealloc(ptr, layout) };
-        }
-    }
-
-    /// Asserts whether the `head` represents a doubly linked list.
-    ///
-    /// # SAFETY:
-    /// * `head` must be a valid pointer.
-    pub unsafe fn assert_list_doubly_linked<T: Default>(head: *mut SlabHeader<T>) {
-        assert_ne!(null_mut(), head, "`head` should not be null");
-
-        let head_prev = unsafe { (*head).prev };
-        assert!(head_prev.is_null(), "`prev` of `head` should be null");
-
-        let mut curr = head;
-        let mut next = unsafe { (*curr).next };
-        while !next.is_null() {
-            assert_eq!(
-                unsafe { (*next).prev },
-                curr,
-                "`prev` of {next:?} should be {curr:?}"
-            );
-            curr = next;
-            next = unsafe { (*curr).next };
         }
     }
 
@@ -2258,17 +1906,431 @@ mod test_utils {
         !curr.is_null()
     }
 
-    /// Collects the addresses of active objects allocated from this slab.
+    /// Asserts whether the `head` represents a doubly linked list.
     ///
     /// # SAFETY:
-    /// `header` must be a valid pointer.
-    pub unsafe fn allocated_object_addrs<T: Default>(header: *mut SlabHeader<T>) -> Vec<usize> {
+    /// * `head` must be a valid pointer.
+    pub unsafe fn verify_list_doubly_linked<T: Default>(head: *mut SlabHeader<T>) {
+        assert_ne!(null_mut(), head, "`head` should not be null");
+        assert_eq!(null_mut(), (*head).prev, "`prev` of `head` should be null");
+
+        let mut curr = head;
+        let mut next = (*curr).next;
+        while !next.is_null() {
+            assert_eq!(curr, (*next).prev, "`prev` of {next:?} should be {curr:?}");
+            curr = next;
+            next = (*curr).next;
+        }
+    }
+
+    /// `verify_node_isolated` checks whether the `node` is isolated.
+    ///
+    /// # SAFETY:
+    /// * `node` must be a valid pointer.
+    pub unsafe fn verify_node_isolated<T: Default>(node: *mut SlabHeader<T>) {
+        assert_eq!(
+            null_mut(),
+            (*node).prev,
+            "`node` is not isolated: it has its `prev` linked"
+        );
+        assert_eq!(
+            null_mut(),
+            (*node).next,
+            "`node` is not isolated: it has its `next` linked"
+        );
+    }
+
+    pub struct SlabMan<T: Default> {
+        slab_layout: Layout,
+        allocated: Vec<*mut u8>,
+        _type_marker: PhantomData<T>,
+    }
+
+    impl<T: Default> SlabMan<T> {
+        pub fn new(slab_layout: Layout) -> Self {
+            assert_ne!(
+                0,
+                slab_layout.size(),
+                "`slab_layout` size should not be zero"
+            );
+            assert_eq!(
+                0,
+                slab_layout.align() % align_of::<SlabHeader<T>>(),
+                "`slab_layout` should align to the alignment of SlabHeader<T>"
+            );
+
+            Self {
+                slab_layout,
+                allocated: Vec::new(),
+                _type_marker: PhantomData,
+            }
+        }
+
+        /// `new_test_slab` returns a pointer to the newly allocated test slab.
+        pub fn new_test_slab(&mut self, cache: *mut Cache<T>) -> *mut SlabHeader<T> {
+            let addr0 = unsafe { alloc(self.slab_layout) };
+            assert_ne!(null_mut(), addr0, "Failed to allocate memory");
+            self.allocated.push(addr0);
+
+            let header = unsafe {
+                SlabHeader::<T>::new(
+                    cache,
+                    self.slab_layout.size(),
+                    NonNull::new_unchecked(addr0),
+                )
+            };
+            assert!(
+                header.is_ok(),
+                "Failed to create a test slab: expected Ok but got {header:?}"
+            );
+            header.unwrap()
+        }
+    }
+
+    impl<T: Default> Drop for SlabMan<T> {
+        fn drop(&mut self) {
+            unsafe { release_memory(&self.allocated, self.slab_layout) }
+        }
+    }
+
+    /// `safe_slab_size` assumes the slot size is equal to the size of `T` and
+    /// returns a slab size that can accommodate `total_slots`.
+    pub fn safe_slab_size<T: Default>(total_slots: usize) -> ByteSize {
+        size_of::<SlabHeader<T>>() + align_of::<T>() + size_of::<T>() * total_slots
+    }
+
+    /// Verify if the `cache` satisfies the invariants of a [Cache].
+    ///
+    /// # SAFETY:
+    /// * `cache` must be a valid pointer.
+    pub unsafe fn verify_cache_invariants<T: Default>(cache: *mut Cache<T>) {
+        verify_cache_type(cache);
+        verify_cache_slab_layout(cache);
+        verify_cache_slabs_full(cache);
+        verify_cache_slabs_partial(cache);
+        verify_cache_slabs_empty(cache);
+    }
+
+    /// Verify if the type [T] of `cache` satisfies the invariant of a [Cache].
+    ///
+    /// SAFETY:
+    /// * `cache` must be a valid pointer.
+    unsafe fn verify_cache_type<T: Default>(_cache: *mut Cache<T>) {
+        assert_ne!(0, size_of::<T>(), "Zero-size type not supported");
+    }
+
+    /// Verify if the `slab_layout` of `cache` satisfies the invariant of a [Cache].
+    ///
+    /// SAFETY:
+    /// * `cache` must be a valid pointer.
+    unsafe fn verify_cache_slab_layout<T: Default>(cache: *mut Cache<T>) {
+        assert!(
+            size_of::<T>() + size_of::<SlabHeader<T>>() <= (*cache).slab_layout.size(),
+            "The size of `slab_layout` is too small"
+        );
+        assert_eq!(
+            0,
+            (*cache).slab_layout.align() % align_of::<SlabHeader<T>>(),
+            "The alignment of `slab_layout` is incompatible with SlabHeader<T>"
+        );
+    }
+
+    /// Verify if the `slabs_full` satisfies the invariants of a [Cache].
+    ///
+    /// # SAFETY:
+    /// * `cache` must be a valid pointer.
+    unsafe fn verify_cache_slabs_full<T: Default>(cache: *mut Cache<T>) {
+        if (*cache).slabs_full.is_null() {
+            return;
+        }
+        let list = (*cache).slabs_full;
+        verify_list_doubly_linked(list);
+        verify_list_slabs_source(list, cache);
+        verify_list_slabs_all_full(list);
+        verify_list_slabs_invariants(list, (*cache).slab_layout.size());
+    }
+
+    /// Verify if all the slabs in this `list` belong to `source`.
+    ///
+    /// # SAFETY:
+    /// * `list` must be a valid pointer.
+    /// * `source` must be a valid pointer.
+    unsafe fn verify_list_slabs_source<T: Default>(
+        head: *mut SlabHeader<T>,
+        source: *mut Cache<T>,
+    ) {
+        let mut curr = head;
+        while !curr.is_null() {
+            assert_eq!(
+                source,
+                (*curr).source,
+                "Slabs in this `list` should belong to the `source`"
+            );
+            curr = (*curr).next
+        }
+    }
+
+    /// Verify if all the slabs in this list are full.
+    ///
+    /// # SAFETY:
+    /// * `head` must be a valid pointer.
+    unsafe fn verify_list_slabs_all_full<T: Default>(head: *mut SlabHeader<T>) {
+        let mut curr = head;
+        while !curr.is_null() {
+            assert_eq!(
+                (*curr).total_slots,
+                (*curr).used_count,
+                "Slabs in this `list` should be full"
+            );
+            curr = (*curr).next;
+        }
+    }
+
+    /// Verify if all the slabs in this `list` satisfy the invariants of a [SlabHeader].
+    ///
+    /// # SAFETY:
+    /// * `list` must be a valid pointer.
+    unsafe fn verify_list_slabs_invariants<T: Default>(
+        head: *mut SlabHeader<T>,
+        slab_size: ByteSize,
+    ) {
+        let mut curr = head;
+        while !curr.is_null() {
+            verify_slab_invariants(curr, slab_size);
+            curr = (*curr).next;
+        }
+    }
+
+    /// Verify if the `slabs_partial` satisfies the invariants of a [Cache].
+    ///
+    /// # SAFETY:
+    /// * `cache` must be a valid pointer.
+    unsafe fn verify_cache_slabs_partial<T: Default>(cache: *mut Cache<T>) {
+        if (*cache).slabs_partial.is_null() {
+            return;
+        }
+        let list = (*cache).slabs_partial;
+        verify_list_doubly_linked(list);
+        verify_list_slabs_source(list, cache);
+        verify_list_slabs_all_partial_full(list);
+        verify_list_slabs_invariants(list, (*cache).slab_layout.size());
+    }
+
+    /// Verify if all the slabs in this `list` are partially full.
+    ///
+    /// # SAFETY:
+    /// * `list` must be a valid pointer.
+    unsafe fn verify_list_slabs_all_partial_full<T: Default>(head: *mut SlabHeader<T>) {
+        let mut curr = head;
+        while !curr.is_null() {
+            assert!(
+                0 < (*curr).used_count && (*curr).used_count < (*curr).total_slots,
+                "Slabs in this `list` should be partially full"
+            );
+            curr = (*curr).next;
+        }
+    }
+
+    /// Verify if the `slabs_empty` satisfies the invariants of a [Cache].
+    ///
+    /// # SAFETY:
+    /// * `cache` must be a valid pointer.
+    unsafe fn verify_cache_slabs_empty<T: Default>(cache: *mut Cache<T>) {
+        if (*cache).slabs_empty.is_null() {
+            return;
+        }
+        let list = (*cache).slabs_empty;
+        verify_list_doubly_linked(list);
+        verify_list_slabs_source(list, cache);
+        verify_list_slabs_all_empty(list);
+        verify_list_slabs_invariants(list, (*cache).slab_layout.size());
+    }
+
+    /// Verify if all the slabs in this `list` are empty.
+    ///
+    /// # SAFETY:
+    /// * `list` must be a valid pointer.
+    unsafe fn verify_list_slabs_all_empty<T: Default>(head: *mut SlabHeader<T>) {
+        let mut curr = head;
+        while !curr.is_null() {
+            assert_eq!(
+                0,
+                (*curr).used_count,
+                "Slabs in this `list` should be empty"
+            );
+            curr = (*curr).next;
+        }
+    }
+
+    /// # SAFETY:
+    /// * `header` must be a valid pointer.
+    pub unsafe fn verify_slab_invariants<T: Default>(
+        header: *mut SlabHeader<T>,
+        slab_size: ByteSize,
+    ) {
+        verify_slab_type(header);
+        verify_slab_slot_attributes(header, slab_size);
+        verify_slab_used_attributes(header);
+    }
+
+    /// Verify if the type [T] of `header` satisfies the invariant of a slab.
+    ///
+    /// SAFETY:
+    /// * `cache` must be a valid pointer.
+    unsafe fn verify_slab_type<T: Default>(_header: *mut SlabHeader<T>) {
+        assert_ne!(0, size_of::<T>(), "Zero-size type not supported");
+    }
+
+    /// Verify if the slot attributes satisfy the invariants of a slab.
+    ///
+    /// # SAFETY:
+    /// * `header` must be a valid pointer.
+    unsafe fn verify_slab_slot_attributes<T: Default>(
+        header: *mut SlabHeader<T>,
+        slab_size: ByteSize,
+    ) {
+        assert!(
+            0 < (*header).total_slots && (*header).total_slots <= MAX_SLOTS_PER_SLAB,
+            "`total_slots` should be at least zero and not greater than the `MAX_SLOTS_PER_SLAB`"
+        );
+        assert_eq!(
+            0,
+            (*header).slot0.align_offset(align_of::<T>()),
+            "`slot0` should align with the alignment of object [T]"
+        );
+        assert!(
+            size_of::<T>() <= (*header).slot_size,
+            "`slot_size` should be at least the size of object [T]"
+        );
+        assert_eq!(
+            0,
+            (*header).slot_size % align_of::<T>(),
+            "`slot_size` should be a multiple of the alignment of object [T]"
+        );
+        assert!(
+            (*header).slot0.addr().get() + (*header).slot_size * (*header).total_slots
+                <= header.addr() + slab_size,
+            "The last slot should not exceed the boundary of the slab"
+        );
+    }
+
+    /// Verify if the used attributes satisfy the invariants of a slab.
+    ///
+    /// # SAFETY:
+    /// * `header` must be a valid pointer.
+    unsafe fn verify_slab_used_attributes<T: Default>(header: *mut SlabHeader<T>) {
+        assert!(
+            (*header).used_count <= (*header).total_slots,
+            "`used_count` should not exceed `total_slots`"
+        );
+
+        assert_eq!(
+            SLAB_USED_BITMAP_SIZE,
+            (*header).used_bitmap.len(),
+            "`used_bitmap` should have a size of the `SLAB_USED_BITMAP_SIZE`"
+        );
+
+        let set_bits_after_last_slot = ((*header).total_slots..MAX_SLOTS_PER_SLAB)
+            .filter(|&slot| {
+                let (index, shift) = (slot / 64, slot % 64);
+                (*header).used_bitmap[index] & (1 << shift) != 0
+            })
+            .count();
+        assert_eq!(
+            0, set_bits_after_last_slot,
+            "The bits in `used_bitmap` after the last slot should not be set"
+        );
+
+        let total_set_bits = (*header)
+            .used_bitmap
+            .iter()
+            .map(|&bits| bits.count_ones() as usize)
+            .sum();
+        assert_eq!(
+            (*header).used_count,
+            total_set_bits,
+            "`used_count` should match the total set bits in `used_bitmap`"
+        )
+    }
+
+    /// `cache_allocated_addrs` collects the address of the objects allocated from this `cache`.
+    ///
+    /// # SAFETY:
+    /// * `cache` must be either null or a valid pointer.
+    pub unsafe fn cache_allocated_addrs<T: Default>(cache: *mut Cache<T>) -> Vec<usize> {
+        if cache.is_null() {
+            return Vec::new();
+        }
+        let mut result = Vec::new();
+        result.append(&mut list_allocated_addrs((*cache).slabs_full));
+        result.append(&mut list_allocated_addrs((*cache).slabs_partial));
+        result.append(&mut list_allocated_addrs((*cache).slabs_empty));
+        result
+    }
+
+    /// `list_allocated_addrs` collects the addresses of the objects allocated from the `head` list.
+    ///
+    /// # SAFETY:
+    /// * `head` must be either null or a valid pointer.
+    pub unsafe fn list_allocated_addrs<T: Default>(head: *mut SlabHeader<T>) -> Vec<usize> {
+        let mut result = Vec::new();
+        let mut curr = head;
+        while !curr.is_null() {
+            result.append(&mut slab_allocated_addrs(curr));
+            curr = (*curr).next;
+        }
+        result
+    }
+
+    /// `slab_allocated_addrs` collects the addresses of the objects allocated from this `header`.
+    ///
+    /// # SAFETY:
+    /// `header` must be either null or a valid pointer.
+    pub unsafe fn slab_allocated_addrs<T: Default>(header: *mut SlabHeader<T>) -> Vec<usize> {
+        if header.is_null() {
+            return Vec::new();
+        }
+
         (0..(*header).total_slots)
             .filter(|&i| {
                 let (index, shift) = (i / 64, i % 64);
                 (*header).used_bitmap[index] & (1 << shift) > 0
             })
-            .map(|i| ((*header).slot0 + (*header).slot_size * i).0)
+            .map(|i| (*header).slot0.addr().get() + (*header).slot_size * i)
             .collect()
+    }
+
+    /// `cache_slabs` returns a list containing the slabs that belong to this `cache`.
+    ///
+    /// # SAFETY:
+    /// * `cache` must be either null or a valid pointer.
+    pub unsafe fn cache_slabs<T: Default>(cache: *mut Cache<T>) -> Vec<*mut SlabHeader<T>> {
+        if cache.is_null() {
+            return Vec::new();
+        }
+        let mut result = Vec::new();
+        result.append(&mut list_slabs((*cache).slabs_full));
+        result.append(&mut list_slabs((*cache).slabs_partial));
+        result.append(&mut list_slabs((*cache).slabs_empty));
+        result
+    }
+
+    /// `list_slabs` returns a list containing the slabs that belong to the `head` list.
+    ///
+    /// The slabs on the `prev` side of the `head` are ignored.
+    ///
+    /// # SAFETY:
+    /// * `head` must be either null or a valid pointer.
+    pub unsafe fn list_slabs<T: Default>(head: *mut SlabHeader<T>) -> Vec<*mut SlabHeader<T>> {
+        if head.is_null() {
+            return Vec::new();
+        }
+        let mut result = Vec::new();
+        let mut curr = head;
+        while !curr.is_null() {
+            result.push(curr);
+            curr = (*curr).next;
+        }
+        result
     }
 }
