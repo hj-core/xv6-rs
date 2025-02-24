@@ -20,7 +20,10 @@ const MAX_SLOTS_PER_SLAB: usize = SLAB_USED_BITMAP_SIZE * 64;
 
 /// todo!()
 ///
-/// # SAFETY:
+/// Methods of [Cache] are not thread-safe; therefore client need to provide
+/// proper synchronization measures.
+///
+/// # Safety:
 /// * [T] must not be repr(packed).
 #[repr(C)]
 struct Cache<T>
@@ -39,17 +42,15 @@ impl<T> Cache<T>
 where
     T: Default,
 {
-    /// Returns a [SlabObject] wrapping the allocated object [T] if the allocation succeeds,
-    /// or else returns the corresponding error.
+    /// `allocate_object` returns a [SlabObject] wrapping the allocated object
+    /// if the allocation succeeds; otherwise, it returns the corresponding error.
     ///
-    /// The allocated object has the default value of [T], and clients can access it through
-    /// the [SlabObject].
-    /// Furthermore, it is guaranteed that if an [Error] is returned, the states of `cache`
-    /// remain unmodified.
+    /// It is guaranteed that if an [Error] is returned, the `cache` remains unmodified.
+    /// The allocated object has the default value of [T], and clients can access it
+    /// through the [SlabObject].
     ///
     /// # SAFETY:
     /// * `cache` must be a valid pointer.
-    /// * Clients need to apply thread-safe measures to protect the `cache` from concurrent access.
     unsafe fn allocate_object(cache: *mut Cache<T>) -> Result<SlabObject<T>, Error> {
         assert!(!cache.is_null(), "`cache` should not be null");
 
@@ -64,19 +65,18 @@ where
         }
     }
 
-    /// Attempts to allocate an object from one of the empty slabs.
+    /// `allocate_from_empty` attempts to allocate an object from one of the empty slabs.
     ///
-    /// Returns a [SlabObject] wrapping the allocated object [T] if the attempt succeeds,
+    /// It returns a [SlabObject] wrapping the allocated object if the attempt succeeds,
     /// or returns the corresponding [Error] if it fails.
-    /// Furthermore, it is guaranteed that if an [Error] is returned, the states of `cache`
+    ///
+    /// It is guaranteed that if an [Error] is returned, the states of `cache`
     /// remain unmodified.
+    /// The allocated object has the default value of [T], and clients can access it
+    /// through the [SlabObject].
     ///
-    /// The allocated object has the default value of [T], and clients can access it through
-    /// the [SlabObject].
-    ///
-    /// # SAFETY:
+    /// # Safety:
     /// * `cache` must be a valid pointer.
-    /// * Clients need to apply thread-safe measures to protect the `cache` from concurrent access.
     unsafe fn allocate_from_empty(cache: *mut Cache<T>) -> Result<SlabObject<T>, Error> {
         assert!(!cache.is_null(), "`cache` should not be null");
 
@@ -2322,10 +2322,11 @@ mod test_utils {
     /// # SAFETY:
     /// * `head` must be either null or a valid pointer.
     pub unsafe fn list_slabs<T: Default>(head: *mut SlabHeader<T>) -> Vec<*mut SlabHeader<T>> {
-        if head.is_null() {
-            return Vec::new();
-        }
         let mut result = Vec::new();
+        if head.is_null() {
+            return result;
+        }
+
         let mut curr = head;
         while !curr.is_null() {
             result.push(curr);
