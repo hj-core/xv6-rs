@@ -4,6 +4,8 @@ members = ["kernel", "hw", "wrapper"]
 
 [profile.dev]
 panic = "abort"
+incremental = false
 
 [profile.release]
 panic = "abort"
+incremental = false
