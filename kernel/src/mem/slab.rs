@@ -2,6 +2,8 @@
 // Understanding the Linux Virtual Memory Manager by Mel Gorman, Chapter 8
 // https://pdos.csail.mit.edu/~sbw/links/gorman_book.pdf
 
+#![allow(unsafe_op_in_unsafe_fn)]
+
 use core::alloc::Layout;
 use core::marker::PhantomData;
 use core::marker::PhantomPinned;
@@ -339,7 +341,7 @@ where
         let total_slots = (slab_size - slot0_offset) / slot_size;
         // SAFETY:
         // * todo!()
-        let slot0 = addr0.add(slot0_offset);
+        let slot0 = unsafe { addr0.add(slot0_offset) };
 
         let header = Self {
             source: cache,
@@ -1173,9 +1175,9 @@ mod cache_tests {
 
         let free_slots = unsafe { (*only_slab).total_slots - (*only_slab).used_count };
         assert!(
-                free_slots > 1,
-                "`only_slab` should have multiple free slots remaining; otherwise, this test is incorrect"
-            );
+            free_slots > 1,
+            "`only_slab` should have multiple free slots remaining; otherwise, this test is incorrect"
+        );
         cache.slabs_partial = only_slab;
 
         // Exercise `allocate_from_partial` and verify the result
@@ -1335,9 +1337,9 @@ mod cache_tests {
         // Verify the allocated [SlabObject]
         let slab_object = result.unwrap();
         assert!(
-                slab_object.source == partial_slab1 || slab_object.source == partial_slab2,
-                "`source` of the allocated [SlabObject] should be either `partial_slab1` or `partial_slab2`"
-            );
+            slab_object.source == partial_slab1 || slab_object.source == partial_slab2,
+            "`source` of the allocated [SlabObject] should be either `partial_slab1` or `partial_slab2`"
+        );
         assert_eq!(
             &T::default(),
             slab_object.get_ref(),

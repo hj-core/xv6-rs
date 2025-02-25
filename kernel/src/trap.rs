@@ -11,7 +11,7 @@ fn install_kernel_trap_vec() {
     riscv64::write_stvec(kernel_trap_vec as *const u64 as u64);
 }
 
-extern "C" {
+unsafe extern "C" {
     fn kernel_trap_vec();
 }
 
@@ -68,7 +68,7 @@ global_asm!(
     "sret"
 );
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 fn kernel_trap_handler() {
     let scause = riscv64::read_scause();
 

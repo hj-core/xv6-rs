@@ -69,7 +69,7 @@ fn kernel_text_size() -> Bytes {
 }
 
 fn kernel_text_end_exclusive() -> Address {
-    extern "C" {
+    unsafe extern "C" {
         #[link_name = "link_text_end"]
         static addr_as_value: u8;
     }

@@ -44,7 +44,7 @@ fn initialize_free_pages() {
 }
 
 fn allocatable_start() -> Address {
-    extern "C" {
+    unsafe extern "C" {
         #[link_name = "link_end"]
         static addr_as_value: u8;
     }

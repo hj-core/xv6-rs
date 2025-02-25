@@ -25,7 +25,7 @@ struct CpuStacks([u8; STACK_SIZE_PER_CPU.0 * MAX_CPUS]);
 
 static CPU_STACKS: CpuStacks = CpuStacks([0; STACK_SIZE_PER_CPU.0 * MAX_CPUS]);
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn _start() -> ! {
     unsafe {
         asm!(
@@ -43,7 +43,7 @@ pub extern "C" fn _start() -> ! {
     loop {}
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 fn m_mode_initialize() {
     store_mhartid_to_tp();
     allow_s_mode_manage_all_physical_memories();
