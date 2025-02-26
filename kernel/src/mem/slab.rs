@@ -249,7 +249,7 @@ where
         // SAFETY:
         // * Dereferencing `cache` is safe because it is a valid pointer.
         // * [Layout] implements [Copy] so there is no ownership transfer.
-        let layout = unsafe { (*cache).slab_layout };
+        let layout = (*cache).slab_layout;
         if addr0.align_offset(layout.align()) != 0 {
             return Err(SlabNotAligned);
         }
@@ -261,18 +261,16 @@ where
         //   place.
         // * We are safe to dereference `slab_empty` and update it in place if it is not null.
         // * In light of the above, this unsafe block is considered safe.
-        unsafe {
-            let result = SlabHeader::new(cache, layout.size(), addr0)?;
+        let result = SlabHeader::new(cache, layout.size(), addr0)?;
 
-            let old_head = (*cache).slabs_empty;
-            if !old_head.is_null() {
-                (*result).next = old_head;
-                (*old_head).prev = result;
-            }
-            (*cache).slabs_empty = result;
-
-            Ok(result)
+        let old_head = (*cache).slabs_empty;
+        if !old_head.is_null() {
+            (*result).next = old_head;
+            (*old_head).prev = result;
         }
+        (*cache).slabs_empty = result;
+
+        Ok(result)
     }
 }
 
