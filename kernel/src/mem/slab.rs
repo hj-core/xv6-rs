@@ -10,8 +10,8 @@ use core::marker::PhantomPinned;
 use core::ptr;
 use core::ptr::{null_mut, NonNull};
 use Error::{
-    AllocateFromFullSlab, AllocateFromNullSlab, SlabNotAligned, SlabTooSmall,
-    ZeroSizeTypeNotSupported,
+    AllocateFromFullSlab, AllocateFromNullSlab, NotAnObjectOfCurrentSlab, SlabNotAligned,
+    SlabTooSmall, ZeroSizeTypeNotSupported,
 };
 
 type ByteSize = usize;
@@ -487,6 +487,30 @@ where
     ) -> Result<bool, Error> {
         todo!()
     }
+
+    /// `object_slot_index` returns the slot index of the object or the corresponding error.
+    fn object_slot_index(
+        slot0_addr: usize,
+        slot_size: ByteSize,
+        max_slots: usize,
+        object_addr: usize,
+    ) -> Result<usize, Error> {
+        if object_addr < slot0_addr {
+            return Err(NotAnObjectOfCurrentSlab);
+        }
+
+        let offset = object_addr - slot0_addr;
+        if offset % slot_size != 0 {
+            return Err(NotAnObjectOfCurrentSlab);
+        };
+
+        let index = offset / slot_size;
+        if max_slots <= index {
+            return Err(NotAnObjectOfCurrentSlab);
+        }
+
+        Ok(index)
+    }
 }
 
 /// A proxy to the actual allocated object, which is address-sensitive.
@@ -567,6 +591,7 @@ enum Error {
     RequestMemoryFailed,
     AllocateFromFullSlab,
     AllocateFromNullSlab,
+    NotAnObjectOfCurrentSlab,
 }
 
 #[cfg(test)]
@@ -1543,8 +1568,9 @@ mod header_tests {
     use crate::mem::slab::test_utils::{
         safe_slab_size, verify_slab_invariants, SlabMan, TestObject,
     };
-    use alloc::format;
+    use alloc::{format, vec};
     use core::any::type_name;
+    use Error::NotAnObjectOfCurrentSlab;
 
     #[test]
     fn test_compute_slot0_offset() {
@@ -1821,6 +1847,115 @@ mod header_tests {
             );
             unsafe { verify_slab_invariants(slab, slab_layout.size()) };
         }
+    }
+    #[test]
+    fn object_slot_index_ok_input_return_ok_index() {
+        type T = TestObject;
+        let slot0_addr = 0xa000_0000;
+        let max_slots = MAX_SLOTS_PER_SLAB;
+        let slot_size = size_of::<T>();
+
+        let expected_indices = vec![0, 1, 55, 128, 166, MAX_SLOTS_PER_SLAB - 1];
+        for &expected in expected_indices.iter() {
+            let object_addr = slot0_addr + slot_size * expected;
+            assert_eq!(
+                Ok(expected),
+                SlabHeader::<T>::object_slot_index(slot0_addr, slot_size, max_slots, object_addr),
+                "slot0_addr= {slot0_addr}, slot_size= {slot_size}, object_addr= {object_addr}"
+            );
+        }
+    }
+
+    #[test]
+    fn object_slot_index_object_addr_not_aligned_to_slots_return_err() {
+        type T = TestObject;
+        let slot0_addr = 0xa002_0000;
+        let slot_size = size_of::<T>();
+        let max_slots = MAX_SLOTS_PER_SLAB;
+        assert_ne!(
+            1, slot_size,
+            "The `slot_size` should be greater than one for the test to work correctly"
+        );
+        let object_addr = slot0_addr + slot_size + 1;
+
+        let result =
+            SlabHeader::<T>::object_slot_index(slot0_addr, slot_size, max_slots, object_addr);
+        assert!(
+            result.is_err(),
+            "The result should be Err(NotAnObjectOfCurrentSlab) but got {result:?}"
+        );
+        let err = result.unwrap_err();
+        assert!(
+            matches!(err, NotAnObjectOfCurrentSlab),
+            "The error should be {:?} but got {err:?}",
+            NotAnObjectOfCurrentSlab
+        );
+    }
+
+    #[test]
+    fn object_slot_index_object_before_slot0_return_err() {
+        type T = TestObject;
+        let slot0_addr = 0xa002_0000;
+        let slot_size = size_of::<T>();
+        let max_slots = MAX_SLOTS_PER_SLAB;
+        let object_addr = slot0_addr - slot_size;
+
+        let result =
+            SlabHeader::<T>::object_slot_index(slot0_addr, slot_size, max_slots, object_addr);
+        assert!(
+            result.is_err(),
+            "The result should be Err(NotAnObjectOfCurrentSlab) but got {result:?}"
+        );
+        let err = result.unwrap_err();
+        assert!(
+            matches!(err, NotAnObjectOfCurrentSlab),
+            "The error should be {:?} but got {err:?}",
+            NotAnObjectOfCurrentSlab
+        );
+    }
+
+    #[test]
+    fn object_slot_index_object_equal_max_slots_return_err() {
+        type T = TestObject;
+        let slot0_addr = 0xa002_0000;
+        let slot_size = size_of::<T>();
+        let max_slots = 2;
+        let object_addr = slot0_addr + slot_size * max_slots;
+
+        let result =
+            SlabHeader::<T>::object_slot_index(slot0_addr, slot_size, max_slots, object_addr);
+        assert!(
+            result.is_err(),
+            "The result should be Err(NotAnObjectOfCurrentSlab) but got {result:?}"
+        );
+        let err = result.unwrap_err();
+        assert!(
+            matches!(err, NotAnObjectOfCurrentSlab),
+            "The error should be {:?} but got {err:?}",
+            NotAnObjectOfCurrentSlab
+        );
+    }
+
+    #[test]
+    fn object_slot_index_object_exceed_max_slots_return_err() {
+        type T = TestObject;
+        let slot0_addr = 0xa002_0000;
+        let slot_size = size_of::<T>();
+        let max_slots = 2;
+        let object_addr = slot0_addr + slot_size * (max_slots + 1);
+
+        let result =
+            SlabHeader::<T>::object_slot_index(slot0_addr, slot_size, max_slots, object_addr);
+        assert!(
+            result.is_err(),
+            "The result should be Err(NotAnObjectOfCurrentSlab) but got {result:?}"
+        );
+        let err = result.unwrap_err();
+        assert!(
+            matches!(err, NotAnObjectOfCurrentSlab),
+            "The error should be {:?} but got {err:?}",
+            NotAnObjectOfCurrentSlab
+        );
     }
 }
 
