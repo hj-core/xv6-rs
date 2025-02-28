@@ -511,6 +511,20 @@ where
 
         Ok(index)
     }
+
+    /// `is_slot_in_use` returns whether the slot with `slot_index` is in use.
+    fn is_slot_in_use(
+        used_bitmap: &[u64; SLAB_USED_BITMAP_SIZE],
+        max_slots: usize,
+        slot_index: usize,
+    ) -> bool {
+        if max_slots <= slot_index {
+            panic!("The `slot_index` is out of bounds");
+        };
+
+        let (index, shift) = (slot_index / 64, slot_index % 64);
+        used_bitmap[index] & (1 << shift) > 0
+    }
 }
 
 /// A proxy to the actual allocated object, which is address-sensitive.
@@ -1956,6 +1970,74 @@ mod header_tests {
             "The error should be {:?} but got {err:?}",
             NotAnObjectOfCurrentSlab
         );
+    }
+
+    #[test]
+    #[should_panic(expected = "The `slot_index` is out of bounds")]
+    fn is_slot_in_use_slot_index_equals_max_slots_should_panic() {
+        let _ = SlabHeader::<u8>::is_slot_in_use(&[0; SLAB_USED_BITMAP_SIZE], 5, 5);
+    }
+
+    #[test]
+    #[should_panic(expected = "The `slot_index` is out of bounds")]
+    fn is_slot_in_use_slot_index_exceed_max_slots_should_panic() {
+        let _ = SlabHeader::<u8>::is_slot_in_use(
+            &[0; SLAB_USED_BITMAP_SIZE],
+            MAX_SLOTS_PER_SLAB,
+            MAX_SLOTS_PER_SLAB + 1,
+        );
+    }
+
+    #[test]
+    fn is_slot_in_use_used_slot_index_should_return_true() {
+        type T = TestObject;
+        let used_bitmap = [
+            0x0000_0000_0000_9876,
+            0xffff_ffff_ffff_ffff,
+            0x0000_0000_fa00_cb00,
+            0x0de0_a0f0_c0f0_0000,
+        ];
+        let used_slot_indices = vec![
+            1, 2, 4, 5, 6, 11, 12, 15, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78,
+            79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99,
+            100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116,
+            117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 136, 137, 139, 142, 143, 153,
+            155, 156, 157, 158, 159, 212, 213, 214, 215, 222, 223, 228, 229, 230, 231, 237, 239,
+            245, 246, 247, 248, 250, 251,
+        ];
+        for slot_index in used_slot_indices {
+            assert!(
+                SlabHeader::<T>::is_slot_in_use(&used_bitmap, MAX_SLOTS_PER_SLAB, slot_index),
+                "Slot {slot_index} should be in use: used_bitmap= {used_bitmap:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn is_slot_in_use_unused_index_should_return_false() {
+        let used_bitmap = [
+            0x6cf0_83e7_82ca_1bec,
+            0x2d24_6b8c_8721_1c2c,
+            0x1a39_49c9_bcdc_654d,
+            0xa2d0_6280_e029_35e0,
+        ];
+        let unused_slot_indices = vec![
+            0, 1, 4, 10, 13, 14, 15, 16, 18, 20, 21, 24, 26, 27, 28, 29, 30, 35, 36, 42, 43, 44,
+            45, 46, 48, 49, 50, 51, 56, 57, 60, 63, 64, 65, 68, 70, 71, 72, 73, 77, 78, 79, 81, 82,
+            83, 84, 86, 87, 91, 92, 93, 94, 96, 97, 100, 101, 102, 106, 108, 111, 112, 113, 115,
+            116, 118, 119, 121, 124, 126, 127, 129, 132, 133, 135, 137, 139, 140, 143, 144, 145,
+            149, 152, 153, 158, 161, 162, 164, 165, 169, 170, 172, 173, 175, 177, 178, 182, 183,
+            184, 186, 189, 190, 191, 192, 193, 194, 195, 196, 201, 203, 206, 207, 209, 210, 212,
+            214, 215, 216, 217, 218, 219, 220, 224, 225, 226, 227, 228, 229, 230, 232, 234, 235,
+            236, 239, 240, 241, 242, 243, 245, 248, 250, 251, 252, 254,
+        ];
+
+        for slot_index in unused_slot_indices {
+            assert!(
+                !SlabHeader::<u8>::is_slot_in_use(&used_bitmap, MAX_SLOTS_PER_SLAB, slot_index),
+                "Slot {slot_index} should be unused: used_bitmap= {used_bitmap:?}"
+            );
+        }
     }
 }
 
