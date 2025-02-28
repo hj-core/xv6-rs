@@ -492,7 +492,7 @@ where
     fn object_slot_index(
         slot0_addr: usize,
         slot_size: ByteSize,
-        max_slots: usize,
+        total_slots: usize,
         object_addr: usize,
     ) -> Result<usize, Error> {
         if object_addr < slot0_addr {
@@ -505,7 +505,7 @@ where
         };
 
         let index = offset / slot_size;
-        if max_slots <= index {
+        if total_slots <= index {
             return Err(NotAnObjectOfCurrentSlab);
         }
 
@@ -515,10 +515,10 @@ where
     /// `is_slot_in_use` returns whether the slot with `slot_index` is in use.
     fn is_slot_in_use(
         used_bitmap: &[u64; SLAB_USED_BITMAP_SIZE],
-        max_slots: usize,
+        total_slots: usize,
         slot_index: usize,
     ) -> bool {
-        if max_slots <= slot_index {
+        if total_slots <= slot_index {
             panic!("The `slot_index` is out of bounds");
         };
 
@@ -1863,10 +1863,10 @@ mod header_tests {
         }
     }
     #[test]
-    fn object_slot_index_ok_input_return_ok_index() {
+    fn object_slot_index_valid_input_return_index() {
         type T = TestObject;
         let slot0_addr = 0xa000_0000;
-        let max_slots = MAX_SLOTS_PER_SLAB;
+        let total_slots = MAX_SLOTS_PER_SLAB;
         let slot_size = size_of::<T>();
 
         let expected_indices = vec![0, 1, 55, 128, 166, MAX_SLOTS_PER_SLAB - 1];
@@ -1874,7 +1874,7 @@ mod header_tests {
             let object_addr = slot0_addr + slot_size * expected;
             assert_eq!(
                 Ok(expected),
-                SlabHeader::<T>::object_slot_index(slot0_addr, slot_size, max_slots, object_addr),
+                SlabHeader::<T>::object_slot_index(slot0_addr, slot_size, total_slots, object_addr),
                 "slot0_addr= {slot0_addr}, slot_size= {slot_size}, object_addr= {object_addr}"
             );
         }
@@ -1929,15 +1929,15 @@ mod header_tests {
     }
 
     #[test]
-    fn object_slot_index_object_equal_max_slots_return_err() {
+    fn object_slot_index_object_right_after_slab_boundary_return_err() {
         type T = TestObject;
         let slot0_addr = 0xa002_0000;
         let slot_size = size_of::<T>();
-        let max_slots = 2;
-        let object_addr = slot0_addr + slot_size * max_slots;
+        let total_slots = 2;
+        let object_addr = slot0_addr + slot_size * total_slots;
 
         let result =
-            SlabHeader::<T>::object_slot_index(slot0_addr, slot_size, max_slots, object_addr);
+            SlabHeader::<T>::object_slot_index(slot0_addr, slot_size, total_slots, object_addr);
         assert!(
             result.is_err(),
             "The result should be Err(NotAnObjectOfCurrentSlab) but got {result:?}"
@@ -1951,15 +1951,15 @@ mod header_tests {
     }
 
     #[test]
-    fn object_slot_index_object_exceed_max_slots_return_err() {
+    fn object_slot_index_object_exceed_slab_boundary_return_err() {
         type T = TestObject;
         let slot0_addr = 0xa002_0000;
         let slot_size = size_of::<T>();
-        let max_slots = 2;
-        let object_addr = slot0_addr + slot_size * (max_slots + 1);
+        let total_slots = 2;
+        let object_addr = slot0_addr + slot_size * (total_slots + 1);
 
         let result =
-            SlabHeader::<T>::object_slot_index(slot0_addr, slot_size, max_slots, object_addr);
+            SlabHeader::<T>::object_slot_index(slot0_addr, slot_size, total_slots, object_addr);
         assert!(
             result.is_err(),
             "The result should be Err(NotAnObjectOfCurrentSlab) but got {result:?}"
@@ -1974,13 +1974,13 @@ mod header_tests {
 
     #[test]
     #[should_panic(expected = "The `slot_index` is out of bounds")]
-    fn is_slot_in_use_slot_index_equals_max_slots_should_panic() {
+    fn is_slot_in_use_slot_index_equals_total_slots_should_panic() {
         let _ = SlabHeader::<u8>::is_slot_in_use(&[0; SLAB_USED_BITMAP_SIZE], 5, 5);
     }
 
     #[test]
     #[should_panic(expected = "The `slot_index` is out of bounds")]
-    fn is_slot_in_use_slot_index_exceed_max_slots_should_panic() {
+    fn is_slot_in_use_slot_index_exceed_total_slots_should_panic() {
         let _ = SlabHeader::<u8>::is_slot_in_use(
             &[0; SLAB_USED_BITMAP_SIZE],
             MAX_SLOTS_PER_SLAB,
