@@ -942,9 +942,6 @@ mod cache_tests {
             allocated_objects_after,
             "The `cache` should have the same objects allocated before and after"
         );
-
-        // Teardown
-        drop(_slab_object1);
     }
 
     #[test]
@@ -993,9 +990,6 @@ mod cache_tests {
             allocated_objects_after,
             "The `cache` should only have the object behind the `slab_object` allocated"
         );
-
-        // Teardown
-        drop(slab_object);
     }
 
     #[test]
@@ -1050,9 +1044,6 @@ mod cache_tests {
             allocated_objects_after,
             "The `cache` should only have the object behind the [SlabObject] allocated"
         );
-
-        // Teardown
-        drop(slab_object);
     }
 
     #[test]
@@ -1117,10 +1108,6 @@ mod cache_tests {
             expected_allocated_objects, actual_allocated_objects,
             "The `cache` should have the expected objects allocated"
         );
-
-        // Teardown
-        drop(slab_object);
-        drop(_slab_object1);
     }
 
     #[test]
@@ -1187,9 +1174,6 @@ mod cache_tests {
             allocated_objects_after,
             "The `cache` should only have the object behind the `slab_object` allocated"
         );
-
-        // Teardown
-        drop(_slab_object1);
     }
 
     #[test]
@@ -1255,11 +1239,6 @@ mod cache_tests {
             expected_allocated_objects, allocated_objects_after,
             "The `cache` should have the expected objects allocated"
         );
-
-        // Teardown
-        drop(slab_object);
-        drop(_slab_object1);
-        drop(_slab_object2);
     }
 
     #[test]
@@ -1320,10 +1299,6 @@ mod cache_tests {
             expected_allocated_objects, allocated_objects_after,
             "The `cache` should have the expected objects allocated"
         );
-
-        // Teardown
-        drop(slab_object);
-        drop(slab_object1);
     }
 
     #[test]
@@ -1409,13 +1384,6 @@ mod cache_tests {
             expected_allocated_objects, actual_allocated_objects,
             "The `cache` should have the expected objects allocated"
         );
-
-        // Teardown
-        drop(slab_object);
-        drop(_slab_object1);
-        drop(_slab_object2);
-        drop(_slab_object3);
-        drop(_slab_object4);
     }
 
     #[test]
