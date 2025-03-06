@@ -475,17 +475,44 @@ where
         used_bitmap[index] ^= 1 << shift;
     }
 
-    /// Attempts to deallocate the `object` from the slab the `header` refers to.
+    /// `deallocate_object` attempts to deallocate the allocated object.
+    /// It returns true if the attempt succeeds; otherwise, it returns the corresponding [Error].
     ///
-    /// Returns true if the attempt succeeds, or returns the corresponding error if it fails.
+    /// It is guaranteed that if an [Err] is returned, the header remains unmodified.
     ///
     /// # SAFETY:
-    /// * todo!()
+    /// * `header` must be a valid pointer.
+    /// * `slab_object` must be allocated from `header`.
     unsafe fn deallocate_object(
-        _header: *mut SlabHeader<T>,
-        _object: *mut T,
+        header: *mut SlabHeader<T>,
+        slab_object: SlabObject<T>,
     ) -> Result<bool, Error> {
-        todo!()
+        if header.is_null() {
+            panic!("SlabHeader::deallocate_object: header should not be null");
+        }
+        if header != slab_object.source {
+            return Err(NotAnObjectOfCurrentSlab);
+        };
+
+        let slot_index = unsafe {
+            Self::object_slot_index(
+                (*header).slot0.addr().get(),
+                (*header).slot_size,
+                (*header).total_slots,
+                slab_object.object.addr(),
+            )?
+        };
+
+        if unsafe {
+            !Self::is_slot_in_use(&(*header).used_bitmap, (*header).total_slots, slot_index)
+        } {
+            panic!("SlabHeader::deallocate_object: deallocate from an unused slot");
+        };
+
+        Self::alter_used_bit(&mut (*header).used_bitmap, slot_index);
+        (*header).used_count -= 1;
+
+        Ok(true)
     }
 
     /// `object_slot_index` returns the slot index of the object or the corresponding error.
@@ -1548,8 +1575,9 @@ mod header_tests {
 
     use super::*;
     use crate::mem::slab::test_utils::{
-        safe_slab_size, verify_slab_invariants, SlabMan, TestObject,
+        safe_slab_size, slab_allocated_addrs, verify_slab_invariants, SlabMan, TestObject,
     };
+    use alloc::vec::Vec;
     use alloc::{format, vec};
     use core::any::type_name;
     use Error::NotAnObjectOfCurrentSlab;
@@ -1830,6 +1858,162 @@ mod header_tests {
             unsafe { verify_slab_invariants(slab, slab_layout.size()) };
         }
     }
+
+    #[test]
+    #[should_panic(expected = "SlabHeader::deallocate_object: header should not be null")]
+    fn deallocate_object_from_null_header_should_panic() {
+        // Create a slab and allocate an object from it
+        type T = TestObject;
+        let slab_layout =
+            Layout::from_size_align(safe_slab_size::<T>(1), align_of::<SlabHeader<T>>())
+                .expect("Failed to create `slab_layout`");
+        let mut slab_man = SlabMan::<T>::new(slab_layout);
+
+        let header = slab_man.new_test_slab(null_mut());
+        let slab_object = unsafe { SlabHeader::allocate_object(header) }
+            .expect("Failed to allocate object from `header`");
+
+        // Exercise `deallocate_object` with null header
+        let _ = unsafe { SlabHeader::deallocate_object(null_mut(), slab_object) };
+    }
+
+    #[test]
+    fn deallocate_object_from_different_header_return_wrong_slab_err() {
+        // Create two slabs and allocate one object from each one of them
+        type T = TestObject;
+        let slab_layout =
+            Layout::from_size_align(safe_slab_size::<T>(1), align_of::<SlabHeader<T>>())
+                .expect("Failed to create `slab_layout`");
+        let mut slab_man = SlabMan::<T>::new(slab_layout);
+
+        let slab1 = slab_man.new_test_slab(null_mut());
+        let _slab_object1 = unsafe { SlabHeader::allocate_object(slab1) }
+            .expect("Failed to allocate object from `slab1`");
+
+        let slab2 = slab_man.new_test_slab(null_mut());
+        let slab_object2 = unsafe { SlabHeader::allocate_object(slab2) }
+            .expect("Failed to allocate object from `slab2`");
+
+        // Exercise `deallocate_object` from wrong slab and verify the result
+        let result = unsafe { SlabHeader::deallocate_object(slab1, slab_object2) };
+        assert!(
+            result.is_err(),
+            "The result should be Err(NotAnObjectOfCurrentSlab) but got {result:?}"
+        );
+        let err = result.unwrap_err();
+        assert!(
+            matches!(err, NotAnObjectOfCurrentSlab),
+            "The err should be {:?} but got {err:?}",
+            NotAnObjectOfCurrentSlab
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "SlabHeader::deallocate_object: deallocate from an unused slot")]
+    fn deallocate_object_has_not_been_allocated_should_panic() {
+        // Create an empty slab and craft a SlabObject pointing to an unused slot
+        type T = TestObject;
+        let slab_layout =
+            Layout::from_size_align(safe_slab_size::<T>(1), align_of::<SlabHeader<T>>())
+                .expect("Failed to create `slab_layout`");
+        let mut slab_man = SlabMan::<T>::new(slab_layout);
+
+        let header = slab_man.new_test_slab(null_mut());
+        let slab_object = SlabObject {
+            source: header,
+            object: unsafe { (*header).slot0.as_ptr() as *mut T },
+            _marker: PhantomData,
+        };
+
+        // Exercise `deallocate_object`
+        let _ = unsafe { SlabHeader::deallocate_object(header, slab_object) };
+    }
+
+    #[test]
+    fn deallocate_object_from_single_allocation_slab() {
+        // Create a slab and allocate an object from it
+        type T = TestObject;
+        let slab_layout =
+            Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
+                .expect("Failed to create `slab_layout`");
+        let mut slab_man = SlabMan::<T>::new(slab_layout);
+
+        let header = slab_man.new_test_slab(null_mut());
+        let slab_object = unsafe { SlabHeader::allocate_object(header) }
+            .expect("Failed to allocate object from `header`");
+
+        // Exercise `deallocate_object` and verify the result
+        let result = unsafe { SlabHeader::deallocate_object(header, slab_object) };
+        assert!(
+            result.is_ok(),
+            "The result should be Ok(true) but got {result:?}"
+        );
+        assert!(result.unwrap(), "The result should be true");
+
+        // Verify the `header`
+        unsafe { verify_slab_invariants(header, slab_layout.size()) };
+        let allocated_addrs = unsafe { slab_allocated_addrs(header) };
+        assert_eq!(
+            0,
+            allocated_addrs.len(),
+            "The `header` should not have any object allocated but got {allocated_addrs:?}"
+        );
+    }
+
+    #[test]
+    fn deallocate_object_from_fully_allocated_slab_until_free() {
+        // Create a slab and has all its slots allocated
+        type T = TestObject;
+        let slab_layout =
+            Layout::from_size_align(safe_slab_size::<T>(4), align_of::<SlabHeader<T>>())
+                .expect("Failed to create `slab_layout`");
+        let mut slab_man = SlabMan::<T>::new(slab_layout);
+
+        let header = slab_man.new_test_slab(null_mut());
+        assert_eq!(
+            4,
+            unsafe { (*header).total_slots },
+            "The header should have a `total_slots` of 4 in order for this test to work correctly"
+        );
+
+        let slab_object0 = unsafe { SlabHeader::allocate_object(header) }
+            .expect("Failed to allocate object from `header`");
+        let slab_object1 = unsafe { SlabHeader::allocate_object(header) }
+            .expect("Failed to allocate object from `header`");
+        let slab_object2 = unsafe { SlabHeader::allocate_object(header) }
+            .expect("Failed to allocate object from `header`");
+        let slab_object3 = unsafe { SlabHeader::allocate_object(header) }
+            .expect("Failed to allocate object from `header`");
+
+        // Exercise `deallocate_object` until the slab is free
+        let mut slab_objects = vec![slab_object2, slab_object3, slab_object0, slab_object1];
+        while slab_objects.len() > 0 {
+            let slab_object = slab_objects.pop().unwrap();
+            // Verify the result
+            let result = unsafe { SlabHeader::deallocate_object(header, slab_object) };
+            assert!(
+                result.is_ok(),
+                "The result should be Ok(true) but got {result:?}"
+            );
+            assert!(result.unwrap(), "The result should be true");
+
+            // Verify the `header`
+            unsafe { verify_slab_invariants(header, slab_layout.size()) };
+
+            let mut expected_allocated_addrs = slab_objects
+                .iter()
+                .map(|so| so.object.addr())
+                .collect::<Vec<_>>();
+            expected_allocated_addrs.sort();
+            let mut actual_allocated_addrs = unsafe { slab_allocated_addrs(header) };
+            actual_allocated_addrs.sort();
+            assert_eq!(
+                expected_allocated_addrs, actual_allocated_addrs,
+                "The `header` should have the expected objects allocated"
+            );
+        }
+    }
+
     #[test]
     fn object_slot_index_valid_input_return_index() {
         type T = TestObject;
