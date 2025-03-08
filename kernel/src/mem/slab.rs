@@ -216,17 +216,52 @@ where
         Ok(result)
     }
 
-    /// Returns true if the attempt to deallocate the [SlabObject] succeeds,
-    /// or else returns the corresponding error.
+    /// `deallocate_object` attempts to deallocate the given allocated object.
+    /// It returns true if the attempt succeeds; otherwise, it returns the corresponding [Error].
     ///
-    /// # SAFETY:
-    /// * This method is **NOT** thread-safe.
-    /// * todo!()
+    /// # Safety:
+    /// * `cache` must be a valid pointer.
+    /// * `slab_object` must be allocated from `cache`.
     unsafe fn deallocate_object(
-        _cache: *mut Cache<T>,
-        _object: SlabObject<T>,
+        cache: *mut Cache<T>,
+        slab_object: SlabObject<T>,
     ) -> Result<bool, Error> {
-        todo!()
+        if cache.is_null() {
+            panic!("Cache::deallocate_object: cache should not be null");
+        }
+        if (*slab_object.source).source != cache {
+            panic!("Cache::deallocate_object: object does not belong to the cache");
+        }
+
+        // Update the header
+        let header = slab_object.source;
+        let result = unsafe { SlabHeader::deallocate_object(header, slab_object)? };
+        assert!(
+            result,
+            "Cache::deallocate_object: SlabHeader::deallocate_object should return true"
+        );
+
+        // Update the slab lists
+        if header == (*cache).slabs_full {
+            (*cache).slabs_full = (*header).next;
+        } else if header == (*cache).slabs_partial {
+            (*cache).slabs_partial = (*header).next;
+        } else if header == (*cache).slabs_empty {
+            panic!("Cache::deallocate_object: The slab header should never be slab_empty")
+        }
+        Cache::detach_node_from_list(header);
+
+        if (*header).used_count == 0 {
+            (*cache).slabs_empty = Cache::push_front((*cache).slabs_empty, header);
+        } else if (*header).used_count < (*header).total_slots {
+            (*cache).slabs_partial = Cache::push_front((*cache).slabs_partial, header);
+        } else {
+            panic!(
+                "Cache::deallocate_object: The slab after deallocation should have a used_count less than the total_slots"
+            )
+        }
+
+        Ok(true)
     }
 
     /// Detaches the `node` from the slab list it belonged to.
@@ -1570,6 +1605,244 @@ mod cache_tests {
         assert_eq!(
             expected_allocated_objects, actual_allocated_objects,
             "The `cache` should have the expected objects allocated"
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "Cache::deallocate_object: cache should not be null")]
+    fn deallocate_object_from_null_cache_should_panic() {
+        // Create a slab and allocate an object from it
+        type T = TestObject;
+        let slab_layout =
+            Layout::from_size_align(safe_slab_size::<T>(1), align_of::<SlabHeader<T>>())
+                .expect("Failed to create slab_layout");
+        let mut slab_man = SlabMan::<T>::new(slab_layout);
+
+        let header = slab_man.new_test_slab(null_mut());
+        let slab_object = unsafe { SlabHeader::allocate_object(header) }
+            .expect("Failed to allocate object from header");
+
+        // Exercise deallocate_object with null cache
+        let _ = unsafe { Cache::deallocate_object(null_mut(), slab_object) };
+    }
+
+    #[test]
+    #[should_panic(expected = "Cache::deallocate_object: object does not belong to the cache")]
+    fn deallocate_object_from_other_cache_should_panic() {
+        // Create a cache and an external slab that has an object allocated
+        type T = TestObject;
+        let mut cache = new_test_default::<T>();
+        let mut slab_man = SlabMan::<T>::new(cache.slab_layout);
+
+        let header = slab_man.new_test_slab(null_mut());
+        let slab_object = unsafe {
+            SlabHeader::allocate_object(header).expect("Fail to allocate object from header")
+        };
+
+        // Exercise deallocate_object
+        let _ = unsafe { Cache::deallocate_object(&raw mut cache, slab_object) };
+    }
+
+    #[test]
+    fn deallocate_object_partial_slab_become_empty_and_slabs_partial_become_null() {
+        // Create a cache that contains a single partial slab with an allocated object.
+        type T = TestObject;
+        let mut cache = new_test_default::<T>();
+        let mut slab_man = SlabMan::<T>::new(cache.slab_layout);
+
+        let only_slab = slab_man.new_test_slab(&raw mut cache);
+        let slab_object = unsafe {
+            SlabHeader::allocate_object(only_slab)
+                .expect("Failed to allocate object from only_slab")
+        };
+        cache.slabs_partial = only_slab;
+
+        // Exercise deallocate_object and verify the result
+        let result = unsafe { Cache::deallocate_object(&raw mut cache, slab_object) };
+        assert!(result.is_ok(), "The result should be Ok but got {result:?}");
+        assert!(result.unwrap(), "The result should be true");
+
+        // Verify the `cache`
+        unsafe { verify_cache_invariants(&raw mut cache) };
+        assert_eq!(
+            vec![only_slab],
+            unsafe { cache_slabs(&raw mut cache) },
+            "The cache should only contain the only_slab"
+        );
+        assert_eq!(
+            0,
+            unsafe { cache_allocated_addrs(&raw mut cache).len() },
+            "The cache should have no object allocated"
+        );
+    }
+
+    #[test]
+    fn deallocate_object_full_slabs_become_partial_and_slabs_full_become_null() {
+        // Create a cache that contains a full slab
+        type T = TestObject;
+        let mut cache = new_test_default::<T>();
+        let mut slab_man = SlabMan::<T>::new(cache.slab_layout);
+
+        let only_slab = slab_man.new_test_slab(&raw mut cache);
+        assert_eq!(
+            2,
+            unsafe { (*only_slab).total_slots },
+            "only_slab should have a total_slots of 2 for this test to work correctly"
+        );
+        let slab_object1 = unsafe {
+            SlabHeader::allocate_object(only_slab)
+                .expect("Failed to allocate object from only_slab")
+        };
+        let slab_object2 = unsafe {
+            SlabHeader::allocate_object(only_slab)
+                .expect("Failed to allocate object from only_slab")
+        };
+        cache.slabs_full = only_slab;
+
+        // Exercise deallocate_object on slab_object1 and verify the result
+        let result = unsafe { Cache::deallocate_object(&raw mut cache, slab_object1) };
+        assert!(result.is_ok(), "The result should be Ok but got {result:?}");
+        assert!(result.unwrap(), "The result should be true");
+
+        // Verify the cache
+        unsafe { verify_cache_invariants(&raw mut cache) };
+        assert_eq!(
+            vec![only_slab],
+            unsafe { cache_slabs(&raw mut cache) },
+            "The cache should only contain the only_slab"
+        );
+        assert_eq!(
+            vec![slab_object2.object.addr()],
+            unsafe { cache_allocated_addrs(&raw mut cache) },
+            "The cache should only have the slab_object2 allocated"
+        );
+    }
+
+    #[test]
+    fn deallocate_object_partial_slab_and_remain_partial() {
+        // Create a cache that contains two partial slabs.
+        // One of them has two objects allocated.
+        type T = TestObject;
+        let slab_layout =
+            Layout::from_size_align(safe_slab_size::<T>(3), align_of::<SlabHeader<T>>())
+                .expect("Failed to create slab_layout");
+        let mut cache = new_test_default::<T>();
+        cache.slab_layout = slab_layout;
+
+        let mut slab_man = SlabMan::<T>::new(cache.slab_layout);
+
+        let slab1 = slab_man.new_test_slab(&raw mut cache);
+        assert_eq!(
+            3,
+            unsafe { (*slab1).total_slots },
+            "slab1 should have a total_slots of 2 for this test to work correctly"
+        );
+        let slab_object1 = unsafe {
+            SlabHeader::allocate_object(slab1)
+                .expect("Failed to allocate the first object from slab1")
+        };
+        let slab_object2 = unsafe {
+            SlabHeader::allocate_object(slab1)
+                .expect("Failed to allocate the second object from slab1")
+        };
+
+        let slab2 = slab_man.new_test_slab(&raw mut cache);
+        let slab_object3 = unsafe {
+            SlabHeader::allocate_object(slab2)
+                .expect("Failed to allocate the first object from slab2")
+        };
+
+        unsafe {
+            (*slab1).next = slab2;
+            (*slab2).prev = slab1;
+        }
+        cache.slabs_partial = slab1;
+
+        // Exercise deallocate_object on slab_object1 and verify the result
+        let result = unsafe { Cache::deallocate_object(&raw mut cache, slab_object1) };
+        assert!(result.is_ok(), "The result should be Ok but got {result:?}");
+        assert!(result.unwrap(), "The result should be true");
+
+        // Verify the cache
+        unsafe { verify_cache_invariants(&raw mut cache) };
+
+        let mut expected_slabs = vec![slab1, slab2];
+        expected_slabs.sort();
+        let mut actual_slabs = unsafe { cache_slabs(&raw mut cache) };
+        actual_slabs.sort();
+        assert_eq!(
+            expected_slabs, actual_slabs,
+            "The `cache` should only contain the initial slabs",
+        );
+
+        let mut expected_allocated_addrs =
+            vec![slab_object2.object.addr(), slab_object3.object.addr()];
+        expected_allocated_addrs.sort();
+        let mut actual_allocated_addrs = unsafe { cache_allocated_addrs(&raw mut cache) };
+        actual_allocated_addrs.sort();
+        assert_eq!(
+            expected_allocated_addrs, actual_allocated_addrs,
+            "The cache should only have the expected objects allocated"
+        );
+    }
+
+    #[test]
+    fn deallocate_object_full_slab_become_empty() {
+        // Create a cache that contains two full slabs and one empty slab.
+        // All slabs have a total_slots of one.
+        type T = TestObject;
+        let slab_layout =
+            Layout::from_size_align(safe_slab_size::<T>(1), align_of::<SlabHeader<T>>())
+                .expect("Failed to create slab_layout");
+        let mut cache = new_test_default::<T>();
+        cache.slab_layout = slab_layout;
+
+        let mut slab_man = SlabMan::<T>::new(cache.slab_layout);
+
+        let slab1 = slab_man.new_test_slab(&raw mut cache);
+        assert_eq!(
+            1,
+            unsafe { (*slab1).total_slots },
+            "slab1 should have a total_slots of 1 for this test to work correctly"
+        );
+        let slab_object1 = unsafe { SlabHeader::allocate_object(slab1) }
+            .expect("Failed to allocate object from slab1");
+
+        let slab2 = slab_man.new_test_slab(&raw mut cache);
+        let slab_object2 = unsafe { SlabHeader::allocate_object(slab2) }
+            .expect("Failed to allocate object from slab2");
+
+        unsafe {
+            (*slab1).next = slab2;
+            (*slab2).prev = slab1;
+        }
+        cache.slabs_full = slab1;
+
+        let slab3 = slab_man.new_test_slab(&raw mut cache);
+        cache.slabs_empty = slab3;
+
+        // Exercise deallocate_object on slab_object2 and verify the result
+        let result = unsafe { Cache::deallocate_object(&raw mut cache, slab_object2) };
+        assert!(result.is_ok(), "The result should be Ok but got {result:?}");
+        assert!(result.unwrap(), "The result should be true");
+
+        // Verify the cache
+        unsafe { verify_cache_invariants(&raw mut cache) };
+
+        let mut expected_slabs = vec![slab1, slab2, slab3];
+        expected_slabs.sort();
+        let mut actual_slabs = unsafe { cache_slabs(&raw mut cache) };
+        actual_slabs.sort();
+        assert_eq!(
+            expected_slabs, actual_slabs,
+            "The cache should only contain the initial slabs"
+        );
+
+        let expected_allocated_addrs = vec![slab_object1.object.addr()];
+        assert_eq!(
+            expected_allocated_addrs,
+            unsafe { cache_allocated_addrs(&raw mut cache) },
+            "The cache should only have the expected objects allocated"
         );
     }
 
