@@ -229,6 +229,24 @@ where
         todo!()
     }
 
+    /// Detaches the `node` from the slab list it belonged to.
+    ///
+    /// # Safety:
+    /// * `node` must be a valid pointer.
+    unsafe fn detach_node_from_list(node: *mut SlabHeader<T>) {
+        if node.is_null() {
+            panic!("Cache::detach_node_from_list: `node` should not be null")
+        }
+        if !(*node).prev.is_null() {
+            (*(*node).prev).next = (*node).next;
+        }
+        if !(*node).next.is_null() {
+            (*(*node).next).prev = (*node).prev;
+        }
+        (*node).prev = null_mut();
+        (*node).next = null_mut();
+    }
+
     /// Attempts to create a new slab and push it to the `slab_empty`.
     /// Clients of this method are responsible for acquiring the required memory
     /// and providing the starting address `addr0`.
@@ -912,6 +930,148 @@ mod cache_tests {
             "The new head should contain the `next_next`"
         );
         unsafe { verify_list_doubly_linked(new_head) };
+    }
+
+    #[test]
+    #[should_panic(expected = "Cache::detach_node_from_list: `node` should not be null")]
+    fn detach_node_from_list_with_null_node_should_panic() {
+        type T = TestObject;
+        unsafe { Cache::<T>::detach_node_from_list(null_mut()) }
+    }
+
+    #[test]
+    fn detach_node_from_list_with_isolated_node() {
+        // Create an empty slab
+        type T = TestObject;
+        let slab_layout =
+            Layout::from_size_align(safe_slab_size::<T>(1), align_of::<SlabHeader<T>>())
+                .expect("Failed to create `slab_layout`");
+        let mut slab_man = SlabMan::<T>::new(slab_layout);
+
+        let node = slab_man.new_test_slab(null_mut());
+
+        // Exercise `detach_node_from_list`
+        unsafe { Cache::detach_node_from_list(node) };
+
+        // Verify the result
+        unsafe { verify_node_isolated(node) };
+    }
+
+    #[test]
+    fn detach_node_from_list_with_head_node() {
+        // Create a list containing three nodes
+        type T = TestObject;
+        let slab_layout =
+            Layout::from_size_align(safe_slab_size::<T>(1), align_of::<SlabHeader<T>>())
+                .expect("Failed to create `slab_layout`");
+        let mut slab_man = SlabMan::<T>::new(slab_layout);
+
+        let head = slab_man.new_test_slab(null_mut());
+        let body = slab_man.new_test_slab(null_mut());
+        let tail = slab_man.new_test_slab(null_mut());
+        unsafe {
+            (*head).next = body;
+            (*body).prev = head;
+            (*body).next = tail;
+            (*tail).prev = body;
+        }
+
+        // Exercise `detach_node_from_list`
+        unsafe { Cache::detach_node_from_list(head) };
+
+        // Verify the resulting node and list
+        unsafe {
+            verify_node_isolated(head);
+            verify_list_doubly_linked(body);
+            assert_eq!(
+                tail,
+                (*body).next,
+                "The `next` of the `body` should be the `tail`"
+            );
+            assert_eq!(
+                2,
+                size_of_list(body),
+                "The resulting list should contain two nodes"
+            )
+        }
+    }
+
+    #[test]
+    fn detach_node_from_list_with_tail_node() {
+        // Create a list containing three nodes
+        type T = TestObject;
+        let slab_layout =
+            Layout::from_size_align(safe_slab_size::<T>(1), align_of::<SlabHeader<T>>())
+                .expect("Failed to create `slab_layout`");
+        let mut slab_man = SlabMan::<T>::new(slab_layout);
+
+        let head = slab_man.new_test_slab(null_mut());
+        let body = slab_man.new_test_slab(null_mut());
+        let tail = slab_man.new_test_slab(null_mut());
+        unsafe {
+            (*head).next = body;
+            (*body).prev = head;
+            (*body).next = tail;
+            (*tail).prev = body;
+        }
+
+        // Exercise `detach_node_from_list`
+        unsafe { Cache::detach_node_from_list(tail) };
+
+        // Verify the resulting node and list
+        unsafe {
+            verify_node_isolated(tail);
+            verify_list_doubly_linked(head);
+            assert_eq!(
+                body,
+                (*head).next,
+                "The `next` of the `head` should be the `body`"
+            );
+            assert_eq!(
+                2,
+                size_of_list(head),
+                "The resulting list should contain two nodes"
+            )
+        }
+    }
+
+    #[test]
+    fn detach_node_from_list_with_body_node() {
+        // Create a list containing three nodes
+        type T = TestObject;
+        let slab_layout =
+            Layout::from_size_align(safe_slab_size::<T>(1), align_of::<SlabHeader<T>>())
+                .expect("Failed to create `slab_layout`");
+        let mut slab_man = SlabMan::<T>::new(slab_layout);
+
+        let head = slab_man.new_test_slab(null_mut());
+        let body = slab_man.new_test_slab(null_mut());
+        let tail = slab_man.new_test_slab(null_mut());
+        unsafe {
+            (*head).next = body;
+            (*body).prev = head;
+            (*body).next = tail;
+            (*tail).prev = body;
+        }
+
+        // Exercise `detach_node_from_list`
+        unsafe { Cache::detach_node_from_list(body) };
+
+        // Verify the resulting node and list
+        unsafe {
+            verify_node_isolated(body);
+            verify_list_doubly_linked(head);
+            assert_eq!(
+                tail,
+                (*head).next,
+                "The `next` of the `head` should be the `tail`"
+            );
+            assert_eq!(
+                2,
+                size_of_list(head),
+                "The resulting list should contain two nodes"
+            )
+        }
     }
 
     #[test]
