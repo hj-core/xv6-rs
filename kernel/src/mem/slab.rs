@@ -325,6 +325,20 @@ where
 
         Ok(result)
     }
+
+    /// `shrink` attempts to reclaim memory from the `cache`.
+    /// It returns a pointer to the evicted empty slab if there is one;
+    /// otherwise, it returns a null pointer.
+    unsafe fn shrink(cache: *mut Cache<T>) -> *mut u8 {
+        if (*cache).slabs_empty.is_null() {
+            return null_mut();
+        }
+        
+        let result = (*cache).slabs_empty;
+        (*cache).slabs_empty = (*result).next;
+        Cache::detach_node_from_list(result);
+        result as *mut u8
+    }
 }
 
 #[repr(C)]
@@ -1999,6 +2013,111 @@ mod cache_tests {
 
         // Teardown
         unsafe { release_memory(&addrs, cache.slab_layout) }
+    }
+
+    #[test]
+    fn shrink_when_no_empty_slab_return_null_ptr() {
+        // Create a cache that contains no slabs
+        type T = TestObject;
+        let mut cache = new_test_default::<T>();
+
+        // Exercise shrink and verify the result
+        let result = unsafe { Cache::shrink(&raw mut cache) };
+        assert_eq!(
+            null_mut(),
+            result,
+            "The result should be null but got {result:?}"
+        );
+
+        // Verify the cache
+        unsafe { verify_cache_invariants(&raw mut cache) };
+        assert_eq!(
+            0,
+            unsafe { cache_slabs(&raw mut cache).len() },
+            "The cache should contain no slabs"
+        )
+    }
+
+    #[test]
+    fn shrink_when_single_empty_slab_then_slabs_empty_become_null() {
+        // Create a cache that contains an empty slab and a partial slab.
+        type T = TestObject;
+        let mut cache = new_test_default();
+
+        let mut slab_man = SlabMan::<T>::new(cache.slab_layout);
+
+        let slab1 = slab_man.new_test_slab(&raw mut cache);
+        cache.slabs_empty = slab1;
+
+        let slab2 = slab_man.new_test_slab(&raw mut cache);
+        let slab_object = unsafe { SlabHeader::allocate_object(slab2) }
+            .expect("Failed to allocate object from slab2");
+        cache.slabs_partial = slab2;
+
+        // Exercise shrink and verify the result
+        let result = unsafe { Cache::shrink(&raw mut cache) };
+        assert_eq!(slab1 as *mut u8, result, "The result should be the slab1");
+
+        // Verify the cache
+        unsafe { verify_cache_invariants(&raw mut cache) };
+
+        assert_eq!(
+            vec![slab2],
+            unsafe { cache_slabs(&raw mut cache) },
+            "The cache should only contain the slab2"
+        );
+        assert_eq!(
+            vec![slab_object.object.addr()],
+            unsafe { cache_allocated_addrs(&raw mut cache) },
+            "The cache should only have slab_object allocated"
+        );
+    }
+
+    #[test]
+    fn shrink_when_multiple_empty_slabs_return_evicted_slab_ptr() {
+        // Create a cache that contains two empty slabs
+        type T = TestObject;
+        let mut cache = new_test_default();
+
+        let mut slab_man = SlabMan::<T>::new(cache.slab_layout);
+        let slab1 = slab_man.new_test_slab(&raw mut cache);
+        let slab2 = slab_man.new_test_slab(&raw mut cache);
+        unsafe {
+            (*slab1).next = slab2;
+            (*slab2).prev = slab1;
+        }
+        cache.slabs_empty = slab1;
+
+        // Exercise shrink and verify the result
+        let result = unsafe { Cache::shrink(&raw mut cache) };
+        assert!(
+            result == slab1 as *mut u8 || result == slab2 as *mut u8,
+            "The result should be either slab1 or slab2"
+        );
+
+        // Verify the cache
+        unsafe { verify_cache_invariants(&raw mut cache) };
+
+        let cache_slabs = unsafe { cache_slabs(&raw mut cache) };
+        assert_eq!(
+            1,
+            cache_slabs.len(),
+            "The cache should only contain one slab"
+        );
+        assert!(
+            cache_slabs.contains(&slab1) || cache_slabs.contains(&slab2),
+            "The cache should contain either slab1 or slab2"
+        );
+        assert_ne!(
+            cache_slabs[0] as *mut u8, result,
+            "The cache should not contain the evicted slab"
+        );
+
+        assert_eq!(
+            0,
+            unsafe { cache_allocated_addrs(&raw mut cache).len() },
+            "The cache should have no object allocated"
+        );
     }
 }
 
