@@ -692,7 +692,7 @@ where
 }
 
 #[derive(Debug, PartialEq)]
-enum Error {
+pub enum Error {
     SlabNotAligned,
     SlabTooSmall,
     ZeroSizeTypeNotSupported,
