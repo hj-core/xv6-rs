@@ -696,7 +696,6 @@ pub enum Error {
     SlabNotAligned,
     SlabTooSmall,
     ZeroSizeTypeNotSupported,
-    RequestMemoryFailed,
     AllocateFromFullSlab,
     AllocateFromNullSlab,
     NotAnObjectOfCurrentSlab,
