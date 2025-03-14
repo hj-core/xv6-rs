@@ -628,7 +628,7 @@ where
 /// Failing to do so will cause a memory leak; the destructor of the object will still be invoked
 /// when this [SlabObject] is dropped.
 #[derive(Debug)]
-struct SlabObject<T>
+pub struct SlabObject<T>
 where
     T: Default,
 {
