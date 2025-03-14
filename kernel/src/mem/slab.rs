@@ -295,16 +295,9 @@ where
     /// * `cache` must be a valid pointer.
     /// * `addr0` must point to a memory block that satisfies the `slab_layout` and dedicated
     ///   to the new slab.
-    ///
-    /// # THREAD SAFETY:
-    /// * This method is **NOT** thread-safe.
     unsafe fn grow(cache: *mut Cache<T>, addr0: NonNull<u8>) -> Result<*mut SlabHeader<T>, Error> {
-        // SAFETY:
-        // * Dereferencing `cache` is safe because it is a valid pointer.
-        // * [Layout] implements [Copy] so there is no ownership transfer.
-        let layout = (*cache).slab_layout;
-        if addr0.align_offset(layout.align()) != 0 {
-            return Err(SlabNotAligned);
+        if addr0.align_offset((*cache).slab_layout.align()) != 0 {
+            panic!("Cache::grow: addr0 should comply with the slab layout")
         }
 
         // SAFETY:
@@ -314,7 +307,7 @@ where
         //   place.
         // * We are safe to dereference `slab_empty` and update it in place if it is not null.
         // * In light of the above, this unsafe block is considered safe.
-        let result = SlabHeader::new(cache, layout.size(), addr0)?;
+        let result = SlabHeader::new(cache, (*cache).slab_layout.size(), addr0)?;
 
         let old_head = (*cache).slabs_empty;
         if !old_head.is_null() {
@@ -333,7 +326,7 @@ where
         if (*cache).slabs_empty.is_null() {
             return null_mut();
         }
-        
+
         let result = (*cache).slabs_empty;
         (*cache).slabs_empty = (*result).next;
         Cache::detach_node_from_list(result);
@@ -1860,6 +1853,28 @@ mod cache_tests {
     }
 
     #[test]
+    #[should_panic(expected = "Cache::grow: addr0 should comply with the slab layout")]
+    fn grow_when_addr0_violate_slab_alignment_should_panic() {
+        // Create a cache that contains no slabs
+        type T = TestObject;
+        let mut cache = new_test_default::<T>();
+
+        assert!(
+            cache.slab_layout.align() > 1,
+            "The slab layout should have an alignment greater than one for this test to work correctly"
+        );
+
+        // Exercise `grow` with a misaligned addr0
+        let mut mem_block =
+            Vec::<u8>::with_capacity(1 + cache.slab_layout.align() + cache.slab_layout.size());
+        let addr0 = {
+            let offset = mem_block.as_ptr().align_offset(cache.slab_layout.align());
+            unsafe { mem_block.as_mut_ptr().add(offset + 1) }
+        };
+        let _ = unsafe { Cache::grow(&raw mut cache, NonNull::new_unchecked(addr0)) };
+    }
+
+    #[test]
     fn grow_succeeds_update_slabs_empty() {
         // Create a `cache` without any slabs
         type T = u64;
@@ -1979,33 +1994,6 @@ mod cache_tests {
             matches!(err, SlabTooSmall),
             "The error should be {:?} but got {err:?}",
             SlabTooSmall,
-        );
-
-        // No validation of the `cache` because it is ill-formed from the beginning
-
-        // Teardown
-        unsafe { release_memory(&addrs, cache.slab_layout) }
-    }
-
-    #[test]
-    fn grow_with_wrong_align_return_align_err() {
-        // Create a `cache` without any slabs
-        type T = u64;
-        let mut cache = new_test_default::<T>();
-        let addrs = acquire_memory(cache.slab_layout, 1);
-
-        // Exercise `grow` and verify the result
-        let result =
-            unsafe { Cache::grow(&raw mut cache, NonNull::new_unchecked(addrs[0].add(1))) };
-        assert!(
-            result.is_err(),
-            "The result should be Err(SlabNotAligned) but got {result:?}"
-        );
-        let err = result.unwrap_err();
-        assert!(
-            matches!(err, SlabNotAligned),
-            "The error should be {:?} but got {err:?}",
-            SlabNotAligned,
         );
 
         // No validation of the `cache` because it is ill-formed from the beginning
