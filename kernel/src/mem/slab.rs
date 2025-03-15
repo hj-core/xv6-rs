@@ -366,10 +366,8 @@ where
 {
     /// Attempts to create a slab for `cache` at `addr0` with a size of `slab_size`.
     ///
-    /// Returns a pointer to the [SlabHeader] if the attempt succeeds,
-    /// or an [Error] if it fails.
-    /// Furthermore, it is guaranteed that if an [Err] is returned, the provided memory
-    /// remain unmodified.
+    /// Returns a pointer to the [SlabHeader] if the attempt succeeds, or an [Error] if it fails.
+    /// Furthermore, it is guaranteed that if an [Err] is returned, the provided memory remains unmodified.
     ///
     /// # SAFETY:
     /// * The memory block starting at `addr0` and extending for `slab_size` must be dedicated
@@ -2122,7 +2120,7 @@ mod header_tests {
     use Error::NotAnObjectOfCurrentSlab;
 
     #[test]
-    fn test_compute_slot0_offset() {
+    fn compute_slot0_offset_with_general_input() {
         let expected: ByteSize = 5;
         let addr0: usize = 0;
         let header_size: ByteSize = 5;
@@ -2164,7 +2162,7 @@ mod header_tests {
     }
 
     #[test]
-    fn test_first_free_slot() {
+    fn first_free_slot_with_general_input() {
         assert_first_free_slot(&[0; SLAB_USED_BITMAP_SIZE], 0);
         assert_first_free_slot(&[0xffff_ffff_ffff_ffff; SLAB_USED_BITMAP_SIZE], 256);
         assert_first_free_slot(&[0xffff_ffff_ffff_ffef, 0, 0, 0], 4);
@@ -2233,7 +2231,7 @@ mod header_tests {
     }
 
     #[test]
-    fn test_alter_used_bit_with_valid_input() {
+    fn alter_used_bit_with_valid_input() {
         assert_alter_used_bit(&mut [0, 0, 0, 0], 5, &mut [0x20, 0, 0, 0]);
         assert_alter_used_bit(&mut [0x20, 0, 0, 0], 5, &mut [0, 0, 0, 0]);
         assert_alter_used_bit(
