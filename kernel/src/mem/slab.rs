@@ -44,9 +44,12 @@ impl<T> Cache<T>
 where
     T: Default,
 {
-    fn new(_name: [char; CACHE_NAME_LENGTH], _slab_layout: Layout) -> Self {
+    fn new(_name: [char; CACHE_NAME_LENGTH], slab_layout: Layout) -> Self {
         if size_of::<T>() == 0 {
             panic!("Cache::new: zero size type is not supported")
+        };
+        if slab_layout.align() % align_of::<SlabHeader<T>>() != 0 {
+            panic!("Cache::new: slab_layout is not properly aligned")
         };
         todo!()
     }
@@ -2117,6 +2120,20 @@ mod cache_tests {
     fn new_when_zero_size_type_should_panic() {
         let slab_layout = Layout::from_size_align(0, 1024).expect("Failed to create slab_layout");
         let _ = Cache::<()>::new(['c'; CACHE_NAME_LENGTH], slab_layout);
+    }
+
+    #[test]
+    #[should_panic(expected = "Cache::new: slab_layout is not properly aligned")]
+    fn new_when_slab_layout_not_aligned_should_panic() {
+        type T = TestObject;
+        assert!(
+            align_of::<SlabHeader<T>>() > 2,
+            "The type should have an align greater than 2 for this test to work correctly"
+        );
+        
+        let slab_layout = Layout::from_size_align(safe_slab_size::<T>(1), 2)
+            .expect("Failed to create slab_layout");
+        let _ = Cache::<T>::new(['c'; CACHE_NAME_LENGTH], slab_layout);
     }
 }
 
