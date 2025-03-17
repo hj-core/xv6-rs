@@ -44,6 +44,13 @@ impl<T> Cache<T>
 where
     T: Default,
 {
+    fn new(_name: [char; CACHE_NAME_LENGTH], _slab_layout: Layout) -> Self {
+        if size_of::<T>() == 0 {
+            panic!("Cache::new: zero size type is not supported")
+        };
+        todo!()
+    }
+
     /// `allocate_object` returns a [SlabObject] wrapping the allocated object
     /// if the allocation succeeds; otherwise, it returns the corresponding error.
     ///
@@ -2103,6 +2110,13 @@ mod cache_tests {
             unsafe { cache_allocated_addrs(&raw mut cache).len() },
             "The cache should have no object allocated"
         );
+    }
+
+    #[test]
+    #[should_panic(expected = "Cache::new: zero size type is not supported")]
+    fn new_when_zero_size_type_should_panic() {
+        let slab_layout = Layout::from_size_align(0, 1024).expect("Failed to create slab_layout");
+        let _ = Cache::<()>::new(['c'; CACHE_NAME_LENGTH], slab_layout);
     }
 }
 
