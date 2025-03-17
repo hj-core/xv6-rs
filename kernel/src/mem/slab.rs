@@ -51,7 +51,16 @@ where
         if slab_layout.align() % align_of::<SlabHeader<T>>() != 0 {
             panic!("Cache::new: slab_layout is not properly aligned")
         };
+        if slab_layout.size() < Self::min_slab_size() {
+            panic!("Cache::new: slab_layout should not smaller than Cache::min_slab_size")
+        }
         todo!()
+    }
+
+    /// `min_slab_size` returns the minimum size of the slab layout for type [T].
+    /// Note that the value is evaluated a bit conservatively.
+    fn min_slab_size() -> usize {
+        size_of::<SlabHeader<T>>() + align_of::<T>() + size_of::<T>()
     }
 
     /// `allocate_object` returns a [SlabObject] wrapping the allocated object
@@ -2130,9 +2139,21 @@ mod cache_tests {
             align_of::<SlabHeader<T>>() > 2,
             "The type should have an align greater than 2 for this test to work correctly"
         );
-        
+
         let slab_layout = Layout::from_size_align(safe_slab_size::<T>(1), 2)
             .expect("Failed to create slab_layout");
+        let _ = Cache::<T>::new(['c'; CACHE_NAME_LENGTH], slab_layout);
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "Cache::new: slab_layout should not smaller than Cache::min_slab_size"
+    )]
+    fn new_when_slab_layout_smaller_than_min_slab_size_should_panic() {
+        type T = TestObject;
+        let slab_layout = Layout::from_size_align(size_of::<T>(), align_of::<SlabHeader<T>>())
+            .expect("Failed to create slab_layout");
+
         let _ = Cache::<T>::new(['c'; CACHE_NAME_LENGTH], slab_layout);
     }
 }
