@@ -9,10 +9,7 @@ use core::marker::PhantomData;
 use core::marker::PhantomPinned;
 use core::ptr;
 use core::ptr::{null_mut, NonNull};
-use Error::{
-    AllocateFromFullSlab, AllocateFromNullSlab, NotAnObjectOfCurrentSlab, SlabNotAligned,
-    SlabTooSmall, ZeroSizeTypeNotSupported,
-};
+use Error::{AllocateFromFullSlab, AllocateFromNullSlab, NotAnObjectOfCurrentSlab};
 
 type ByteSize = usize;
 
@@ -411,24 +408,11 @@ where
         slab_size: ByteSize,
         addr0: NonNull<u8>,
     ) -> Result<*mut Self, Error> {
-        if size_of::<T>() == 0 {
-            return Err(ZeroSizeTypeNotSupported);
-        }
-
-        if addr0.align_offset(align_of::<SlabHeader<T>>()) != 0 {
-            return Err(SlabNotAligned);
-        }
-
         let header_size: ByteSize = size_of::<SlabHeader<T>>();
         let slot_size: ByteSize = size_of::<T>();
         let slot0_offset = Self::compute_slot0_offset(addr0.addr().get(), header_size);
-        let min_size = slot0_offset + slot_size;
-
-        if slab_size < min_size {
-            return Err(SlabTooSmall);
-        }
-
         let total_slots = (slab_size - slot0_offset) / slot_size;
+
         // SAFETY:
         // * todo!()
         let slot0 = unsafe { addr0.add(slot0_offset) };
@@ -718,9 +702,6 @@ where
 
 #[derive(Debug, PartialEq)]
 pub enum Error {
-    SlabNotAligned,
-    SlabTooSmall,
-    ZeroSizeTypeNotSupported,
     AllocateFromFullSlab,
     AllocateFromNullSlab,
     NotAnObjectOfCurrentSlab,
@@ -2000,37 +1981,6 @@ mod cache_tests {
 
         // Teardown
         drop(new_slabs);
-        unsafe { release_memory(&addrs, cache.slab_layout) }
-    }
-
-    #[test]
-    fn grow_with_insufficient_size_return_size_err() {
-        // Create a `cache` without any slabs
-        type T = u64;
-        let small_layout =
-            Layout::from_size_align(size_of::<SlabHeader<T>>(), align_of::<SlabHeader<u64>>())
-                .unwrap();
-
-        let mut cache = new_test_default::<T>();
-        cache.slab_layout = small_layout;
-        let addrs = acquire_memory(cache.slab_layout, 1);
-
-        // Exercise `grow` and verify the result
-        let result = unsafe { Cache::grow(&raw mut cache, NonNull::new_unchecked(addrs[0])) };
-        assert!(
-            result.is_err(),
-            "The result should be Err(SlabTooSmall) but got {result:?}"
-        );
-        let err = result.unwrap_err();
-        assert!(
-            matches!(err, SlabTooSmall),
-            "The error should be {:?} but got {err:?}",
-            SlabTooSmall,
-        );
-
-        // No validation of the `cache` because it is ill-formed from the beginning
-
-        // Teardown
         unsafe { release_memory(&addrs, cache.slab_layout) }
     }
 
