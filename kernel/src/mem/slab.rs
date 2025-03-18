@@ -51,7 +51,7 @@ where
         if size_of::<T>() == 0 {
             panic!("Cache::new: zero size type is not supported")
         };
-        if slab_layout.align() % align_of::<SlabHeader<T>>() != 0 {
+        if slab_layout.align() % Self::align_of_slab() != 0 {
             panic!("Cache::new: slab_layout is not properly aligned")
         };
         if slab_layout.size() < Self::min_slab_size() {
@@ -71,6 +71,11 @@ where
     /// Note that the value is evaluated a bit conservatively.
     fn min_slab_size() -> usize {
         size_of::<SlabHeader<T>>() + align_of::<T>() + size_of::<T>()
+    }
+
+    /// `align_of_slab` returns the alignment that the slab layout must comply with.
+    fn align_of_slab() -> usize {
+        align_of::<SlabHeader<T>>()
     }
 
     /// `allocate_object` returns a [SlabObject] wrapping the allocated object
@@ -2173,9 +2178,9 @@ mod cache_tests {
         let slab_layout =
             Layout::from_size_align(Cache::<T>::min_slab_size(), align_of::<SlabHeader<T>>())
                 .expect("Failed to create slab_layout");
-        
+
         let mut cache = Cache::<T>::new(['c'; CACHE_NAME_LENGTH], slab_layout);
-        
+
         unsafe { verify_cache_invariants(&raw mut cache) };
         assert_eq!(
             0,
