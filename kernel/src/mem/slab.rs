@@ -44,7 +44,10 @@ impl<T> Cache<T>
 where
     T: Default,
 {
-    fn new(_name: [char; CACHE_NAME_LENGTH], slab_layout: Layout) -> Self {
+    /// `new` returns a new [Cache] with the given `name` and `slab_layout`.
+    /// The `slab_layout` must have a size no less than [Cache::min_slab_size]
+    /// and comply with the [Cache::align_of_slab].
+    fn new(name: [char; CACHE_NAME_LENGTH], slab_layout: Layout) -> Self {
         if size_of::<T>() == 0 {
             panic!("Cache::new: zero size type is not supported")
         };
@@ -54,7 +57,14 @@ where
         if slab_layout.size() < Self::min_slab_size() {
             panic!("Cache::new: slab_layout should not smaller than Cache::min_slab_size")
         }
-        todo!()
+
+        Self {
+            name,
+            slab_layout,
+            slabs_full: null_mut(),
+            slabs_partial: null_mut(),
+            slabs_empty: null_mut(),
+        }
     }
 
     /// `min_slab_size` returns the minimum size of the slab layout for type [T].
@@ -2155,6 +2165,23 @@ mod cache_tests {
             .expect("Failed to create slab_layout");
 
         let _ = Cache::<T>::new(['c'; CACHE_NAME_LENGTH], slab_layout);
+    }
+
+    #[test]
+    fn new_when_valid_slab_layout_return_an_new_cache() {
+        type T = TestObject;
+        let slab_layout =
+            Layout::from_size_align(Cache::<T>::min_slab_size(), align_of::<SlabHeader<T>>())
+                .expect("Failed to create slab_layout");
+        
+        let mut cache = Cache::<T>::new(['c'; CACHE_NAME_LENGTH], slab_layout);
+        
+        unsafe { verify_cache_invariants(&raw mut cache) };
+        assert_eq!(
+            0,
+            unsafe { cache_slabs(&raw mut cache).len() },
+            "The new cache should contain no slabs"
+        );
     }
 }
 
