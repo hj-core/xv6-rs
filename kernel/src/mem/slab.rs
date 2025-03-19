@@ -395,12 +395,15 @@ impl<T> SlabHeader<T>
 where
     T: Default,
 {
-    /// Attempts to create a slab for `cache` at `addr0` with a size of `slab_size`.
-    ///
-    /// Returns a pointer to the [SlabHeader] if the attempt succeeds, or an [Error] if it fails.
-    /// Furthermore, it is guaranteed that if an [Err] is returned, the provided memory remains unmodified.
+    /// `new` attempts to create a slab for `cache` at `addr0` with a size of `slab_size`.
+    /// It returns a pointer to the [SlabHeader].
     ///
     /// # SAFETY:
+    /// * `slab_size` must be able to accommodate the [SlabHeader] and at least one [T],
+    ///   with the alignment of [T] considered, i.e., padding after the [SlabHeader] to
+    ///   comply with the alignment of [T].
+    /// * `addr0` must be a valid pointer.
+    /// * `addr0` must comply with the alignment of [SlabHeader].
     /// * The memory block starting at `addr0` and extending for `slab_size` must be dedicated
     ///   to the new slab's use.
     unsafe fn new(cache: *mut Cache<T>, slab_size: ByteSize, addr0: NonNull<u8>) -> *mut Self {
@@ -409,8 +412,17 @@ where
         let slot0_offset = Self::compute_slot0_offset(addr0.addr().get(), header_size);
         let total_slots = (slab_size - slot0_offset) / slot_size;
 
+        assert!(
+            slot0_offset <= isize::MAX as usize,
+            "slot0_offset must fit in an isize to satisfy the safety of NonNull::add"
+        );
+
         // SAFETY:
-        // * todo!()
+        // We are safe to call add because:
+        // * addr0 is a valid pointer.
+        // * The computed offset, slot0_offset * size_of::<u8> cannot overflow isize.
+        // * The computed offset is in bounds of addr0 because addr0 is backed by
+        //   a memory block of slab_size, and slot0 is within the slab.
         let slot0 = unsafe { addr0.add(slot0_offset) };
 
         let header = Self {
@@ -427,6 +439,11 @@ where
         };
 
         let result: *mut SlabHeader<T> = addr0.as_ptr().cast();
+        // SAFETY:
+        // We are safe to write the header to the result because
+        // * addr0 is valid for writes.
+        // * addr0 is properly aligned.
+        // * The memory block is dedicated to the slab's use.
         unsafe { result.write(header) };
 
         result
