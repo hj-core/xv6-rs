@@ -338,7 +338,7 @@ where
         //   place.
         // * We are safe to dereference `slab_empty` and update it in place if it is not null.
         // * In light of the above, this unsafe block is considered safe.
-        let result = SlabHeader::new(cache, (*cache).slab_layout.size(), addr0)?;
+        let result = SlabHeader::new(cache, (*cache).slab_layout.size(), addr0);
 
         let old_head = (*cache).slabs_empty;
         if !old_head.is_null() {
@@ -403,11 +403,7 @@ where
     /// # SAFETY:
     /// * The memory block starting at `addr0` and extending for `slab_size` must be dedicated
     ///   to the new slab's use.
-    unsafe fn new(
-        cache: *mut Cache<T>,
-        slab_size: ByteSize,
-        addr0: NonNull<u8>,
-    ) -> Result<*mut Self, Error> {
+    unsafe fn new(cache: *mut Cache<T>, slab_size: ByteSize, addr0: NonNull<u8>) -> *mut Self {
         let header_size: ByteSize = size_of::<SlabHeader<T>>();
         let slot_size: ByteSize = size_of::<T>();
         let slot0_offset = Self::compute_slot0_offset(addr0.addr().get(), header_size);
@@ -431,15 +427,9 @@ where
         };
 
         let result: *mut SlabHeader<T> = addr0.as_ptr().cast();
-        // SAFETY:
-        // * We are safe to write the newly created header to `result` because
-        //   1. We have checked the alignment requirement.
-        //   2. We have verified the intended slab size can accommodate the header
-        //      plus at least one slot.
-        //   3. The memory block is dedicated to this slab's use.
         unsafe { result.write(header) };
 
-        Ok(result)
+        result
     }
 
     /// Offset from the [SlabHeader]'s address to slot 0.
@@ -2912,18 +2902,13 @@ mod test_utils {
             assert_ne!(null_mut(), addr0, "Failed to allocate memory");
             self.allocated.push(addr0);
 
-            let header = unsafe {
+            unsafe {
                 SlabHeader::<T>::new(
                     cache,
                     self.slab_layout.size(),
                     NonNull::new_unchecked(addr0),
                 )
-            };
-            assert!(
-                header.is_ok(),
-                "Failed to create a test slab: expected Ok but got {header:?}"
-            );
-            header.unwrap()
+            }
         }
     }
 
