@@ -76,7 +76,7 @@ where
     }
 
     /// `allocate_object` returns a [SlabObject] wrapping the allocated object
-    /// if the allocation succeeds; otherwise, it returns the corresponding error.
+    /// if the allocation succeeds; otherwise, it returns the corresponding [Error].
     ///
     /// It is guaranteed that if an [Error] is returned, the `cache` remains unmodified.
     /// The allocated object has the default value of [T], and clients can access it
@@ -85,7 +85,7 @@ where
     /// # SAFETY:
     /// * `cache` must be a valid pointer.
     unsafe fn allocate_object(cache: *mut Cache<T>) -> Result<SlabObject<T>, Error> {
-        assert!(!cache.is_null(), "`cache` should not be null");
+        assert!(!cache.is_null(), "Cache::allocate_object: cache should not be null");
 
         if !(*cache).slabs_partial.is_null() {
             Self::allocate_from_partial(cache)
@@ -1136,7 +1136,7 @@ mod cache_tests {
     }
 
     #[test]
-    #[should_panic(expected = "`cache` should not be null")]
+    #[should_panic(expected = "Cache::allocate_object: cache should not be null")]
     fn allocate_object_with_null_cache_should_panic() {
         type T = TestObject;
         let _ = unsafe { Cache::<T>::allocate_object(null_mut()) };
