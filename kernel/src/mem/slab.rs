@@ -148,39 +148,37 @@ where
         Ok(result)
     }
 
-    /// `push_front` pushes the `node` to the front of `head` and returns the new head.
+    /// `push_front` pushes the `node` to the front of the doubly-linked list `head` and
+    /// returns the new head.
     ///
     /// # SAFETY:
     /// * `head` should be either null or a valid pointer that doesn't have its `prev` linked.
-    /// * `node` should be either null or a valid pointer that is isolated, i.e., not linked to other nodes.
+    /// * `node` should be a valid pointer and isolated, i.e., not linked to other nodes.
     unsafe fn push_front(head: *mut SlabHeader<T>, node: *mut SlabHeader<T>) -> *mut SlabHeader<T> {
-        if !head.is_null() {
-            assert_eq!(
-                null_mut(),
-                (*head).prev,
-                "`head` should not have its `prev` linked"
-            )
+        if node.is_null() {
+            panic!("Cache::push_front: node should not be null")
         }
 
-        if !node.is_null() {
-            assert_eq!(
-                null_mut(),
-                (*node).prev,
-                "`node` is not isolated: it has its `prev` linked"
-            );
-            assert_eq!(
-                null_mut(),
-                (*node).next,
-                "`node` is not isolated: it has its `next` linked"
-            );
-        }
+        assert_eq!(
+            null_mut(),
+            (*node).prev,
+            "`node` is not isolated: it has its `prev` linked"
+        );
+        assert_eq!(
+            null_mut(),
+            (*node).next,
+            "`node` is not isolated: it has its `next` linked"
+        );
 
         if head.is_null() {
             return node;
         };
-        if node.is_null() {
-            return head;
-        };
+
+        assert_eq!(
+            null_mut(),
+            (*head).prev,
+            "`head` should not have its `prev` linked"
+        );
 
         (*node).next = head;
         (*head).prev = node;
@@ -742,10 +740,31 @@ mod cache_tests {
     }
 
     #[test]
-    fn push_front_with_null_head_and_node_return_null() {
+    #[should_panic(expected = "Cache::push_front: node should not be null")]
+    fn push_front_null_head_and_node_panics() {
         type T = u8;
-        let result = unsafe { Cache::<T>::push_front(null_mut(), null_mut()) };
-        assert_eq!(null_mut(), result, "The new head should be null")
+        let _ = unsafe { Cache::<T>::push_front(null_mut(), null_mut()) };
+    }
+
+    #[test]
+    #[should_panic(expected = "Cache::push_front: node should not be null")]
+    fn push_front_valid_head_null_node_panics() {
+        // Create a head containing two nodes
+        type T = u8;
+        let slab_layout =
+            Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
+                .expect("Failed to create slab_layout");
+        let mut slab_man = SlabMan::new(slab_layout);
+
+        let head = slab_man.new_test_slab(null_mut());
+        let next = slab_man.new_test_slab(null_mut());
+        unsafe {
+            (*head).next = next;
+            (*next).prev = head;
+        }
+
+        // Exercise push_front
+        let _ = unsafe { Cache::<T>::push_front(head, null_mut()) };
     }
 
     #[test]
@@ -764,46 +783,10 @@ mod cache_tests {
             (*head).prev = prev;
             (*prev).next = head;
         }
+        let node = slab_man.new_test_slab(null_mut());
 
         // Exercise `push_front`
-        unsafe { Cache::push_front(head, null_mut()) };
-    }
-
-    #[test]
-    fn push_front_with_valid_head_and_null_node_return_head() {
-        // Create a `head` containing two nodes
-        type T = u8;
-        let slab_layout =
-            Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
-                .expect("Failed to create `slab_layout`");
-        let mut slab_man = SlabMan::new(slab_layout);
-
-        let head = slab_man.new_test_slab(null_mut());
-        let next = slab_man.new_test_slab(null_mut());
-        unsafe {
-            (*head).next = next;
-            (*next).prev = head;
-        }
-
-        // Exercise `push_front`
-        let new_head = unsafe { Cache::<T>::push_front(head, null_mut()) };
-
-        // Verify the new head
-        assert_eq!(new_head, head, "The new head should be the original `head`");
-        assert_eq!(
-            2,
-            unsafe { size_of_list(new_head) },
-            "The new head should contain two nodes"
-        );
-        assert!(
-            unsafe { contains_node(new_head, head) },
-            "The new head should contain the `head`"
-        );
-        assert!(
-            unsafe { contains_node(new_head, next) },
-            "The new head should contain the `next`"
-        );
-        unsafe { verify_list_doubly_linked(new_head) };
+        unsafe { Cache::push_front(head, node) };
     }
 
     #[test]
