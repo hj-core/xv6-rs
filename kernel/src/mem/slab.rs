@@ -76,7 +76,7 @@ where
     }
 
     /// `allocate_object` attempts to allocate an object from the `cache`.
-    /// 
+    ///
     /// It returns a [SlabObject] wrapping the allocated object if the allocation succeeds,
     /// or returns the corresponding [Error] if it fails.
     ///
@@ -125,13 +125,13 @@ where
         let result = SlabHeader::allocate_object((*cache).slabs_empty)?;
 
         // Update list heads
-        let (detached_node, new_head_empty) = Cache::pop_front((*cache).slabs_empty);
+        let (moved_slab, new_head_empty) = Cache::pop_front((*cache).slabs_empty);
         (*cache).slabs_empty = new_head_empty;
 
-        if SlabHeader::is_full(detached_node) {
-            (*cache).slabs_full = Cache::push_front((*cache).slabs_full, detached_node);
+        if SlabHeader::is_full(moved_slab) {
+            (*cache).slabs_full = Cache::push_front((*cache).slabs_full, moved_slab);
         } else {
-            (*cache).slabs_partial = Cache::push_front((*cache).slabs_partial, detached_node);
+            (*cache).slabs_partial = Cache::push_front((*cache).slabs_partial, moved_slab);
         }
 
         // EXCEPTION SAFETY:
