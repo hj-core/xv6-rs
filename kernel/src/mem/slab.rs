@@ -187,15 +187,14 @@ where
         node
     }
 
-    /// Detaches the first node from `head` and returns the detached node and the new head.
+    /// `pop_front` detaches the first node from the doubly-linked list `head` and 
+    /// returns the detached node along with the new head.
     ///
     /// # SAFETY:
-    /// * `head` should be a valid pointer if it is not null.
-    /// * `head` should not have its `prev` linked if it is not null.
+    /// * `head` should be a valid pointer.
+    /// * `head` should not have its `prev` linked.
     unsafe fn pop_front(head: *mut SlabHeader<T>) -> (*mut SlabHeader<T>, *mut SlabHeader<T>) {
-        if head.is_null() {
-            return (null_mut(), null_mut());
-        }
+        assert!(!head.is_null(), "Cache::pop_front: head should not be null");
 
         assert_eq!(
             null_mut(),
@@ -894,19 +893,10 @@ mod cache_tests {
     }
 
     #[test]
-    fn pop_front_with_null_head_return_nulls() {
+    #[should_panic(expected = "Cache::pop_front: head should not be null")]
+    fn pop_front_with_null_head_should_panic() {
         type T = u8;
-        let (node, new_head) = unsafe { Cache::<T>::pop_front(null_mut()) };
-        assert_eq!(
-            null_mut(),
-            node,
-            "The detached node should be null but got {node:?}"
-        );
-        assert_eq!(
-            null_mut(),
-            new_head,
-            "The new head should be null but got {new_head:?}"
-        );
+        let _ = unsafe { Cache::<T>::pop_front(null_mut()) };
     }
 
     #[test]
