@@ -451,7 +451,7 @@ where
         result
     }
 
-    /// Offset from the [SlabHeader]'s address to slot 0.
+    /// `compute_slot0_offset` returns the Offset from the [SlabHeader]'s address to slot 0.
     /// This offset has considered the alignment requirement of object [T].
     fn compute_slot0_offset(addr0: usize, header_size: ByteSize) -> ByteSize {
         let header_end = addr0 + header_size;
@@ -2155,31 +2155,28 @@ mod header_tests {
     use Error::NotAnObjectOfCurrentSlab;
 
     #[test]
-    fn compute_slot0_offset_with_general_input() {
-        let expected: ByteSize = 5;
-        let addr0: usize = 0;
-        let header_size: ByteSize = 5;
-        assert_compute_slot0_offset::<u8>(expected, addr0, header_size);
+    fn compute_slot0_offset_aligned_header_end_return_header_size() {
+        assert_compute_slot0_offset::<u8>(5, 5, 5);
+        assert_compute_slot0_offset::<u8>(8, 8, 8);
 
-        let expected: ByteSize = 23;
-        let addr0: usize = 0x8000_fff1;
-        let header_size: ByteSize = 16;
-        assert_compute_slot0_offset::<u64>(expected, addr0, header_size);
+        assert_compute_slot0_offset::<u32>(4, 4, 4);
+        assert_compute_slot0_offset::<u32>(32, 32, 32);
+        assert_compute_slot0_offset::<u32>(6, 38, 6);
+        assert_compute_slot0_offset::<u32>(18, 82, 18);
 
-        let expected: ByteSize = 31;
-        let addr0: usize = 0x8000_fff1;
-        let header_size: ByteSize = 22;
-        assert_compute_slot0_offset::<u128>(expected, addr0, header_size);
+        assert_compute_slot0_offset::<u64>(8, 16, 8);
+        assert_compute_slot0_offset::<u64>(16, 16, 16);
+        assert_compute_slot0_offset::<u64>(4, 12, 4);
+        assert_compute_slot0_offset::<u64>(10, 30, 10);
+    }
 
-        let expected: ByteSize = 31;
-        let addr0: usize = 0x8000_fff1;
-        let header_size: ByteSize = 28;
-        assert_compute_slot0_offset::<u128>(expected, addr0, header_size);
+    #[test]
+    fn compute_slot0_offset_unaligned_header_end_returns_correct_offset() {
+        assert_compute_slot0_offset::<u32>(20, 16, 18);
+        assert_compute_slot0_offset::<u32>(21, 15, 19);
 
-        let expected: ByteSize = 30;
-        let addr0: usize = 0x8000_fff2;
-        let header_size: ByteSize = 28;
-        assert_compute_slot0_offset::<u128>(expected, addr0, header_size);
+        assert_compute_slot0_offset::<u64>(40, 40, 35);
+        assert_compute_slot0_offset::<u64>(42, 38, 37);
     }
 
     fn assert_compute_slot0_offset<T: Default>(
