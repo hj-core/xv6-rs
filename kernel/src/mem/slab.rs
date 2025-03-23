@@ -3304,4 +3304,102 @@ mod test_utils {
         }
         result
     }
+
+    /// `create_slab_list` creates a doubly-linked list of [SlabHeader] and returns its head.
+    ///
+    /// Each slab is empty, has a null `source` and has a layout determined by the `slab_man`.
+    pub fn create_slab_list<T: Default>(
+        slab_man: &mut SlabMan<T>,
+        size: usize,
+    ) -> *mut SlabHeader<T> {
+        assert_ne!(
+            0, size,
+            "test_utils::create_slab_list: size should not be zero"
+        );
+
+        let mut vec = Vec::new();
+        for _ in 0..size {
+            vec.push(slab_man.new_test_slab(null_mut()));
+        }
+
+        for i in 1..size {
+            unsafe {
+                (*vec[i - 1]).next = vec[i];
+                (*vec[i]).prev = vec[i - 1];
+            }
+        }
+        vec[0]
+    }
+
+    #[test]
+    #[should_panic(expected = "test_utils::create_slab_list: size should not be zero")]
+    fn create_slab_list_zero_size_panics() {
+        // Create a SlabMan
+        type T = u8;
+        let slab_layout =
+            Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
+                .expect("Failed to create slab_layout");
+        let mut slab_man = SlabMan::<T>::new(slab_layout);
+
+        // Exercise create_slab_list with zero size
+        let _ = create_slab_list(&mut slab_man, 0);
+    }
+
+    #[test]
+    fn create_slab_list_valid_arguments_returns_head_correct_size() {
+        // Create a SlabMan
+        type T = u8;
+        let slab_layout =
+            Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
+                .expect("Failed to create slab_layout");
+        let mut slab_man = SlabMan::<T>::new(slab_layout);
+
+        // Exercise create_slab_list
+        let head = create_slab_list(&mut slab_man, 3);
+
+        // Verify the size of the returned head
+        assert_eq!(
+            3,
+            unsafe { list_slabs(head).len() },
+            "The size of head is incorrect"
+        );
+    }
+
+    #[test]
+    fn create_slab_list_valid_arguments_returns_head_doubly_linked() {
+        // Create a SlabMan
+        type T = u8;
+        let slab_layout =
+            Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
+                .expect("Failed to create slab_layout");
+        let mut slab_man = SlabMan::<T>::new(slab_layout);
+
+        // Exercise create_slab_list
+        let head = create_slab_list(&mut slab_man, 2);
+
+        // Verify whether the returned head is doubly linked
+        unsafe { verify_list_doubly_linked(head) };
+    }
+
+    #[test]
+    fn create_slab_list_valid_arguments_returns_null_source_slabs() {
+        // Create a SlabMan
+        type T = u8;
+        let slab_layout =
+            Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
+                .expect("Failed to create slab_layout");
+        let mut slab_man = SlabMan::<T>::new(slab_layout);
+
+        // Exercise create_slab_list
+        let head = create_slab_list(&mut slab_man, 3);
+
+        // Verify whether each slab has a null source
+        for slab in unsafe { list_slabs(head) } {
+            assert_eq!(
+                null_mut(),
+                unsafe { (*slab).source },
+                "The source of each slab should be null"
+            );
+        }
+    }
 }
