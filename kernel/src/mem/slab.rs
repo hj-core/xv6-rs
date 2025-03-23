@@ -451,16 +451,18 @@ where
         result
     }
 
-    /// `compute_slot0_offset` returns the Offset from the [SlabHeader]'s address to slot 0.
-    /// This offset has considered the alignment requirement of object [T].
+    /// `compute_slot0_offset` returns the offset from the [SlabHeader]'s address to slot 0.
+    /// This offset considers the alignment requirements of object [T].
+    ///
+    /// If the header end overflows, it returns the expected offset.
+    /// However, it will panic if the computed offset overflows.
     fn compute_slot0_offset(addr0: usize, header_size: ByteSize) -> ByteSize {
-        let header_end = addr0 + header_size;
         let object_align = align_of::<T>();
-        let padding: ByteSize = if header_end % object_align == 0 {
-            0
-        } else {
-            object_align - (header_end % object_align)
-        };
+        let rem = (addr0 % object_align + header_size % object_align) % object_align;
+        let padding: ByteSize = if rem == 0 { 0 } else { object_align - rem };
+        if header_size > usize::MAX - padding {
+            panic!("SlabHeader::compute_slot0_offset: result overflow");
+        }
         header_size + padding
     }
 
@@ -2153,6 +2155,23 @@ mod header_tests {
     use alloc::{format, vec};
     use core::any::type_name;
     use Error::NotAnObjectOfCurrentSlab;
+
+    #[test]
+    #[should_panic(expected = "SlabHeader::compute_slot0_offset: result overflow")]
+    fn compute_slot0_offset_result_overflow_panics() {
+        let _ = SlabHeader::<u64>::compute_slot0_offset(0, usize::MAX - 2);
+    }
+
+    #[test]
+    fn compute_slot0_offset_header_end_overflow_returns_expected_offset() {
+        // aligned header end
+        assert_compute_slot0_offset::<u32>(9, usize::MAX, 9);
+        assert_compute_slot0_offset::<u32>(9, usize::MAX - 8, 9);
+
+        // unaligned header end
+        assert_compute_slot0_offset::<u32>(9, usize::MAX, 8);
+        assert_compute_slot0_offset::<u32>(9, usize::MAX - 8, 8);
+    }
 
     #[test]
     fn compute_slot0_offset_aligned_header_end_return_header_size() {
