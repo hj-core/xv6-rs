@@ -756,12 +756,7 @@ mod cache_tests {
                 .expect("Failed to create slab_layout");
         let mut slab_man = SlabMan::new(slab_layout);
 
-        let head = slab_man.new_test_slab(null_mut());
-        let next = slab_man.new_test_slab(null_mut());
-        unsafe {
-            (*head).next = next;
-            (*next).prev = head;
-        }
+        let head = create_slab_list(&mut slab_man, 2);
 
         // Exercise push_front
         let _ = unsafe { Cache::<T>::push_front(head, null_mut()) };
@@ -777,12 +772,10 @@ mod cache_tests {
                 .expect("Failed to create slab_layout");
         let mut slab_man = SlabMan::<T>::new(slab_layout);
 
-        let head = slab_man.new_test_slab(null_mut());
-        let prev = slab_man.new_test_slab(null_mut());
-        unsafe {
-            (*head).prev = prev;
-            (*prev).next = head;
-        }
+        let prev = create_slab_list(&mut slab_man, 2);
+        let head = unsafe { (*prev).next };
+
+        // Create the node to be inserted
         let node = slab_man.new_test_slab(null_mut());
 
         // Exercise push_front
@@ -799,12 +792,8 @@ mod cache_tests {
                 .expect("Failed to create slab_layout");
         let mut slab_man = SlabMan::<T>::new(slab_layout);
 
-        let node = slab_man.new_test_slab(null_mut());
-        let prev = slab_man.new_test_slab(null_mut());
-        unsafe {
-            (*node).prev = prev;
-            (*prev).next = node;
-        }
+        let prev = create_slab_list(&mut slab_man, 2);
+        let node = unsafe { (*prev).next };
 
         // Exercise push_front
         unsafe { Cache::push_front(null_mut(), node) };
@@ -820,12 +809,7 @@ mod cache_tests {
                 .expect("Failed to create slab_layout");
         let mut slab_man = SlabMan::<T>::new(slab_layout);
 
-        let node = slab_man.new_test_slab(null_mut());
-        let next = slab_man.new_test_slab(null_mut());
-        unsafe {
-            (*node).next = next;
-            (*next).prev = node;
-        }
+        let node = create_slab_list(&mut slab_man, 2);
 
         // Exercise push_front
         unsafe { Cache::push_front(null_mut(), node) };
@@ -864,12 +848,8 @@ mod cache_tests {
                 .expect("Failed to create slab_layout");
         let mut slab_man = SlabMan::<T>::new(slab_layout);
 
-        let head = slab_man.new_test_slab(null_mut());
-        let next = slab_man.new_test_slab(null_mut());
-        unsafe {
-            (*head).next = next;
-            (*next).prev = head;
-        }
+        let head = create_slab_list(&mut slab_man, 2);
+        let next = unsafe { (*head).next };
 
         // Create the node to be inserted
         let node = slab_man.new_test_slab(null_mut());
