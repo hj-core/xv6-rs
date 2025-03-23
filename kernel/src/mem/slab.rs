@@ -889,12 +889,8 @@ mod cache_tests {
                 .expect("Failed to create slab_layout");
         let mut slab_man = SlabMan::<T>::new(slab_layout);
 
-        let head = slab_man.new_test_slab(null_mut());
-        let prev = slab_man.new_test_slab(null_mut());
-        unsafe {
-            (*head).prev = prev;
-            (*prev).next = head;
-        }
+        let prev = create_slab_list(&mut slab_man, 2);
+        let head = unsafe { (*prev).next };
 
         // Exercise pop_front
         unsafe { Cache::pop_front(head) };
@@ -931,12 +927,8 @@ mod cache_tests {
                 .expect("Failed to create slab_layout");
         let mut slab_man = SlabMan::<T>::new(slab_layout);
 
-        let head = slab_man.new_test_slab(null_mut());
-        let next = slab_man.new_test_slab(null_mut());
-        unsafe {
-            (*head).next = next;
-            (*next).prev = head;
-        }
+        let head = create_slab_list(&mut slab_man, 2);
+        let next = unsafe { (*head).next };
 
         // Exercise pop_front
         let (node, new_head) = unsafe { Cache::pop_front(head) };
@@ -967,15 +959,9 @@ mod cache_tests {
                 .expect("Failed to create slab_layout");
         let mut slab_man = SlabMan::<T>::new(slab_layout);
 
-        let head = slab_man.new_test_slab(null_mut());
-        let next = slab_man.new_test_slab(null_mut());
-        let next_next = slab_man.new_test_slab(null_mut());
-        unsafe {
-            (*head).next = next;
-            (*next).prev = head;
-            (*next).next = next_next;
-            (*next_next).prev = next;
-        }
+        let head = create_slab_list(&mut slab_man, 3);
+        let next = unsafe { (*head).next };
+        let next_next = unsafe { (*next).next };
 
         // Exercise pop_front
         let (node, new_head) = unsafe { Cache::pop_front(head) };
