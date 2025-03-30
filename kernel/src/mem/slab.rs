@@ -55,8 +55,16 @@ where
     T: Default,
 {
     /// `new` returns a new [Cache] with the given `name` and `slab_layout`.
+    /// The `name` is used for debugging and identification purposes.
     /// The `slab_layout` must have a size no less than [Cache::min_slab_size]
-    /// and comply with the [Cache::align_of_slab].
+    /// and its alignment must be a multiple of [Cache::align_of_slab].
+    ///
+    /// # Panics
+    ///
+    /// This function will panic if:
+    /// * `T` is a zero-sized type.
+    /// * `slab_layout` is not properly aligned.
+    /// * `slab_layout` is smaller than [Cache::min_slab_size].
     fn new(name: [char; CACHE_NAME_LENGTH], slab_layout: Layout) -> Self {
         if size_of::<T>() == 0 {
             panic!("Cache::new: zero size type is not supported")
