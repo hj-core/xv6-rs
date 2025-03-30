@@ -755,6 +755,166 @@ mod cache_tests {
     }
 
     #[test]
+    #[should_panic(expected = "Cache::new: zero size type is not supported")]
+    fn new_zero_size_type_panics() {
+        let layout = Layout::from_size_align(16, 8).expect("Failed to create the layout");
+        let _ = Cache::<()>::new(['c'; CACHE_NAME_LENGTH], layout);
+    }
+
+    #[test]
+    #[should_panic(expected = "Cache::new: slab_layout is not properly aligned")]
+    fn new_layout_not_aligned_with_header_panics_case_2() {
+        type T = TestObject;
+        assert!(
+            align_of::<SlabHeader<T>>() > 2,
+            "The type should have an align greater than 2 for this test to work correctly"
+        );
+
+        let layout = Layout::from_size_align(safe_slab_size::<T>(1), 2)
+            .expect("Failed to create the layout");
+        let _ = Cache::<T>::new(['c'; CACHE_NAME_LENGTH], layout);
+    }
+
+    #[test]
+    #[should_panic(expected = "Cache::new: slab_layout is not properly aligned")]
+    fn new_layout_not_aligned_with_header_panics_case_4() {
+        type T = TestObject;
+        assert!(
+            align_of::<SlabHeader<T>>() > 4,
+            "The type should have an align greater than 4 for this test to work correctly"
+        );
+
+        let layout = Layout::from_size_align(safe_slab_size::<T>(1), 4)
+            .expect("Failed to create the layout");
+        let _ = Cache::<T>::new(['c'; CACHE_NAME_LENGTH], layout);
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "Cache::new: slab_layout should not smaller than Cache::min_slab_size"
+    )]
+    fn new_layout_smaller_than_min_slab_size_panics_case_test_object() {
+        type T = TestObject;
+        let layout = Layout::from_size_align(size_of::<T>(), align_of::<SlabHeader<T>>())
+            .expect("Failed to create the layout");
+
+        let _ = Cache::<T>::new(['c'; CACHE_NAME_LENGTH], layout);
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "Cache::new: slab_layout should not smaller than Cache::min_slab_size"
+    )]
+    fn new_layout_smaller_than_min_slab_size_panics_case_u128() {
+        type T = u128;
+        let layout =
+            Layout::from_size_align(size_of::<SlabHeader<T>>(), align_of::<SlabHeader<T>>())
+                .expect("Failed to create the layout");
+
+        let _ = Cache::<T>::new(['c'; CACHE_NAME_LENGTH], layout);
+    }
+
+    #[test]
+    fn new_header_align_min_slab_size_returns_new_cache_case_test_object() {
+        type T = TestObject;
+        let layout =
+            Layout::from_size_align(Cache::<T>::min_slab_size(), align_of::<SlabHeader<T>>())
+                .expect("Failed to create the layout");
+
+        let mut cache = Cache::<T>::new(['c'; CACHE_NAME_LENGTH], layout);
+
+        unsafe { verify_cache_invariants(&raw mut cache) };
+        assert_eq!(
+            0,
+            unsafe { cache_slabs(&raw mut cache).len() },
+            "The new cache should contain no slabs"
+        );
+    }
+
+    #[test]
+    fn new_header_align_min_size_returns_new_cache_case_u8() {
+        type T = u8;
+        let layout =
+            Layout::from_size_align(Cache::<T>::min_slab_size(), align_of::<SlabHeader<T>>())
+                .expect("Failed to create the layout");
+
+        let mut cache = Cache::<T>::new(['c'; CACHE_NAME_LENGTH], layout);
+
+        unsafe { verify_cache_invariants(&raw mut cache) };
+        assert_eq!(
+            0,
+            unsafe { cache_slabs(&raw mut cache).len() },
+            "The new cache should contain no slabs"
+        );
+    }
+
+    #[test]
+    fn new_header_align_general_size_returns_new_cache_case_test_object() {
+        type T = TestObject;
+        let layout = Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
+            .expect("Failed to create the layout");
+
+        let mut cache = Cache::<T>::new(['c'; CACHE_NAME_LENGTH], layout);
+
+        unsafe { verify_cache_invariants(&raw mut cache) };
+        assert_eq!(
+            0,
+            unsafe { cache_slabs(&raw mut cache).len() },
+            "The new cache should contain no slabs"
+        );
+    }
+
+    #[test]
+    fn new_header_align_general_size_returns_new_cache_case_u8() {
+        type T = u8;
+        let layout = Layout::from_size_align(safe_slab_size::<T>(5), align_of::<SlabHeader<T>>())
+            .expect("Failed to create the layout");
+
+        let mut cache = Cache::<T>::new(['c'; CACHE_NAME_LENGTH], layout);
+
+        unsafe { verify_cache_invariants(&raw mut cache) };
+        assert_eq!(
+            0,
+            unsafe { cache_slabs(&raw mut cache).len() },
+            "The new cache should contain no slabs"
+        );
+    }
+
+    #[test]
+    fn new_multiple_header_align_general_size_returns_new_cache_case_test_object() {
+        type T = TestObject;
+        let layout =
+            Layout::from_size_align(safe_slab_size::<T>(5), 2 * align_of::<SlabHeader<T>>())
+                .expect("Failed to create the layout");
+
+        let mut cache = Cache::<T>::new(['c'; CACHE_NAME_LENGTH], layout);
+
+        unsafe { verify_cache_invariants(&raw mut cache) };
+        assert_eq!(
+            0,
+            unsafe { cache_slabs(&raw mut cache).len() },
+            "The new cache should contain no slabs"
+        );
+    }
+
+    #[test]
+    fn new_multiple_header_align_general_size_returns_new_cache_case_u64() {
+        type T = u64;
+        let layout =
+            Layout::from_size_align(safe_slab_size::<T>(5), 4 * align_of::<SlabHeader<T>>())
+                .expect("Failed to create the layout");
+
+        let mut cache = Cache::<T>::new(['c'; CACHE_NAME_LENGTH], layout);
+
+        unsafe { verify_cache_invariants(&raw mut cache) };
+        assert_eq!(
+            0,
+            unsafe { cache_slabs(&raw mut cache).len() },
+            "The new cache should contain no slabs"
+        );
+    }
+
+    #[test]
     #[should_panic(expected = "Cache::push_front: node should not be null")]
     fn push_front_null_head_and_node_panics() {
         type T = u8;
@@ -2102,56 +2262,6 @@ mod cache_tests {
             0,
             unsafe { cache_allocated_addrs(&raw mut cache).len() },
             "The cache should have no object allocated"
-        );
-    }
-
-    #[test]
-    #[should_panic(expected = "Cache::new: zero size type is not supported")]
-    fn new_when_zero_size_type_should_panic() {
-        let slab_layout = Layout::from_size_align(0, 1024).expect("Failed to create slab_layout");
-        let _ = Cache::<()>::new(['c'; CACHE_NAME_LENGTH], slab_layout);
-    }
-
-    #[test]
-    #[should_panic(expected = "Cache::new: slab_layout is not properly aligned")]
-    fn new_when_slab_layout_not_aligned_should_panic() {
-        type T = TestObject;
-        assert!(
-            align_of::<SlabHeader<T>>() > 2,
-            "The type should have an align greater than 2 for this test to work correctly"
-        );
-
-        let slab_layout = Layout::from_size_align(safe_slab_size::<T>(1), 2)
-            .expect("Failed to create slab_layout");
-        let _ = Cache::<T>::new(['c'; CACHE_NAME_LENGTH], slab_layout);
-    }
-
-    #[test]
-    #[should_panic(
-        expected = "Cache::new: slab_layout should not smaller than Cache::min_slab_size"
-    )]
-    fn new_when_slab_layout_smaller_than_min_slab_size_should_panic() {
-        type T = TestObject;
-        let slab_layout = Layout::from_size_align(size_of::<T>(), align_of::<SlabHeader<T>>())
-            .expect("Failed to create slab_layout");
-
-        let _ = Cache::<T>::new(['c'; CACHE_NAME_LENGTH], slab_layout);
-    }
-
-    #[test]
-    fn new_when_valid_slab_layout_return_an_new_cache() {
-        type T = TestObject;
-        let slab_layout =
-            Layout::from_size_align(Cache::<T>::min_slab_size(), align_of::<SlabHeader<T>>())
-                .expect("Failed to create slab_layout");
-
-        let mut cache = Cache::<T>::new(['c'; CACHE_NAME_LENGTH], slab_layout);
-
-        unsafe { verify_cache_invariants(&raw mut cache) };
-        assert_eq!(
-            0,
-            unsafe { cache_slabs(&raw mut cache).len() },
-            "The new cache should contain no slabs"
         );
     }
 }
