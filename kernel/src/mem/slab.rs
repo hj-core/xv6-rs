@@ -62,7 +62,7 @@ where
     /// # Panics
     ///
     /// This function will panic if:
-    /// * `T` is a zero-sized type.
+    /// * [T] is a zero-sized type.
     /// * `slab_layout` is not properly aligned.
     /// * `slab_layout` is smaller than [Cache::min_slab_size].
     fn new(name: [char; CACHE_NAME_LENGTH], slab_layout: Layout) -> Self {
