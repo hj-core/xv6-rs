@@ -17,18 +17,31 @@ const CACHE_NAME_LENGTH: usize = 16;
 const SLAB_USED_BITMAP_SIZE: usize = 4;
 const MAX_SLOTS_PER_SLAB: usize = SLAB_USED_BITMAP_SIZE * 64;
 
-/// todo!()
+/// [Cache] manages a collection of memory slabs (contiguous blocks of memory divided into
+/// fixed-size slots), providing an interface for allocating and deallocating objects of type [T].
+/// Clients can use the [Cache] to efficiently allocate new objects and return them
+/// to the cache when they are no longer needed.
 ///
-/// Methods of [Cache] are not thread-safe; therefore client need to provide
-/// proper synchronization measures.
+/// The `name` field is used for debugging and identification purposes.
+///
+/// Methods of [Cache] are not thread-safe; clients must provide proper synchronization
+/// measures to protect the [Cache] from concurrent access.
+///
+/// The `#[repr(C)]` attribute ensures that the [Cache] struct has a well-defined memory
+/// layout, which is important for potential interoperability with C code or when
+/// relying on specific memory offsets.
 ///
 /// # Safety:
-/// * [T] must not be repr(packed).
+/// * [T] must not be `#[repr(packed)]`. Packed types can lead to undefined behavior when
+///   accessed through pointers with alignment requirements.
+/// * [T] must not be a zero-sized type. Zero-sized types are not supported by this
+///   slab allocator.
 #[repr(C)]
 struct Cache<T>
 where
     T: Default,
 {
+    /// The `name` field is used for debugging and identification purposes.
     name: [char; CACHE_NAME_LENGTH],
     slab_layout: Layout,
     // `slabs_*` is either null or the head of the doubly linked [SlabHeader]s.
