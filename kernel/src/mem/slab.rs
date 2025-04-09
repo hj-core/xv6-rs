@@ -4,6 +4,7 @@
 
 #![allow(unsafe_op_in_unsafe_fn)]
 
+use crate::mem::slab::Error::NoSlabAvailable;
 use Error::{AllocateFromFullSlab, AllocateFromNullSlab, NotAnObjectOfCurrentSlab};
 use core::alloc::Layout;
 use core::marker::PhantomData;
@@ -121,7 +122,7 @@ where
         } else if !(*cache).slabs_full.is_null() {
             Err(AllocateFromFullSlab)
         } else {
-            Err(AllocateFromNullSlab)
+            Err(NoSlabAvailable)
         }
     }
 
