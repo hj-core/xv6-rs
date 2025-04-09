@@ -1315,7 +1315,7 @@ mod cache_tests {
 
     #[test]
     #[should_panic(expected = "Cache::allocate_object: cache should not be null")]
-    fn allocate_object_with_null_cache_should_panic() {
+    fn allocate_object_null_cache_panics() {
         type T = TestObject;
         let _ = unsafe { Cache::<T>::allocate_object(null_mut()) };
     }
