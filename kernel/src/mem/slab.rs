@@ -735,6 +735,7 @@ where
 
 #[derive(Debug, PartialEq)]
 pub enum Error {
+    NoSlabAvailable,
     AllocateFromFullSlab,
     AllocateFromNullSlab,
     NotAnObjectOfCurrentSlab,
@@ -745,6 +746,7 @@ mod cache_tests {
     extern crate alloc;
     extern crate std;
     use super::*;
+    use crate::mem::slab::Error::NoSlabAvailable;
     use alloc::vec;
     use alloc::vec::Vec;
     use test_utils::*;
@@ -1318,6 +1320,49 @@ mod cache_tests {
     fn allocate_object_null_cache_panics() {
         type T = TestObject;
         let _ = unsafe { Cache::<T>::allocate_object(null_mut()) };
+    }
+
+    #[test]
+    fn allocate_object_no_slabs_returns_no_slab_available_err() {
+        // Arrange:
+        // Create a cache with no slabs.
+        type T = TestObject;
+        let layout = Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
+            .expect("Failed to create layout");
+
+        let mut cache = Cache::<T>::new(['c'; CACHE_NAME_LENGTH], layout);
+
+        assert_eq!(
+            null_mut(),
+            cache.slabs_empty,
+            "The slabs_empty should be null initially"
+        );
+        assert_eq!(
+            null_mut(),
+            cache.slabs_partial,
+            "The slabs_partial should be null initially"
+        );
+        assert_eq!(
+            null_mut(),
+            cache.slabs_full,
+            "The slabs_full should be null initially"
+        );
+
+        // Act
+        let result = unsafe { Cache::allocate_object(&raw mut cache) };
+
+        // Assert
+        assert!(
+            result.is_err(),
+            "The result should be Err(NoSlabAvailable) but got {result:?}"
+        );
+
+        let err = result.unwrap_err();
+        assert!(
+            matches!(err, NoSlabAvailable),
+            "The error should be {:?} but got {err:?}",
+            NoSlabAvailable,
+        );
     }
 
     #[test]
