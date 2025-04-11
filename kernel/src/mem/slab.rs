@@ -120,7 +120,7 @@ where
         } else if !(*cache).slabs_empty.is_null() {
             Self::allocate_from_empty(cache)
         } else if !(*cache).slabs_full.is_null() {
-            Err(AllocateFromFullSlab)
+            Err(NoSlabAvailable)
         } else {
             Err(NoSlabAvailable)
         }
