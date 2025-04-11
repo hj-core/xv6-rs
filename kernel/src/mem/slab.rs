@@ -1424,6 +1424,45 @@ mod cache_tests {
     }
 
     #[test]
+    fn allocate_object_slabs_empty_becomes_null_slabs_empty_is_null() {
+        // Arrange:
+        // Create a cache that contains a single empty slab.
+        type T = TestObject;
+        let layout = Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
+            .expect("Failed to create layout");
+
+        let mut cache = Cache::<T>::new(['c'; CACHE_NAME_LENGTH], layout);
+        let mut slab_man = SlabMan::<T>::new(layout);
+
+        let empty_slab = slab_man.new_test_slab(&raw mut cache);
+        cache.slabs_empty = empty_slab;
+
+        assert_eq!(
+            null_mut(),
+            cache.slabs_partial,
+            "The slabs_partial should be null initially to ensure the object is allocated from the empty slab"
+        );
+
+        // Act
+        let result = unsafe { Cache::allocate_object(&raw mut cache) };
+        assert!(result.is_ok(), "The result should be Ok but got {result:?}");
+
+        // Assert
+        let allocated_object = result.unwrap();
+        assert_eq!(
+            empty_slab, allocated_object.source,
+            "The allocated object should come from the empty_slab"
+        );
+        assert_eq!(
+            null_mut(),
+            cache.slabs_empty,
+            "The slab_empty should be null after the allocation"
+        );
+
+        unsafe { verify_cache_invariants(&raw mut cache) }
+    }
+
+    #[test]
     #[should_panic(expected = "`cache` should not be null")]
     fn allocate_from_empty_with_null_cache_should_panic() {
         type T = u64;
