@@ -1367,6 +1367,63 @@ mod cache_tests {
     }
 
     #[test]
+    fn allocate_object_full_slabs_only_returns_no_slab_available_err() {
+        // Arrange:
+        // Create a cache that contains only two full slabs.
+        type T = TestObject;
+        let layout = Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
+            .expect("Failed to create layout");
+
+        let mut cache = Cache::<T>::new(['c'; CACHE_NAME_LENGTH], layout);
+        let mut slab_man = SlabMan::<T>::new(layout);
+        let mut slab_objects = Vec::new();
+
+        let full_slab1 = slab_man.new_test_slab(&raw mut cache);
+        let full_slab2 = slab_man.new_test_slab(&raw mut cache);
+
+        unsafe {
+            // Fill each slab to make it full
+            for slab in [full_slab1, full_slab2] {
+                while !SlabHeader::is_full(slab) {
+                    slab_objects.push(
+                        SlabHeader::allocate_object(slab).expect("Failed to allocate object"),
+                    );
+                }
+            }
+            (*full_slab1).next = full_slab2;
+            (*full_slab2).prev = full_slab1;
+        }
+        cache.slabs_full = full_slab1;
+
+        assert_eq!(
+            null_mut(),
+            cache.slabs_empty,
+            "The slabs_empty should be null initially"
+        );
+        assert_eq!(
+            null_mut(),
+            cache.slabs_partial,
+            "The slabs_partial should be null initially"
+        );
+
+        // Act
+        let result = unsafe { Cache::allocate_object(&raw mut cache) };
+
+        // Assert
+        assert!(
+            result.is_err(),
+            "The result should be Err(NoSlabAvailable) but got {result:?}"
+        );
+
+        let err = result.unwrap_err();
+        assert!(
+            matches!(err, NoSlabAvailable),
+            "The error should be {:?} but got {err:?}",
+            NoSlabAvailable,
+        );
+    }
+
+    #[test]
     #[should_panic(expected = "`cache` should not be null")]
     fn allocate_from_empty_with_null_cache_should_panic() {
         type T = u64;
