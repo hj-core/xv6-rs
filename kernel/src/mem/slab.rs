@@ -1601,6 +1601,61 @@ mod cache_tests {
     }
 
     #[test]
+    fn allocate_object_slabs_full_becomes_non_null_slabs_full_is_non_null() {
+        // Arrange:
+        // Create a cache that contains a partial slab that is one free slot left.
+        type T = TestObject;
+        let layout = Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
+            .expect("Failed to create layout");
+
+        let mut cache = Cache::<T>::new(['c'; CACHE_NAME_LENGTH], layout);
+        let mut slab_man = SlabMan::<T>::new(layout);
+        let mut slab_objects = Vec::new();
+
+        let partial_slab = slab_man.new_test_slab(&raw mut cache);
+        unsafe {
+            while (*partial_slab).used_count < (*partial_slab).total_slots - 1 {
+                slab_objects.push(
+                    SlabHeader::allocate_object(partial_slab).expect("Failed to allocate object"),
+                );
+            }
+        }
+        cache.slabs_partial = partial_slab;
+
+        assert_eq!(
+            null_mut(),
+            cache.slabs_full,
+            "The slabs_full should be null initially"
+        );
+
+        // Act
+        let result = unsafe { Cache::allocate_object(&raw mut cache) };
+        assert!(result.is_ok(), "The result should be Ok but got {result:?}");
+
+        // Assert
+        let allocated_object = result.unwrap();
+        assert_eq!(
+            partial_slab, allocated_object.source,
+            "The allocated object should come from the partial_slab"
+        );
+        assert_ne!(
+            null_mut(),
+            cache.slabs_full,
+            "slabs_full should not be null"
+        );
+        assert!(
+            unsafe { SlabHeader::is_full(partial_slab) },
+            "The partial_slab should be full after the allocation"
+        );
+        assert!(
+            unsafe { contains_node(cache.slabs_full, partial_slab) },
+            "The partial_slab should be moved to the slabs_full list"
+        );
+
+        unsafe { verify_cache_invariants(&raw mut cache) }
+    }
+
+    #[test]
     #[should_panic(expected = "`cache` should not be null")]
     fn allocate_from_empty_with_null_cache_should_panic() {
         type T = u64;
