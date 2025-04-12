@@ -4,12 +4,12 @@
 
 #![allow(unsafe_op_in_unsafe_fn)]
 
+use Error::{AllocateFromFullSlab, AllocateFromNullSlab, NotAnObjectOfCurrentSlab};
 use core::alloc::Layout;
 use core::marker::PhantomData;
 use core::marker::PhantomPinned;
 use core::ptr;
-use core::ptr::{null_mut, NonNull};
-use Error::{AllocateFromFullSlab, AllocateFromNullSlab, NotAnObjectOfCurrentSlab};
+use core::ptr::{NonNull, null_mut};
 
 type ByteSize = usize;
 
@@ -32,6 +32,7 @@ const MAX_SLOTS_PER_SLAB: usize = SLAB_USED_BITMAP_SIZE * 64;
 /// relying on specific memory offsets.
 ///
 /// # Safety:
+/// * [Cache] is address-sensitive. Clients must ensure it is not moved after creation.
 /// * [T] must not be `#[repr(packed)]`. Packed types can lead to undefined behavior when
 ///   accessed through pointers with alignment requirements.
 /// * [T] must not be a zero-sized type. Zero-sized types are not supported by this
@@ -2280,12 +2281,12 @@ mod header_tests {
 
     use super::*;
     use crate::mem::slab::test_utils::{
-        safe_slab_size, slab_allocated_addrs, verify_slab_invariants, SlabMan, TestObject,
+        SlabMan, TestObject, safe_slab_size, slab_allocated_addrs, verify_slab_invariants,
     };
+    use Error::NotAnObjectOfCurrentSlab;
     use alloc::vec::Vec;
     use alloc::{format, vec};
     use core::any::type_name;
-    use Error::NotAnObjectOfCurrentSlab;
 
     #[test]
     #[should_panic(expected = "SlabHeader::compute_slot0_offset: result overflow")]
@@ -2919,7 +2920,7 @@ mod test_utils {
     use alloc::alloc::{alloc, dealloc};
     use alloc::vec::Vec;
     use core::alloc::Layout;
-    use core::ptr::{null_mut, NonNull};
+    use core::ptr::{NonNull, null_mut};
 
     #[derive(Debug, PartialEq)]
     pub struct TestObject {
