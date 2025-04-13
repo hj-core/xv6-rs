@@ -119,8 +119,6 @@ where
             Self::allocate_from_partial(cache)
         } else if !(*cache).slabs_empty.is_null() {
             Self::allocate_from_empty(cache)
-        } else if !(*cache).slabs_full.is_null() {
-            Err(NoSlabAvailable)
         } else {
             Err(NoSlabAvailable)
         }
