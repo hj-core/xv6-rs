@@ -1849,7 +1849,7 @@ mod cache_tests {
         assert_eq!(
             null_mut(),
             cache.slabs_empty,
-            "The slabs_empty should be null initially to ensure the object is allocated from a partial slab"
+            "The slabs_empty should be null initially to ensure the object is allocated from the partial slabs"
         );
 
         // Act
@@ -1876,7 +1876,7 @@ mod cache_tests {
         assert!(
             unsafe { contains_node(cache.slabs_partial, partial_slab1) }
                 && unsafe { contains_node(cache.slabs_partial, partial_slab2) },
-            "The slabs_partial should contain both partial0 and partial1"
+            "The slabs_partial should contain both partial slabs after the allocation"
         );
 
         unsafe { verify_cache_invariants(&raw mut cache) }
@@ -1945,7 +1945,7 @@ mod cache_tests {
         );
         assert!(
             cache.slabs_partial == partial_slab1 || cache.slabs_partial == partial_slab2,
-            "The slabs_partial should be the one of the partial slabs"
+            "The slabs_partial should be the one of the partial slabs after the allocation"
         );
         assert_eq!(
             2,
