@@ -102,13 +102,16 @@ where
     ///
     /// It returns a [SlabObject] wrapping the allocated object if the allocation succeeds,
     /// or returns the corresponding [Error] if it fails.
-    ///
-    /// It is guaranteed that if an [Error] is returned, the `cache` remains unmodified.
     /// The allocated object has the default value of [T], and clients can access it
     /// through the [SlabObject].
     ///
-    /// # SAFETY:
-    /// * `cache` must be a valid pointer.
+    /// It is guaranteed that if an [Error] is returned, the `cache` remains unmodified.
+    ///
+    /// # Safety
+    /// `cache` must be a valid pointer.
+    ///
+    /// # Panics
+    /// This function will panic if `cache` is null.
     unsafe fn allocate_object(cache: *mut Cache<T>) -> Result<SlabObject<T>, Error> {
         assert!(
             !cache.is_null(),
