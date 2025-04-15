@@ -1641,7 +1641,6 @@ mod cache_allocate_object_test {
 #[cfg(test)]
 mod cache_tests {
     extern crate alloc;
-    extern crate std;
     use super::*;
     use alloc::vec;
     use alloc::vec::Vec;
