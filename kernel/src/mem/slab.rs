@@ -1110,6 +1110,7 @@ mod cache_allocate_object_test {
 
         let mut cache = Cache::<T>::new(['c'; CACHE_NAME_LENGTH], layout);
         let mut slab_man = SlabMan::<T>::new(layout);
+        let mut slab_objects = Vec::new();
 
         let empty_slab = slab_man.new_test_slab(&raw mut cache);
         cache.slabs_empty = empty_slab;
@@ -1136,7 +1137,16 @@ mod cache_allocate_object_test {
             "The slab_empty should be null after the allocation"
         );
 
-        unsafe { verify_cache_invariants(&raw mut cache) }
+        unsafe {
+            verify_cache_invariants(&raw mut cache);
+
+            slab_objects.push(allocated_object);
+            verify_allocated_objects_matched(
+                &raw mut cache,
+                &slab_objects,
+                "The cache should have the same objects allocated after the allocation",
+            );
+        }
     }
 
     #[test]
@@ -1149,6 +1159,7 @@ mod cache_allocate_object_test {
 
         let mut cache = Cache::<T>::new(['c'; CACHE_NAME_LENGTH], layout);
         let mut slab_man = SlabMan::<T>::new(layout);
+        let mut slab_objects = Vec::new();
 
         let empty_slab1 = slab_man.new_test_slab(&raw mut cache);
         let empty_slab2 = slab_man.new_test_slab(&raw mut cache);
@@ -1200,7 +1211,16 @@ mod cache_allocate_object_test {
             "The slabs_partial should contain the moved slab"
         );
 
-        unsafe { verify_cache_invariants(&raw mut cache) }
+        unsafe {
+            verify_cache_invariants(&raw mut cache);
+
+            slab_objects.push(allocated_object);
+            verify_allocated_objects_matched(
+                &raw mut cache,
+                &slab_objects,
+                "The cache should have the same objects allocated after the allocation",
+            );
+        }
     }
 
     #[test]
@@ -1271,7 +1291,16 @@ mod cache_allocate_object_test {
             "The partial_slab should be moved to the slabs_full list"
         );
 
-        unsafe { verify_cache_invariants(&raw mut cache) }
+        unsafe {
+            verify_cache_invariants(&raw mut cache);
+
+            slab_objects.push(allocated_object);
+            verify_allocated_objects_matched(
+                &raw mut cache,
+                &slab_objects,
+                "The cache should have the same objects allocated after the allocation",
+            );
+        }
     }
 
     #[test]
@@ -1326,7 +1355,16 @@ mod cache_allocate_object_test {
             "The partial_slab should be moved to the slabs_full list"
         );
 
-        unsafe { verify_cache_invariants(&raw mut cache) }
+        unsafe {
+            verify_cache_invariants(&raw mut cache);
+
+            slab_objects.push(allocated_object);
+            verify_allocated_objects_matched(
+                &raw mut cache,
+                &slab_objects,
+                "The cache should have the same objects allocated after the allocation",
+            );
+        }
     }
 
     #[test]
@@ -1406,7 +1444,16 @@ mod cache_allocate_object_test {
             "The slabs_full should have a single slab after the allocation"
         );
 
-        unsafe { verify_cache_invariants(&raw mut cache) }
+        unsafe {
+            verify_cache_invariants(&raw mut cache);
+
+            slab_objects.push(allocated_object);
+            verify_allocated_objects_matched(
+                &raw mut cache,
+                &slab_objects,
+                "The cache should have the same objects allocated after the allocation",
+            );
+        }
     }
 
     #[test]
@@ -1491,7 +1538,16 @@ mod cache_allocate_object_test {
             "The slabs_full should contain the full_slab"
         );
 
-        unsafe { verify_cache_invariants(&raw mut cache) }
+        unsafe {
+            verify_cache_invariants(&raw mut cache);
+
+            slab_objects.push(allocated_object);
+            verify_allocated_objects_matched(
+                &raw mut cache,
+                &slab_objects,
+                "The cache should have the same objects allocated after the allocation",
+            );
+        }
     }
 
     #[test]
@@ -1556,7 +1612,16 @@ mod cache_allocate_object_test {
             "The slabs_partial should contain both partial slabs after the allocation"
         );
 
-        unsafe { verify_cache_invariants(&raw mut cache) }
+        unsafe {
+            verify_cache_invariants(&raw mut cache);
+
+            slab_objects.push(allocated_object);
+            verify_allocated_objects_matched(
+                &raw mut cache,
+                &slab_objects,
+                "The cache should have the same objects allocated after the allocation",
+            );
+        }
     }
 
     #[test]
@@ -1644,7 +1709,16 @@ mod cache_allocate_object_test {
             "The slabs_full should contain the moved slab"
         );
 
-        unsafe { verify_cache_invariants(&raw mut cache) }
+        unsafe {
+            verify_cache_invariants(&raw mut cache);
+
+            slab_objects.push(allocated_object);
+            verify_allocated_objects_matched(
+                &raw mut cache,
+                &slab_objects,
+                "The cache should have the same objects allocated after the allocation",
+            );
+        }
     }
 
     #[test]
@@ -1703,7 +1777,18 @@ mod cache_allocate_object_test {
         assert!(result.is_ok(), "The result should be Ok but got {result:?}");
 
         // Assert
-        unsafe { verify_cache_invariants(&raw mut cache) }
+        let allocated_object = result.unwrap();
+
+        unsafe {
+            verify_cache_invariants(&raw mut cache);
+
+            slab_objects.push(allocated_object);
+            verify_allocated_objects_matched(
+                &raw mut cache,
+                &slab_objects,
+                "The cache should have the same objects allocated after the allocation",
+            );
+        }
     }
 }
 
