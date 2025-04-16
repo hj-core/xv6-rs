@@ -918,7 +918,7 @@ mod cache_allocate_object_test {
     use crate::mem::slab::Error::NoSlabAvailable;
     use crate::mem::slab::test_utils::{
         SlabMan, TestObject, cache_allocated_addrs, contains_node, safe_slab_size, size_of_list,
-        verify_allocated_objects_matched, verify_cache_invariants,
+        verify_allocated_objects_matched, verify_cache_invariants, verify_contained_slabs_matched,
     };
     use crate::mem::slab::{CACHE_NAME_LENGTH, Cache, SlabHeader};
     use alloc::vec::Vec;
@@ -1058,29 +1058,6 @@ mod cache_allocate_object_test {
         );
 
         assert_eq!(
-            name, cache.name,
-            "The name should remain unmodified after the allocation"
-        );
-        assert_eq!(
-            layout, cache.slab_layout,
-            "The slab_layout should remain unmodified after the allocation"
-        );
-
-        assert_eq!(
-            2,
-            unsafe { size_of_list(cache.slabs_full) },
-            "The slabs_full should remain the same number of slabs after the allocation"
-        );
-        assert_eq!(
-            full_slab1, cache.slabs_full,
-            "The slabs_full should remain unmodified after the allocation"
-        );
-        assert!(
-            unsafe { contains_node(cache.slabs_full, full_slab2) },
-            "The slabs_full should contain the same slabs after the allocation"
-        );
-
-        assert_eq!(
             null_mut(),
             cache.slabs_partial,
             "The slabs_partial should remain null after the allocation"
@@ -1092,6 +1069,14 @@ mod cache_allocate_object_test {
         );
 
         unsafe {
+            verify_cache_invariants(&raw mut cache);
+
+            verify_contained_slabs_matched(
+                &raw mut cache,
+                slab_man.allocated_addrs(),
+                "The cache should contain the same slabs after the allocation",
+            );
+
             verify_allocated_objects_matched(
                 &raw mut cache,
                 &slab_objects,
@@ -1139,6 +1124,12 @@ mod cache_allocate_object_test {
 
         unsafe {
             verify_cache_invariants(&raw mut cache);
+
+            verify_contained_slabs_matched(
+                &raw mut cache,
+                slab_man.allocated_addrs(),
+                "The cache should contain the same slabs after the allocation",
+            );
 
             slab_objects.push(allocated_object);
             verify_allocated_objects_matched(
@@ -1213,6 +1204,12 @@ mod cache_allocate_object_test {
 
         unsafe {
             verify_cache_invariants(&raw mut cache);
+
+            verify_contained_slabs_matched(
+                &raw mut cache,
+                slab_man.allocated_addrs(),
+                "The cache should contain the same slabs after the allocation",
+            );
 
             slab_objects.push(allocated_object);
             verify_allocated_objects_matched(
@@ -1294,6 +1291,12 @@ mod cache_allocate_object_test {
         unsafe {
             verify_cache_invariants(&raw mut cache);
 
+            verify_contained_slabs_matched(
+                &raw mut cache,
+                slab_man.allocated_addrs(),
+                "The cache should contain the same slabs after the allocation",
+            );
+
             slab_objects.push(allocated_object);
             verify_allocated_objects_matched(
                 &raw mut cache,
@@ -1357,6 +1360,12 @@ mod cache_allocate_object_test {
 
         unsafe {
             verify_cache_invariants(&raw mut cache);
+
+            verify_contained_slabs_matched(
+                &raw mut cache,
+                slab_man.allocated_addrs(),
+                "The cache should contain the same slabs after the allocation",
+            );
 
             slab_objects.push(allocated_object);
             verify_allocated_objects_matched(
@@ -1446,6 +1455,12 @@ mod cache_allocate_object_test {
 
         unsafe {
             verify_cache_invariants(&raw mut cache);
+
+            verify_contained_slabs_matched(
+                &raw mut cache,
+                slab_man.allocated_addrs(),
+                "The cache should contain the same slabs after the allocation",
+            );
 
             slab_objects.push(allocated_object);
             verify_allocated_objects_matched(
@@ -1541,6 +1556,12 @@ mod cache_allocate_object_test {
         unsafe {
             verify_cache_invariants(&raw mut cache);
 
+            verify_contained_slabs_matched(
+                &raw mut cache,
+                slab_man.allocated_addrs(),
+                "The cache should contain the same slabs after the allocation",
+            );
+
             slab_objects.push(allocated_object);
             verify_allocated_objects_matched(
                 &raw mut cache,
@@ -1614,6 +1635,12 @@ mod cache_allocate_object_test {
 
         unsafe {
             verify_cache_invariants(&raw mut cache);
+
+            verify_contained_slabs_matched(
+                &raw mut cache,
+                slab_man.allocated_addrs(),
+                "The cache should contain the same slabs after the allocation",
+            );
 
             slab_objects.push(allocated_object);
             verify_allocated_objects_matched(
@@ -1712,6 +1739,12 @@ mod cache_allocate_object_test {
         unsafe {
             verify_cache_invariants(&raw mut cache);
 
+            verify_contained_slabs_matched(
+                &raw mut cache,
+                slab_man.allocated_addrs(),
+                "The cache should contain the same slabs after the allocation",
+            );
+
             slab_objects.push(allocated_object);
             verify_allocated_objects_matched(
                 &raw mut cache,
@@ -1781,6 +1814,12 @@ mod cache_allocate_object_test {
 
         unsafe {
             verify_cache_invariants(&raw mut cache);
+
+            verify_contained_slabs_matched(
+                &raw mut cache,
+                slab_man.allocated_addrs(),
+                "The cache should contain the same slabs after the allocation",
+            );
 
             slab_objects.push(allocated_object);
             verify_allocated_objects_matched(
@@ -3953,6 +3992,10 @@ mod test_utils {
                 )
             }
         }
+
+        pub fn allocated_addrs(&self) -> &Vec<*mut u8> {
+            &(self.allocated)
+        }
     }
 
     impl<T: Default> Drop for SlabMan<T> {
@@ -4219,6 +4262,23 @@ mod test_utils {
             total_set_bits,
             "`used_count` should match the total set bits in `used_bitmap`"
         )
+    }
+
+    pub unsafe fn verify_contained_slabs_matched<T: Default>(
+        cache: *mut Cache<T>,
+        slabs: &Vec<*mut u8>,
+        err_message: &str,
+    ) {
+        let mut expected_addrs = slabs.iter().map(|&slab| slab.addr()).collect::<Vec<_>>();
+        expected_addrs.sort();
+
+        let mut actual_addrs = cache_slabs::<T>(cache)
+            .iter()
+            .map(|header| header.addr())
+            .collect::<Vec<_>>();
+        actual_addrs.sort();
+
+        assert_eq!(expected_addrs, actual_addrs, "{}", err_message,);
     }
 
     pub unsafe fn verify_allocated_objects_matched<T: Default>(
