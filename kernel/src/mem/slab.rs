@@ -917,7 +917,8 @@ mod cache_allocate_object_test {
     extern crate alloc;
     use crate::mem::slab::Error::NoSlabAvailable;
     use crate::mem::slab::test_utils::{
-        SlabMan, TestObject, contains_node, safe_slab_size, size_of_list, verify_cache_invariants,
+        SlabMan, TestObject, cache_allocated_addrs, contains_node, safe_slab_size, size_of_list,
+        verify_cache_invariants,
     };
     use crate::mem::slab::{CACHE_NAME_LENGTH, Cache, SlabHeader};
     use alloc::vec::Vec;
@@ -1000,14 +1001,15 @@ mod cache_allocate_object_test {
     }
 
     #[test]
-    fn full_slabs_only_returns_no_slab_available_err() {
+    fn full_slabs_only_returns_no_slab_available_err_cache_unmodified() {
         // Arrange:
         // Create a cache that contains only two full slabs.
         type T = TestObject;
         let layout = Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
             .expect("Failed to create layout");
+        let name = ['c'; CACHE_NAME_LENGTH];
 
-        let mut cache = Cache::<T>::new(['c'; CACHE_NAME_LENGTH], layout);
+        let mut cache = Cache::<T>::new(name, layout);
         let mut slab_man = SlabMan::<T>::new(layout);
         let mut slab_objects = Vec::new();
 
@@ -1053,6 +1055,54 @@ mod cache_allocate_object_test {
             matches!(err, NoSlabAvailable),
             "The error should be {:?} but got {err:?}",
             NoSlabAvailable,
+        );
+
+        assert_eq!(
+            name, cache.name,
+            "The name should remain unmodified after the allocation"
+        );
+        assert_eq!(
+            layout, cache.slab_layout,
+            "The slab_layout should remain unmodified after the allocation"
+        );
+
+        assert_eq!(
+            2,
+            unsafe { size_of_list(cache.slabs_full) },
+            "The slabs_full should remain the same number of slabs after the allocation"
+        );
+        assert_eq!(
+            full_slab1, cache.slabs_full,
+            "The slabs_full should remain unmodified after the allocation"
+        );
+        assert!(
+            unsafe { contains_node(cache.slabs_full, full_slab2) },
+            "The slabs_full should contain the same slabs after the allocation"
+        );
+
+        assert_eq!(
+            null_mut(),
+            cache.slabs_partial,
+            "The slabs_partial should remain null after the allocation"
+        );
+        assert_eq!(
+            null_mut(),
+            cache.slabs_empty,
+            "The slabs_empty should remain null after the allocation"
+        );
+
+        let mut expected_allocated_addrs = slab_objects
+            .iter()
+            .map(|slab_object| slab_object.object.addr())
+            .collect::<Vec<_>>();
+        expected_allocated_addrs.sort();
+
+        let mut actual_allocated_addrs = unsafe { cache_allocated_addrs(&raw mut cache) };
+        actual_allocated_addrs.sort();
+
+        assert_eq!(
+            expected_allocated_addrs, actual_allocated_addrs,
+            "The cache should have the same objects allocated after the allocation"
         );
     }
 
