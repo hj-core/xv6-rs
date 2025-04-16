@@ -918,7 +918,7 @@ mod cache_allocate_object_test {
     use crate::mem::slab::Error::NoSlabAvailable;
     use crate::mem::slab::test_utils::{
         SlabMan, TestObject, cache_allocated_addrs, contains_node, safe_slab_size, size_of_list,
-        verify_cache_invariants,
+        verify_allocated_objects_matched, verify_cache_invariants,
     };
     use crate::mem::slab::{CACHE_NAME_LENGTH, Cache, SlabHeader};
     use alloc::vec::Vec;
@@ -1091,19 +1091,13 @@ mod cache_allocate_object_test {
             "The slabs_empty should remain null after the allocation"
         );
 
-        let mut expected_allocated_addrs = slab_objects
-            .iter()
-            .map(|slab_object| slab_object.object.addr())
-            .collect::<Vec<_>>();
-        expected_allocated_addrs.sort();
-
-        let mut actual_allocated_addrs = unsafe { cache_allocated_addrs(&raw mut cache) };
-        actual_allocated_addrs.sort();
-
-        assert_eq!(
-            expected_allocated_addrs, actual_allocated_addrs,
-            "The cache should have the same objects allocated after the allocation"
-        );
+        unsafe {
+            verify_allocated_objects_matched(
+                &raw mut cache,
+                &slab_objects,
+                "The cache should have the same objects allocated after the allocation",
+            );
+        }
     }
 
     #[test]
@@ -4140,6 +4134,23 @@ mod test_utils {
             total_set_bits,
             "`used_count` should match the total set bits in `used_bitmap`"
         )
+    }
+
+    pub unsafe fn verify_allocated_objects_matched<T: Default>(
+        cache: *mut Cache<T>,
+        slab_objects: &Vec<SlabObject<T>>,
+        err_message: &str,
+    ) {
+        let mut expected_addrs = slab_objects
+            .iter()
+            .map(|slab_object| slab_object.object.addr())
+            .collect::<Vec<_>>();
+        expected_addrs.sort();
+
+        let mut actual_addrs = cache_allocated_addrs(cache);
+        actual_addrs.sort();
+
+        assert_eq!(expected_addrs, actual_addrs, "{}", err_message,);
     }
 
     /// `cache_allocated_addrs` collects the address of the objects allocated from this `cache`.
