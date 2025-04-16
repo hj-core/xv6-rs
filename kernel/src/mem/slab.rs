@@ -932,14 +932,15 @@ mod cache_allocate_object_test {
     }
 
     #[test]
-    fn no_slabs_returns_no_slab_available_err() {
+    fn no_slabs_returns_no_slab_available_err_cache_unmodified() {
         // Arrange:
         // Create a cache with no slabs.
         type T = TestObject;
         let layout = Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
             .expect("Failed to create layout");
+        let name = ['c'; CACHE_NAME_LENGTH];
 
-        let mut cache = Cache::<T>::new(['c'; CACHE_NAME_LENGTH], layout);
+        let mut cache = Cache::<T>::new(name, layout);
 
         assert_eq!(
             null_mut(),
@@ -971,6 +972,30 @@ mod cache_allocate_object_test {
             matches!(err, NoSlabAvailable),
             "The error should be {:?} but got {err:?}",
             NoSlabAvailable,
+        );
+
+        assert_eq!(
+            name, cache.name,
+            "The name should remain unmodified after the allocation"
+        );
+        assert_eq!(
+            layout, cache.slab_layout,
+            "The slab_layout should remain unmodified after the allocation"
+        );
+        assert_eq!(
+            null_mut(),
+            cache.slabs_full,
+            "The slabs_full should remain null after the allocation"
+        );
+        assert_eq!(
+            null_mut(),
+            cache.slabs_partial,
+            "The slabs_partial should remain null after the allocation"
+        );
+        assert_eq!(
+            null_mut(),
+            cache.slabs_empty,
+            "The slabs_empty should remain null after the allocation"
         );
     }
 
