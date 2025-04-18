@@ -1145,6 +1145,54 @@ mod cache_allocate_object_test {
         ),
     );
 
+    fn test_allocation_returned_object_has_default_value<T: Default + Debug + PartialEq>() {
+        // Arrange:
+        // Create a cache that contains a single empty slab.
+        let layout = Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
+            .expect("Failed to create layout");
+        let name = ['c'; CACHE_NAME_LENGTH];
+
+        let mut cache = Cache::<T>::new(name, layout);
+        let mut slab_man = SlabMan::<T>::new(layout);
+
+        let empty_slab = slab_man.new_test_slab(&raw mut cache);
+        cache.slabs_empty = empty_slab;
+
+        assert_eq!(
+            null_mut(),
+            cache.slabs_partial,
+            "The slabs_partial should be null initially to ensure the object is allocated from the empty slab"
+        );
+
+        // Act
+        let result = unsafe { Cache::allocate_object(&raw mut cache) };
+        assert!(result.is_ok(), "The result should be Ok but got {result:?}");
+
+        // Assert
+        let allocated_object = result.unwrap();
+        assert_eq!(
+            &T::default(),
+            allocated_object.get_ref(),
+            "The allocated object should have the default value"
+        );
+    }
+
+    test_against_types!(
+        test_allocation_returned_object_has_default_value,
+        (
+            allocation_returned_object_has_default_value_for_type1,
+            Type1
+        ),
+        (
+            allocation_returned_object_has_default_value_for_type2,
+            Type2
+        ),
+        (
+            allocation_returned_object_has_default_value_for_type3,
+            Type3
+        ),
+    );
+
     fn test_slabs_empty_becomes_null_slabs_empty_is_null<T: Default + Debug>() {
         // Arrange:
         // Create a cache that contains a single empty slab.
