@@ -1495,7 +1495,7 @@ mod cache_allocate_object_test {
         let result = unsafe { Cache::allocate_object(&raw mut cache) };
         assert!(result.is_ok(), "The result should be Ok but got {result:?}");
 
-        // Assert:
+        // Assert
         let allocated_object = result.unwrap();
         assert!(
             allocated_object.source == empty_slab1 || allocated_object.source == empty_slab2,
@@ -3992,7 +3992,11 @@ mod test_utils {
         expected_slabs: &Vec<*mut u8>,
         expected_objects: &Vec<SlabObject<T>>,
     ) {
-        verify_cache_name(cache, expected_name, "The cache name doesn't match the expected");
+        verify_cache_name(
+            cache,
+            expected_name,
+            "The cache name doesn't match the expected",
+        );
 
         verify_cache_type(cache);
         verify_cache_slab_layout(cache, expected_layout);
@@ -4276,7 +4280,10 @@ mod test_utils {
         expected_slabs: &Vec<*mut u8>,
         err_message: &str,
     ) {
-        let mut expected_addrs = expected_slabs.iter().map(|&slab| slab.addr()).collect::<Vec<_>>();
+        let mut expected_addrs = expected_slabs
+            .iter()
+            .map(|&slab| slab.addr())
+            .collect::<Vec<_>>();
         expected_addrs.sort();
 
         let mut actual_addrs = cache_slabs::<T>(cache)
