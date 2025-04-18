@@ -1153,6 +1153,11 @@ mod cache_allocate_object_test {
         }
         cache.slabs_empty = empty_slab1;
 
+        assert!(
+            unsafe { (*empty_slab1).total_slots > 1 },
+            "The empty slabs should have more than one free slot to ensure a partial slab after the allocation"
+        );
+
         assert_eq!(
             null_mut(),
             cache.slabs_partial,
@@ -1173,7 +1178,7 @@ mod cache_allocate_object_test {
         let moved_slab = allocated_object.source;
         assert!(
             unsafe { !SlabHeader::is_full(moved_slab) },
-            "The moved slab should not be full after the allocation to ensure it is moved to the slabs_partial"
+            "The moved slab should not be full after the allocation"
         );
         assert_eq!(
             1,
