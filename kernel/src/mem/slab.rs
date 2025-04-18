@@ -917,7 +917,7 @@ mod cache_allocate_object_test {
     extern crate alloc;
     use crate::mem::slab::Error::NoSlabAvailable;
     use crate::mem::slab::test_utils::{
-        SlabMan, TestObject, contains_node, safe_slab_size, size_of_list,
+        SlabMan, TestObject, TestObject2, contains_node, safe_slab_size, size_of_list,
         verify_cache_invariants_v2,
     };
     use crate::mem::slab::{CACHE_NAME_LENGTH, Cache, SlabHeader};
@@ -925,12 +925,34 @@ mod cache_allocate_object_test {
     use core::alloc::Layout;
     use core::ptr::null_mut;
 
-    #[test]
-    #[should_panic(expected = "Cache::allocate_object: cache should not be null")]
-    fn null_cache_panics() {
-        type T = TestObject;
+    type Type1 = TestObject;
+    type Type2 = TestObject2;
+    type Type3 = u8;
+
+    macro_rules! test_panic_against_types {
+        ($test:ident, $panic_msg:literal, $(($fn_name:tt, $t:ty)), +,) => {
+            $(
+                #[test]
+                #[should_panic(expected = $panic_msg)]
+                fn $fn_name() {
+                    $test::<$t>()
+                }
+
+            )+
+        };
+    }
+
+    fn test_null_cache_panics<T: Default>() {
         let _ = unsafe { Cache::<T>::allocate_object(null_mut()) };
     }
+
+    test_panic_against_types!(
+        test_null_cache_panics,
+        "Cache::allocate_object: cache should not be null",
+        (null_cache_panics_for_type1, Type1),
+        (null_cache_panics_for_type2, Type2),
+        (null_cache_panics_for_type3, Type3),
+    );
 
     #[test]
     fn no_slabs_returns_no_slab_available_err_cache_unmodified() {
