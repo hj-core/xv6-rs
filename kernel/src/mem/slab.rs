@@ -942,6 +942,8 @@ mod cache_allocate_object_test {
         let name = ['c'; CACHE_NAME_LENGTH];
 
         let mut cache = Cache::<T>::new(name, layout);
+        let slab_man = SlabMan::<T>::new(layout);
+        let allocated_objects = Vec::new();
 
         assert_eq!(
             null_mut(),
@@ -976,28 +978,31 @@ mod cache_allocate_object_test {
         );
 
         assert_eq!(
-            name, cache.name,
-            "The name should remain unmodified after the allocation"
-        );
-        assert_eq!(
-            layout, cache.slab_layout,
-            "The slab_layout should remain unmodified after the allocation"
-        );
-        assert_eq!(
             null_mut(),
             cache.slabs_full,
             "The slabs_full should remain null after the allocation"
         );
+
         assert_eq!(
             null_mut(),
             cache.slabs_partial,
             "The slabs_partial should remain null after the allocation"
         );
+
         assert_eq!(
             null_mut(),
             cache.slabs_empty,
             "The slabs_empty should remain null after the allocation"
         );
+
+        unsafe {
+            verify_cache_invariants_v2(
+                &raw mut cache,
+                &name,
+                slab_man.allocated_addrs(),
+                &allocated_objects,
+            );
+        }
     }
 
     #[test]
@@ -1069,7 +1074,12 @@ mod cache_allocate_object_test {
         );
 
         unsafe {
-            verify_cache_invariants_v2(&raw mut cache, slab_man.allocated_addrs(), &slab_objects);
+            verify_cache_invariants_v2(
+                &raw mut cache,
+                &name,
+                slab_man.allocated_addrs(),
+                &slab_objects,
+            );
         }
     }
 
@@ -1080,8 +1090,9 @@ mod cache_allocate_object_test {
         type T = TestObject;
         let layout = Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
             .expect("Failed to create layout");
+        let name = ['c'; CACHE_NAME_LENGTH];
 
-        let mut cache = Cache::<T>::new(['c'; CACHE_NAME_LENGTH], layout);
+        let mut cache = Cache::<T>::new(name, layout);
         let mut slab_man = SlabMan::<T>::new(layout);
         let mut slab_objects = Vec::new();
 
@@ -1112,7 +1123,12 @@ mod cache_allocate_object_test {
 
         slab_objects.push(allocated_object);
         unsafe {
-            verify_cache_invariants_v2(&raw mut cache, slab_man.allocated_addrs(), &slab_objects);
+            verify_cache_invariants_v2(
+                &raw mut cache,
+                &name,
+                slab_man.allocated_addrs(),
+                &slab_objects,
+            );
         }
     }
 
@@ -1123,8 +1139,9 @@ mod cache_allocate_object_test {
         type T = TestObject;
         let layout = Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
             .expect("Failed to create layout");
+        let name = ['c'; CACHE_NAME_LENGTH];
 
-        let mut cache = Cache::<T>::new(['c'; CACHE_NAME_LENGTH], layout);
+        let mut cache = Cache::<T>::new(name, layout);
         let mut slab_man = SlabMan::<T>::new(layout);
         let mut slab_objects = Vec::new();
 
@@ -1180,7 +1197,12 @@ mod cache_allocate_object_test {
 
         slab_objects.push(allocated_object);
         unsafe {
-            verify_cache_invariants_v2(&raw mut cache, slab_man.allocated_addrs(), &slab_objects);
+            verify_cache_invariants_v2(
+                &raw mut cache,
+                &name,
+                slab_man.allocated_addrs(),
+                &slab_objects,
+            );
         }
     }
 
@@ -1192,8 +1214,9 @@ mod cache_allocate_object_test {
         type T = TestObject;
         let layout = Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
             .expect("Failed to create layout");
+        let name = ['c'; CACHE_NAME_LENGTH];
 
-        let mut cache = Cache::<T>::new(['c'; CACHE_NAME_LENGTH], layout);
+        let mut cache = Cache::<T>::new(name, layout);
         let mut slab_man = SlabMan::<T>::new(layout);
         let mut slab_objects = Vec::new();
 
@@ -1254,7 +1277,12 @@ mod cache_allocate_object_test {
 
         slab_objects.push(allocated_object);
         unsafe {
-            verify_cache_invariants_v2(&raw mut cache, slab_man.allocated_addrs(), &slab_objects);
+            verify_cache_invariants_v2(
+                &raw mut cache,
+                &name,
+                slab_man.allocated_addrs(),
+                &slab_objects,
+            );
         }
     }
 
@@ -1265,8 +1293,9 @@ mod cache_allocate_object_test {
         type T = TestObject;
         let layout = Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
             .expect("Failed to create layout");
+        let name = ['c'; CACHE_NAME_LENGTH];
 
-        let mut cache = Cache::<T>::new(['c'; CACHE_NAME_LENGTH], layout);
+        let mut cache = Cache::<T>::new(name, layout);
         let mut slab_man = SlabMan::<T>::new(layout);
         let mut slab_objects = Vec::new();
 
@@ -1312,7 +1341,12 @@ mod cache_allocate_object_test {
 
         slab_objects.push(allocated_object);
         unsafe {
-            verify_cache_invariants_v2(&raw mut cache, slab_man.allocated_addrs(), &slab_objects);
+            verify_cache_invariants_v2(
+                &raw mut cache,
+                &name,
+                slab_man.allocated_addrs(),
+                &slab_objects,
+            );
         }
     }
 
@@ -1323,8 +1357,9 @@ mod cache_allocate_object_test {
         type T = TestObject;
         let layout = Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
             .expect("Failed to create layout");
+        let name = ['c'; CACHE_NAME_LENGTH];
 
-        let mut cache = Cache::<T>::new(['c'; CACHE_NAME_LENGTH], layout);
+        let mut cache = Cache::<T>::new(name, layout);
         let mut slab_man = SlabMan::<T>::new(layout);
         let mut slab_objects = Vec::new();
 
@@ -1395,7 +1430,12 @@ mod cache_allocate_object_test {
 
         slab_objects.push(allocated_object);
         unsafe {
-            verify_cache_invariants_v2(&raw mut cache, slab_man.allocated_addrs(), &slab_objects);
+            verify_cache_invariants_v2(
+                &raw mut cache,
+                &name,
+                slab_man.allocated_addrs(),
+                &slab_objects,
+            );
         }
     }
 
@@ -1407,8 +1447,9 @@ mod cache_allocate_object_test {
         type T = TestObject;
         let layout = Layout::from_size_align(safe_slab_size::<T>(1), align_of::<SlabHeader<T>>())
             .expect("Failed to create layout");
+        let name = ['c'; CACHE_NAME_LENGTH];
 
-        let mut cache = Cache::<T>::new(['c'; CACHE_NAME_LENGTH], layout);
+        let mut cache = Cache::<T>::new(name, layout);
         let mut slab_man = SlabMan::<T>::new(layout);
         let mut slab_objects = Vec::new();
 
@@ -1483,7 +1524,12 @@ mod cache_allocate_object_test {
 
         slab_objects.push(allocated_object);
         unsafe {
-            verify_cache_invariants_v2(&raw mut cache, slab_man.allocated_addrs(), &slab_objects);
+            verify_cache_invariants_v2(
+                &raw mut cache,
+                &name,
+                slab_man.allocated_addrs(),
+                &slab_objects,
+            );
         }
     }
 
@@ -1495,8 +1541,9 @@ mod cache_allocate_object_test {
         type T = TestObject;
         let layout = Layout::from_size_align(safe_slab_size::<T>(4), align_of::<SlabHeader<T>>())
             .expect("Failed to create layout");
+        let name = ['c'; CACHE_NAME_LENGTH];
 
-        let mut cache = Cache::<T>::new(['c'; CACHE_NAME_LENGTH], layout);
+        let mut cache = Cache::<T>::new(name, layout);
         let mut slab_man = SlabMan::<T>::new(layout);
         let mut slab_objects = Vec::new();
 
@@ -1551,7 +1598,12 @@ mod cache_allocate_object_test {
 
         slab_objects.push(allocated_object);
         unsafe {
-            verify_cache_invariants_v2(&raw mut cache, slab_man.allocated_addrs(), &slab_objects);
+            verify_cache_invariants_v2(
+                &raw mut cache,
+                &name,
+                slab_man.allocated_addrs(),
+                &slab_objects,
+            );
         }
     }
 
@@ -1563,8 +1615,9 @@ mod cache_allocate_object_test {
         type T = TestObject;
         let layout = Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
             .expect("Failed to create layout");
+        let name = ['c'; CACHE_NAME_LENGTH];
 
-        let mut cache = Cache::<T>::new(['c'; CACHE_NAME_LENGTH], layout);
+        let mut cache = Cache::<T>::new(name, layout);
         let mut slab_man = SlabMan::<T>::new(layout);
         let mut slab_objects = Vec::new();
 
@@ -1642,7 +1695,12 @@ mod cache_allocate_object_test {
 
         slab_objects.push(allocated_object);
         unsafe {
-            verify_cache_invariants_v2(&raw mut cache, slab_man.allocated_addrs(), &slab_objects);
+            verify_cache_invariants_v2(
+                &raw mut cache,
+                &name,
+                slab_man.allocated_addrs(),
+                &slab_objects,
+            );
         }
     }
 
@@ -1653,8 +1711,9 @@ mod cache_allocate_object_test {
         type T = TestObject;
         let layout = Layout::from_size_align(safe_slab_size::<T>(4), align_of::<SlabHeader<T>>())
             .expect("Failed to create layout");
+        let name = ['c'; CACHE_NAME_LENGTH];
 
-        let mut cache = Cache::<T>::new(['c'; CACHE_NAME_LENGTH], layout);
+        let mut cache = Cache::<T>::new(name, layout);
         let mut slab_man = SlabMan::<T>::new(layout);
         let mut slab_objects = Vec::new();
 
@@ -1706,7 +1765,12 @@ mod cache_allocate_object_test {
 
         slab_objects.push(allocated_object);
         unsafe {
-            verify_cache_invariants_v2(&raw mut cache, slab_man.allocated_addrs(), &slab_objects);
+            verify_cache_invariants_v2(
+                &raw mut cache,
+                &name,
+                slab_man.allocated_addrs(),
+                &slab_objects,
+            );
         }
     }
 }
@@ -3910,9 +3974,12 @@ mod test_utils {
     /// * `cache` must be a valid pointer.
     pub unsafe fn verify_cache_invariants_v2<T: Default>(
         cache: *mut Cache<T>,
+        name: &[char; CACHE_NAME_LENGTH],
         contained_slabs: &Vec<*mut u8>,
         allocated_objects: &Vec<SlabObject<T>>,
     ) {
+        verify_cache_name(cache, name, "The cache name doesn't match the expected");
+
         verify_cache_type(cache);
         verify_cache_slab_layout(cache);
         verify_cache_slabs_full(cache);
@@ -3929,6 +3996,18 @@ mod test_utils {
             allocated_objects,
             "The allocated objects don't match the expected",
         );
+    }
+
+    /// Verify if the `cache` has the expected `name`.
+    ///
+    /// # Safety:
+    /// * `cache` must be a valid pointer.
+    pub unsafe fn verify_cache_name<T: Default>(
+        cache: *mut Cache<T>,
+        name: &[char; CACHE_NAME_LENGTH],
+        err_message: &str,
+    ) {
+        assert_eq!(name, &(*cache).name, "{}", err_message);
     }
 
     /// Verify if the type [T] of `cache` satisfies the invariant of a [Cache].
