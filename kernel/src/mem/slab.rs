@@ -750,7 +750,7 @@ mod test_marcos {
     /// for a generic test method.
     ///
     /// # Example:
-    /// ```
+    /// ```//noinspection
     /// test_panic_against_types!(
     ///     my_generic_test_method,
     ///     the_expected_panic_message,
@@ -775,7 +775,7 @@ mod test_marcos {
     /// `test_against_types` generates the tests against the given types for a generic test method.
     ///
     /// # Example:
-    /// ```
+    /// ```//noinspection
     /// test_against_types!(
     ///     my_generic_test_method,
     ///     (name_for_the_generated_test_for_type1, Type1),
@@ -4045,7 +4045,11 @@ mod test_utils {
         expected_slabs: &Vec<*mut u8>,
         expected_objects: &Vec<SlabObject<T>>,
     ) {
-        verify_cache_name(cache, expected_name, "The cache name doesn't match the expected");
+        verify_cache_name(
+            cache,
+            expected_name,
+            "The cache name doesn't match the expected",
+        );
 
         verify_cache_type(cache);
         verify_cache_slab_layout(cache, expected_layout);
@@ -4329,7 +4333,10 @@ mod test_utils {
         expected_slabs: &Vec<*mut u8>,
         err_message: &str,
     ) {
-        let mut expected_addrs = expected_slabs.iter().map(|&slab| slab.addr()).collect::<Vec<_>>();
+        let mut expected_addrs = expected_slabs
+            .iter()
+            .map(|&slab| slab.addr())
+            .collect::<Vec<_>>();
         expected_addrs.sort();
 
         let mut actual_addrs = cache_slabs::<T>(cache)
