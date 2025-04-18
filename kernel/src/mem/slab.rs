@@ -1760,12 +1760,10 @@ mod cache_allocate_object_test {
         (a_partial_slab_remains_partial_no_move_for_type3, Type3),
     );
 
-    #[test]
-    fn a_partial_slab_becomes_full_moves_correctly() {
+    fn test_a_partial_slab_becomes_full_moves_correctly<T: Default + Debug>() {
         // Arrange:
         // Create a cache that contains two partial slabs and one full slab.
         // Both partial slabs have only one slot available.
-        type T = TestObject;
         let layout = Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
             .expect("Failed to create layout");
         let name = ['c'; CACHE_NAME_LENGTH];
@@ -1857,6 +1855,13 @@ mod cache_allocate_object_test {
             );
         }
     }
+
+    test_against_types!(
+        test_a_partial_slab_becomes_full_moves_correctly,
+        (a_partial_slab_becomes_full_moves_correctly_for_type1, Type1),
+        (a_partial_slab_becomes_full_moves_correctly_for_type2, Type2),
+        (a_partial_slab_becomes_full_moves_correctly_for_type3, Type3),
+    );
 
     #[test]
     fn general_case_holds_cache_invariants() {
