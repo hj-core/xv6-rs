@@ -3980,34 +3980,34 @@ mod test_utils {
     }
 
     /// Verify if the `cache` satisfies the invariants of a [Cache].
-    // todo!(list the checked variants)
+    // todo!(list the checked invariants)
     // todo!(rename to verify_cache_invariants after the old function is removed)
     ///
     /// # SAFETY:
     /// * `cache` must be a valid pointer.
     pub unsafe fn verify_cache_invariants_v2<T: Default>(
         cache: *mut Cache<T>,
-        name: &[char; CACHE_NAME_LENGTH],
-        layout: Layout,
-        contained_slabs: &Vec<*mut u8>,
-        allocated_objects: &Vec<SlabObject<T>>,
+        expected_name: &[char; CACHE_NAME_LENGTH],
+        expected_layout: Layout,
+        expected_slabs: &Vec<*mut u8>,
+        expected_objects: &Vec<SlabObject<T>>,
     ) {
-        verify_cache_name(cache, name, "The cache name doesn't match the expected");
+        verify_cache_name(cache, expected_name, "The cache name doesn't match the expected");
 
         verify_cache_type(cache);
-        verify_cache_slab_layout(cache, layout);
+        verify_cache_slab_layout(cache, expected_layout);
         verify_cache_slabs_full(cache);
         verify_cache_slabs_partial(cache);
         verify_cache_slabs_empty(cache);
 
         verify_contained_slabs(
             cache,
-            contained_slabs,
+            expected_slabs,
             "The contained slabs don't match the expected",
         );
         verify_allocated_objects(
             cache,
-            allocated_objects,
+            expected_objects,
             "The allocated objects don't match the expected",
         );
     }
@@ -4273,10 +4273,10 @@ mod test_utils {
 
     pub unsafe fn verify_contained_slabs<T: Default>(
         cache: *mut Cache<T>,
-        slabs: &Vec<*mut u8>,
+        expected_slabs: &Vec<*mut u8>,
         err_message: &str,
     ) {
-        let mut expected_addrs = slabs.iter().map(|&slab| slab.addr()).collect::<Vec<_>>();
+        let mut expected_addrs = expected_slabs.iter().map(|&slab| slab.addr()).collect::<Vec<_>>();
         expected_addrs.sort();
 
         let mut actual_addrs = cache_slabs::<T>(cache)
@@ -4290,10 +4290,10 @@ mod test_utils {
 
     pub unsafe fn verify_allocated_objects<T: Default>(
         cache: *mut Cache<T>,
-        slab_objects: &Vec<SlabObject<T>>,
+        expected_objects: &Vec<SlabObject<T>>,
         err_message: &str,
     ) {
-        let mut expected_addrs = slab_objects
+        let mut expected_addrs = expected_objects
             .iter()
             .map(|slab_object| slab_object.object.addr())
             .collect::<Vec<_>>();
