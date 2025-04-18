@@ -947,8 +947,8 @@ mod cache_allocate_object_test {
 
         assert_eq!(
             null_mut(),
-            cache.slabs_empty,
-            "The slabs_empty should be null initially"
+            cache.slabs_full,
+            "The slabs_full should be null initially"
         );
         assert_eq!(
             null_mut(),
@@ -957,8 +957,8 @@ mod cache_allocate_object_test {
         );
         assert_eq!(
             null_mut(),
-            cache.slabs_full,
-            "The slabs_full should be null initially"
+            cache.slabs_empty,
+            "The slabs_empty should be null initially"
         );
 
         // Act
@@ -982,13 +982,11 @@ mod cache_allocate_object_test {
             cache.slabs_full,
             "The slabs_full should remain null after the allocation"
         );
-
         assert_eq!(
             null_mut(),
             cache.slabs_partial,
             "The slabs_partial should remain null after the allocation"
         );
-
         assert_eq!(
             null_mut(),
             cache.slabs_empty,
@@ -1021,7 +1019,6 @@ mod cache_allocate_object_test {
 
         let full_slab1 = slab_man.new_test_slab(&raw mut cache);
         let full_slab2 = slab_man.new_test_slab(&raw mut cache);
-
         unsafe {
             // Fill each slab to make it full
             for slab in [full_slab1, full_slab2] {
@@ -1038,13 +1035,13 @@ mod cache_allocate_object_test {
 
         assert_eq!(
             null_mut(),
-            cache.slabs_empty,
-            "The slabs_empty should be null initially"
+            cache.slabs_partial,
+            "The slabs_partial should be null initially"
         );
         assert_eq!(
             null_mut(),
-            cache.slabs_partial,
-            "The slabs_partial should be null initially"
+            cache.slabs_empty,
+            "The slabs_empty should be null initially"
         );
 
         // Act
@@ -1176,7 +1173,7 @@ mod cache_allocate_object_test {
         let moved_slab = allocated_object.source;
         assert!(
             unsafe { !SlabHeader::is_full(moved_slab) },
-            "The moved slab should not be full"
+            "The moved slab should not be full after the allocation to ensure it is moved to the slabs_partial"
         );
         assert_eq!(
             1,
@@ -1195,7 +1192,7 @@ mod cache_allocate_object_test {
         );
         assert!(
             unsafe { contains_node(cache.slabs_partial, moved_slab) },
-            "The slabs_partial should contain the moved slab"
+            "The slabs_partial should contain the moved slab after the allocation"
         );
 
         slab_objects.push(allocated_object);
@@ -1526,7 +1523,7 @@ mod cache_allocate_object_test {
         );
         assert!(
             unsafe { contains_node(cache.slabs_full, full_slab) },
-            "The slabs_full should contain the full_slab"
+            "The slabs_full should contain the full_slab after the allocation"
         );
 
         slab_objects.push(allocated_object);
