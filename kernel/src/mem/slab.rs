@@ -1863,8 +1863,7 @@ mod cache_allocate_object_test {
         (a_partial_slab_becomes_full_moves_correctly_for_type3, Type3),
     );
 
-    #[test]
-    fn general_case_holds_cache_invariants() {
+    fn test_general_case_holds_cache_invariants<T: Default + Debug>() {
         // Arrange:
         // Create a cache that contains two empty slabs, two partial slabs and two full slabs.
         type T = TestObject;
@@ -1933,6 +1932,13 @@ mod cache_allocate_object_test {
             );
         }
     }
+
+    test_against_types!(
+        test_general_case_holds_cache_invariants,
+        (general_case_holds_cache_invariants_for_type1, Type1),
+        (general_case_holds_cache_invariants_for_type2, Type2),
+        (general_case_holds_cache_invariants_for_type3, Type3),
+    );
 }
 
 #[cfg(test)]
