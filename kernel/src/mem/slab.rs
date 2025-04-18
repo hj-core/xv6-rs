@@ -999,6 +999,7 @@ mod cache_allocate_object_test {
             verify_cache_invariants_v2(
                 &raw mut cache,
                 &name,
+                layout,
                 slab_man.allocated_addrs(),
                 &allocated_objects,
             );
@@ -1077,6 +1078,7 @@ mod cache_allocate_object_test {
             verify_cache_invariants_v2(
                 &raw mut cache,
                 &name,
+                layout,
                 slab_man.allocated_addrs(),
                 &slab_objects,
             );
@@ -1126,6 +1128,7 @@ mod cache_allocate_object_test {
             verify_cache_invariants_v2(
                 &raw mut cache,
                 &name,
+                layout,
                 slab_man.allocated_addrs(),
                 &slab_objects,
             );
@@ -1200,6 +1203,7 @@ mod cache_allocate_object_test {
             verify_cache_invariants_v2(
                 &raw mut cache,
                 &name,
+                layout,
                 slab_man.allocated_addrs(),
                 &slab_objects,
             );
@@ -1280,6 +1284,7 @@ mod cache_allocate_object_test {
             verify_cache_invariants_v2(
                 &raw mut cache,
                 &name,
+                layout,
                 slab_man.allocated_addrs(),
                 &slab_objects,
             );
@@ -1344,6 +1349,7 @@ mod cache_allocate_object_test {
             verify_cache_invariants_v2(
                 &raw mut cache,
                 &name,
+                layout,
                 slab_man.allocated_addrs(),
                 &slab_objects,
             );
@@ -1433,6 +1439,7 @@ mod cache_allocate_object_test {
             verify_cache_invariants_v2(
                 &raw mut cache,
                 &name,
+                layout,
                 slab_man.allocated_addrs(),
                 &slab_objects,
             );
@@ -1527,6 +1534,7 @@ mod cache_allocate_object_test {
             verify_cache_invariants_v2(
                 &raw mut cache,
                 &name,
+                layout,
                 slab_man.allocated_addrs(),
                 &slab_objects,
             );
@@ -1601,6 +1609,7 @@ mod cache_allocate_object_test {
             verify_cache_invariants_v2(
                 &raw mut cache,
                 &name,
+                layout,
                 slab_man.allocated_addrs(),
                 &slab_objects,
             );
@@ -1698,6 +1707,7 @@ mod cache_allocate_object_test {
             verify_cache_invariants_v2(
                 &raw mut cache,
                 &name,
+                layout,
                 slab_man.allocated_addrs(),
                 &slab_objects,
             );
@@ -1768,6 +1778,7 @@ mod cache_allocate_object_test {
             verify_cache_invariants_v2(
                 &raw mut cache,
                 &name,
+                layout,
                 slab_man.allocated_addrs(),
                 &slab_objects,
             );
@@ -3960,7 +3971,7 @@ mod test_utils {
     /// * `cache` must be a valid pointer.
     pub unsafe fn verify_cache_invariants<T: Default>(cache: *mut Cache<T>) {
         verify_cache_type(cache);
-        verify_cache_slab_layout(cache);
+        verify_cache_slab_layout(cache, (*cache).slab_layout);
         verify_cache_slabs_full(cache);
         verify_cache_slabs_partial(cache);
         verify_cache_slabs_empty(cache);
@@ -3975,13 +3986,14 @@ mod test_utils {
     pub unsafe fn verify_cache_invariants_v2<T: Default>(
         cache: *mut Cache<T>,
         name: &[char; CACHE_NAME_LENGTH],
+        layout: Layout,
         contained_slabs: &Vec<*mut u8>,
         allocated_objects: &Vec<SlabObject<T>>,
     ) {
         verify_cache_name(cache, name, "The cache name doesn't match the expected");
 
         verify_cache_type(cache);
-        verify_cache_slab_layout(cache);
+        verify_cache_slab_layout(cache, layout);
         verify_cache_slabs_full(cache);
         verify_cache_slabs_partial(cache);
         verify_cache_slabs_empty(cache);
@@ -4022,15 +4034,20 @@ mod test_utils {
     ///
     /// SAFETY:
     /// * `cache` must be a valid pointer.
-    unsafe fn verify_cache_slab_layout<T: Default>(cache: *mut Cache<T>) {
+    unsafe fn verify_cache_slab_layout<T: Default>(cache: *mut Cache<T>, expected_layout: Layout) {
+        assert_eq!(
+            expected_layout,
+            (*cache).slab_layout,
+            "The slab layout doesn't match the expected"
+        );
         assert!(
             Cache::<T>::min_slab_size() <= (*cache).slab_layout.size(),
-            "The size of `slab_layout` is too small"
+            "The size of the slab layout does not meet the min slab size requirement"
         );
         assert_eq!(
             0,
             (*cache).slab_layout.align() % align_of::<SlabHeader<T>>(),
-            "The alignment of `slab_layout` is incompatible with SlabHeader<T>"
+            "The alignment of the slab layout is incompatible with SlabHeader<T>"
         );
     }
 
