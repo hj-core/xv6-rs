@@ -744,6 +744,59 @@ pub enum Error {
 }
 
 #[cfg(test)]
+#[macro_use]
+mod test_marcos {
+    /// `test_panic_against_types` generates the "should_panic" tests against the given types
+    /// for a generic test method.
+    ///
+    /// # Example:
+    /// ```
+    /// test_panic_against_types!(
+    ///     my_generic_test_method,
+    ///     the_expected_panic_message,
+    ///     (name_for_the_generated_test_for_type1, Type1),
+    ///     (name_for_the_generated_test_for_type2, Type2),
+    ///     (name_for_the_generated_test_for_type3, Type3),
+    /// );
+    /// ```
+    macro_rules! test_panic_against_types {
+        ($test:ident, $panic_msg:literal, $(($fn_name:tt, $t:ty)), +,) => {
+            $(
+                #[test]
+                #[should_panic(expected = $panic_msg)]
+                fn $fn_name() {
+                    $test::<$t>()
+                }
+
+            )+
+        };
+    }
+
+    /// `test_against_types` generates the tests against the given types for a generic test method.
+    ///
+    /// # Example:
+    /// ```
+    /// test_against_types!(
+    ///     my_generic_test_method,
+    ///     (name_for_the_generated_test_for_type1, Type1),
+    ///     (name_for_the_generated_test_for_type2, Type2),
+    ///     (name_for_the_generated_test_for_type3, Type3),
+    /// );
+    /// ```
+    macro_rules! test_against_types {
+        ($test:ident, $(($fn_name:tt, $t:ty)), +,) => {
+            $(
+                #[test]
+                fn $fn_name() {
+                    $test::<$t>()
+                }
+
+            )+
+        };
+    }
+}
+
+#[cfg(test)]
 mod cache_new_test {
     use crate::mem::slab::test_utils::{
         TestObject, cache_slabs, safe_slab_size, verify_cache_invariants,
