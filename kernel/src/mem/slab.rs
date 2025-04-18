@@ -4211,6 +4211,31 @@ mod test_utils {
         }
     }
 
+    /// `prepend_new_full_slab` prepends a full slab to the `slabs_full` of the `cache`.
+    /// This full slab is acquired from the `slab_man`, and all its allocated objects are
+    /// appended to the `slab_objects`.
+    ///
+    /// # Safety
+    /// * `cache` must be a valid pointer and in a valid state.
+    /// * `cache` and `slab_man` must have a compatible slab layout.
+    pub unsafe fn prepend_new_full_slab<T: Default>(
+        cache: *mut Cache<T>,
+        slab_man: &mut SlabMan<T>,
+        slab_objects: &mut Vec<SlabObject<T>>,
+    ) {
+        let new_slab = slab_man.new_test_slab(cache);
+        while !SlabHeader::is_full(new_slab) {
+            slab_objects
+                .push(SlabHeader::allocate_object(new_slab).expect("Failed to allocate object"));
+        }
+
+        if !(*cache).slabs_full.is_null() {
+            (*new_slab).next = (*cache).slabs_full;
+            (*(*cache).slabs_full).prev = new_slab;
+        }
+        (*cache).slabs_full = new_slab;
+    }
+
     /// `safe_slab_size` assumes the slot size is equal to the size of `T` and
     /// returns a slab size that can accommodate `total_slots`.
     pub fn safe_slab_size<T: Default>(total_slots: usize) -> ByteSize {
