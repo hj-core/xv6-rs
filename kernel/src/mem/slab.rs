@@ -917,7 +917,8 @@ mod cache_allocate_object_test {
     extern crate alloc;
     use crate::mem::slab::Error::NoSlabAvailable;
     use crate::mem::slab::test_utils::{
-        SlabMan, TestObject, contains_node, safe_slab_size, size_of_list, verify_cache_invariants,
+        SlabMan, TestObject, contains_node, safe_slab_size, size_of_list,
+        verify_cache_invariants_v2,
     };
     use crate::mem::slab::{CACHE_NAME_LENGTH, Cache, SlabHeader};
     use alloc::vec::Vec;
@@ -932,19 +933,22 @@ mod cache_allocate_object_test {
     }
 
     #[test]
-    fn no_slabs_returns_no_slab_available_err() {
+    fn no_slabs_returns_no_slab_available_err_cache_unmodified() {
         // Arrange:
         // Create a cache with no slabs.
         type T = TestObject;
         let layout = Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
             .expect("Failed to create layout");
+        let name = ['c'; CACHE_NAME_LENGTH];
 
-        let mut cache = Cache::<T>::new(['c'; CACHE_NAME_LENGTH], layout);
+        let mut cache = Cache::<T>::new(name, layout);
+        let slab_man = SlabMan::<T>::new(layout);
+        let allocated_objects = Vec::new();
 
         assert_eq!(
             null_mut(),
-            cache.slabs_empty,
-            "The slabs_empty should be null initially"
+            cache.slabs_full,
+            "The slabs_full should be null initially"
         );
         assert_eq!(
             null_mut(),
@@ -953,8 +957,8 @@ mod cache_allocate_object_test {
         );
         assert_eq!(
             null_mut(),
-            cache.slabs_full,
-            "The slabs_full should be null initially"
+            cache.slabs_empty,
+            "The slabs_empty should be null initially"
         );
 
         // Act
@@ -972,23 +976,49 @@ mod cache_allocate_object_test {
             "The error should be {:?} but got {err:?}",
             NoSlabAvailable,
         );
+
+        assert_eq!(
+            null_mut(),
+            cache.slabs_full,
+            "The slabs_full should remain null after the allocation"
+        );
+        assert_eq!(
+            null_mut(),
+            cache.slabs_partial,
+            "The slabs_partial should remain null after the allocation"
+        );
+        assert_eq!(
+            null_mut(),
+            cache.slabs_empty,
+            "The slabs_empty should remain null after the allocation"
+        );
+
+        unsafe {
+            verify_cache_invariants_v2(
+                &raw mut cache,
+                &name,
+                layout,
+                slab_man.allocated_addrs(),
+                &allocated_objects,
+            );
+        }
     }
 
     #[test]
-    fn full_slabs_only_returns_no_slab_available_err() {
+    fn full_slabs_only_returns_no_slab_available_err_cache_unmodified() {
         // Arrange:
         // Create a cache that contains only two full slabs.
         type T = TestObject;
         let layout = Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
             .expect("Failed to create layout");
+        let name = ['c'; CACHE_NAME_LENGTH];
 
-        let mut cache = Cache::<T>::new(['c'; CACHE_NAME_LENGTH], layout);
+        let mut cache = Cache::<T>::new(name, layout);
         let mut slab_man = SlabMan::<T>::new(layout);
         let mut slab_objects = Vec::new();
 
         let full_slab1 = slab_man.new_test_slab(&raw mut cache);
         let full_slab2 = slab_man.new_test_slab(&raw mut cache);
-
         unsafe {
             // Fill each slab to make it full
             for slab in [full_slab1, full_slab2] {
@@ -1005,13 +1035,13 @@ mod cache_allocate_object_test {
 
         assert_eq!(
             null_mut(),
-            cache.slabs_empty,
-            "The slabs_empty should be null initially"
+            cache.slabs_partial,
+            "The slabs_partial should be null initially"
         );
         assert_eq!(
             null_mut(),
-            cache.slabs_partial,
-            "The slabs_partial should be null initially"
+            cache.slabs_empty,
+            "The slabs_empty should be null initially"
         );
 
         // Act
@@ -1029,6 +1059,27 @@ mod cache_allocate_object_test {
             "The error should be {:?} but got {err:?}",
             NoSlabAvailable,
         );
+
+        assert_eq!(
+            null_mut(),
+            cache.slabs_partial,
+            "The slabs_partial should remain null after the allocation"
+        );
+        assert_eq!(
+            null_mut(),
+            cache.slabs_empty,
+            "The slabs_empty should remain null after the allocation"
+        );
+
+        unsafe {
+            verify_cache_invariants_v2(
+                &raw mut cache,
+                &name,
+                layout,
+                slab_man.allocated_addrs(),
+                &slab_objects,
+            );
+        }
     }
 
     #[test]
@@ -1038,9 +1089,11 @@ mod cache_allocate_object_test {
         type T = TestObject;
         let layout = Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
             .expect("Failed to create layout");
+        let name = ['c'; CACHE_NAME_LENGTH];
 
-        let mut cache = Cache::<T>::new(['c'; CACHE_NAME_LENGTH], layout);
+        let mut cache = Cache::<T>::new(name, layout);
         let mut slab_man = SlabMan::<T>::new(layout);
+        let mut slab_objects = Vec::new();
 
         let empty_slab = slab_man.new_test_slab(&raw mut cache);
         cache.slabs_empty = empty_slab;
@@ -1067,7 +1120,16 @@ mod cache_allocate_object_test {
             "The slab_empty should be null after the allocation"
         );
 
-        unsafe { verify_cache_invariants(&raw mut cache) }
+        slab_objects.push(allocated_object);
+        unsafe {
+            verify_cache_invariants_v2(
+                &raw mut cache,
+                &name,
+                layout,
+                slab_man.allocated_addrs(),
+                &slab_objects,
+            );
+        }
     }
 
     #[test]
@@ -1077,9 +1139,11 @@ mod cache_allocate_object_test {
         type T = TestObject;
         let layout = Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
             .expect("Failed to create layout");
+        let name = ['c'; CACHE_NAME_LENGTH];
 
-        let mut cache = Cache::<T>::new(['c'; CACHE_NAME_LENGTH], layout);
+        let mut cache = Cache::<T>::new(name, layout);
         let mut slab_man = SlabMan::<T>::new(layout);
+        let mut slab_objects = Vec::new();
 
         let empty_slab1 = slab_man.new_test_slab(&raw mut cache);
         let empty_slab2 = slab_man.new_test_slab(&raw mut cache);
@@ -1088,6 +1152,11 @@ mod cache_allocate_object_test {
             (*empty_slab2).prev = empty_slab1;
         }
         cache.slabs_empty = empty_slab1;
+
+        assert!(
+            unsafe { (*empty_slab1).total_slots > 1 },
+            "The empty slabs should have more than one free slot to ensure a partial slab after the allocation"
+        );
 
         assert_eq!(
             null_mut(),
@@ -1109,7 +1178,7 @@ mod cache_allocate_object_test {
         let moved_slab = allocated_object.source;
         assert!(
             unsafe { !SlabHeader::is_full(moved_slab) },
-            "The moved slab should not be full"
+            "The moved slab should not be full after the allocation"
         );
         assert_eq!(
             1,
@@ -1128,10 +1197,19 @@ mod cache_allocate_object_test {
         );
         assert!(
             unsafe { contains_node(cache.slabs_partial, moved_slab) },
-            "The slabs_partial should contain the moved slab"
+            "The slabs_partial should contain the moved slab after the allocation"
         );
 
-        unsafe { verify_cache_invariants(&raw mut cache) }
+        slab_objects.push(allocated_object);
+        unsafe {
+            verify_cache_invariants_v2(
+                &raw mut cache,
+                &name,
+                layout,
+                slab_man.allocated_addrs(),
+                &slab_objects,
+            );
+        }
     }
 
     #[test]
@@ -1142,8 +1220,9 @@ mod cache_allocate_object_test {
         type T = TestObject;
         let layout = Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
             .expect("Failed to create layout");
+        let name = ['c'; CACHE_NAME_LENGTH];
 
-        let mut cache = Cache::<T>::new(['c'; CACHE_NAME_LENGTH], layout);
+        let mut cache = Cache::<T>::new(name, layout);
         let mut slab_man = SlabMan::<T>::new(layout);
         let mut slab_objects = Vec::new();
 
@@ -1202,7 +1281,16 @@ mod cache_allocate_object_test {
             "The partial_slab should be moved to the slabs_full list"
         );
 
-        unsafe { verify_cache_invariants(&raw mut cache) }
+        slab_objects.push(allocated_object);
+        unsafe {
+            verify_cache_invariants_v2(
+                &raw mut cache,
+                &name,
+                layout,
+                slab_man.allocated_addrs(),
+                &slab_objects,
+            );
+        }
     }
 
     #[test]
@@ -1212,8 +1300,9 @@ mod cache_allocate_object_test {
         type T = TestObject;
         let layout = Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
             .expect("Failed to create layout");
+        let name = ['c'; CACHE_NAME_LENGTH];
 
-        let mut cache = Cache::<T>::new(['c'; CACHE_NAME_LENGTH], layout);
+        let mut cache = Cache::<T>::new(name, layout);
         let mut slab_man = SlabMan::<T>::new(layout);
         let mut slab_objects = Vec::new();
 
@@ -1257,7 +1346,16 @@ mod cache_allocate_object_test {
             "The partial_slab should be moved to the slabs_full list"
         );
 
-        unsafe { verify_cache_invariants(&raw mut cache) }
+        slab_objects.push(allocated_object);
+        unsafe {
+            verify_cache_invariants_v2(
+                &raw mut cache,
+                &name,
+                layout,
+                slab_man.allocated_addrs(),
+                &slab_objects,
+            );
+        }
     }
 
     #[test]
@@ -1267,8 +1365,9 @@ mod cache_allocate_object_test {
         type T = TestObject;
         let layout = Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
             .expect("Failed to create layout");
+        let name = ['c'; CACHE_NAME_LENGTH];
 
-        let mut cache = Cache::<T>::new(['c'; CACHE_NAME_LENGTH], layout);
+        let mut cache = Cache::<T>::new(name, layout);
         let mut slab_man = SlabMan::<T>::new(layout);
         let mut slab_objects = Vec::new();
 
@@ -1337,7 +1436,16 @@ mod cache_allocate_object_test {
             "The slabs_full should have a single slab after the allocation"
         );
 
-        unsafe { verify_cache_invariants(&raw mut cache) }
+        slab_objects.push(allocated_object);
+        unsafe {
+            verify_cache_invariants_v2(
+                &raw mut cache,
+                &name,
+                layout,
+                slab_man.allocated_addrs(),
+                &slab_objects,
+            );
+        }
     }
 
     #[test]
@@ -1348,8 +1456,9 @@ mod cache_allocate_object_test {
         type T = TestObject;
         let layout = Layout::from_size_align(safe_slab_size::<T>(1), align_of::<SlabHeader<T>>())
             .expect("Failed to create layout");
+        let name = ['c'; CACHE_NAME_LENGTH];
 
-        let mut cache = Cache::<T>::new(['c'; CACHE_NAME_LENGTH], layout);
+        let mut cache = Cache::<T>::new(name, layout);
         let mut slab_man = SlabMan::<T>::new(layout);
         let mut slab_objects = Vec::new();
 
@@ -1419,10 +1528,19 @@ mod cache_allocate_object_test {
         );
         assert!(
             unsafe { contains_node(cache.slabs_full, full_slab) },
-            "The slabs_full should contain the full_slab"
+            "The slabs_full should contain the full_slab after the allocation"
         );
 
-        unsafe { verify_cache_invariants(&raw mut cache) }
+        slab_objects.push(allocated_object);
+        unsafe {
+            verify_cache_invariants_v2(
+                &raw mut cache,
+                &name,
+                layout,
+                slab_man.allocated_addrs(),
+                &slab_objects,
+            );
+        }
     }
 
     #[test]
@@ -1433,8 +1551,9 @@ mod cache_allocate_object_test {
         type T = TestObject;
         let layout = Layout::from_size_align(safe_slab_size::<T>(4), align_of::<SlabHeader<T>>())
             .expect("Failed to create layout");
+        let name = ['c'; CACHE_NAME_LENGTH];
 
-        let mut cache = Cache::<T>::new(['c'; CACHE_NAME_LENGTH], layout);
+        let mut cache = Cache::<T>::new(name, layout);
         let mut slab_man = SlabMan::<T>::new(layout);
         let mut slab_objects = Vec::new();
 
@@ -1487,7 +1606,16 @@ mod cache_allocate_object_test {
             "The slabs_partial should contain both partial slabs after the allocation"
         );
 
-        unsafe { verify_cache_invariants(&raw mut cache) }
+        slab_objects.push(allocated_object);
+        unsafe {
+            verify_cache_invariants_v2(
+                &raw mut cache,
+                &name,
+                layout,
+                slab_man.allocated_addrs(),
+                &slab_objects,
+            );
+        }
     }
 
     #[test]
@@ -1498,8 +1626,9 @@ mod cache_allocate_object_test {
         type T = TestObject;
         let layout = Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
             .expect("Failed to create layout");
+        let name = ['c'; CACHE_NAME_LENGTH];
 
-        let mut cache = Cache::<T>::new(['c'; CACHE_NAME_LENGTH], layout);
+        let mut cache = Cache::<T>::new(name, layout);
         let mut slab_man = SlabMan::<T>::new(layout);
         let mut slab_objects = Vec::new();
 
@@ -1575,7 +1704,16 @@ mod cache_allocate_object_test {
             "The slabs_full should contain the moved slab"
         );
 
-        unsafe { verify_cache_invariants(&raw mut cache) }
+        slab_objects.push(allocated_object);
+        unsafe {
+            verify_cache_invariants_v2(
+                &raw mut cache,
+                &name,
+                layout,
+                slab_man.allocated_addrs(),
+                &slab_objects,
+            );
+        }
     }
 
     #[test]
@@ -1585,8 +1723,9 @@ mod cache_allocate_object_test {
         type T = TestObject;
         let layout = Layout::from_size_align(safe_slab_size::<T>(4), align_of::<SlabHeader<T>>())
             .expect("Failed to create layout");
+        let name = ['c'; CACHE_NAME_LENGTH];
 
-        let mut cache = Cache::<T>::new(['c'; CACHE_NAME_LENGTH], layout);
+        let mut cache = Cache::<T>::new(name, layout);
         let mut slab_man = SlabMan::<T>::new(layout);
         let mut slab_objects = Vec::new();
 
@@ -1634,7 +1773,18 @@ mod cache_allocate_object_test {
         assert!(result.is_ok(), "The result should be Ok but got {result:?}");
 
         // Assert
-        unsafe { verify_cache_invariants(&raw mut cache) }
+        let allocated_object = result.unwrap();
+
+        slab_objects.push(allocated_object);
+        unsafe {
+            verify_cache_invariants_v2(
+                &raw mut cache,
+                &name,
+                layout,
+                slab_man.allocated_addrs(),
+                &slab_objects,
+            );
+        }
     }
 }
 
@@ -3799,6 +3949,10 @@ mod test_utils {
                 )
             }
         }
+
+        pub fn allocated_addrs(&self) -> &Vec<*mut u8> {
+            &(self.allocated)
+        }
     }
 
     impl<T: Default> Drop for SlabMan<T> {
@@ -3819,10 +3973,55 @@ mod test_utils {
     /// * `cache` must be a valid pointer.
     pub unsafe fn verify_cache_invariants<T: Default>(cache: *mut Cache<T>) {
         verify_cache_type(cache);
-        verify_cache_slab_layout(cache);
+        verify_cache_slab_layout(cache, (*cache).slab_layout);
         verify_cache_slabs_full(cache);
         verify_cache_slabs_partial(cache);
         verify_cache_slabs_empty(cache);
+    }
+
+    /// Verify if the `cache` satisfies the invariants of a [Cache].
+    // todo!(list the checked invariants)
+    // todo!(rename to verify_cache_invariants after the old function is removed)
+    ///
+    /// # SAFETY:
+    /// * `cache` must be a valid pointer.
+    pub unsafe fn verify_cache_invariants_v2<T: Default>(
+        cache: *mut Cache<T>,
+        expected_name: &[char; CACHE_NAME_LENGTH],
+        expected_layout: Layout,
+        expected_slabs: &Vec<*mut u8>,
+        expected_objects: &Vec<SlabObject<T>>,
+    ) {
+        verify_cache_name(cache, expected_name, "The cache name doesn't match the expected");
+
+        verify_cache_type(cache);
+        verify_cache_slab_layout(cache, expected_layout);
+        verify_cache_slabs_full(cache);
+        verify_cache_slabs_partial(cache);
+        verify_cache_slabs_empty(cache);
+
+        verify_contained_slabs(
+            cache,
+            expected_slabs,
+            "The contained slabs don't match the expected",
+        );
+        verify_allocated_objects(
+            cache,
+            expected_objects,
+            "The allocated objects don't match the expected",
+        );
+    }
+
+    /// Verify if the `cache` has the expected `name`.
+    ///
+    /// # Safety:
+    /// * `cache` must be a valid pointer.
+    pub unsafe fn verify_cache_name<T: Default>(
+        cache: *mut Cache<T>,
+        name: &[char; CACHE_NAME_LENGTH],
+        err_message: &str,
+    ) {
+        assert_eq!(name, &(*cache).name, "{}", err_message);
     }
 
     /// Verify if the type [T] of `cache` satisfies the invariant of a [Cache].
@@ -3837,15 +4036,20 @@ mod test_utils {
     ///
     /// SAFETY:
     /// * `cache` must be a valid pointer.
-    unsafe fn verify_cache_slab_layout<T: Default>(cache: *mut Cache<T>) {
+    unsafe fn verify_cache_slab_layout<T: Default>(cache: *mut Cache<T>, expected_layout: Layout) {
+        assert_eq!(
+            expected_layout,
+            (*cache).slab_layout,
+            "The slab layout doesn't match the expected"
+        );
         assert!(
             Cache::<T>::min_slab_size() <= (*cache).slab_layout.size(),
-            "The size of `slab_layout` is too small"
+            "The size of the slab layout does not meet the min slab size requirement"
         );
         assert_eq!(
             0,
             (*cache).slab_layout.align() % align_of::<SlabHeader<T>>(),
-            "The alignment of `slab_layout` is incompatible with SlabHeader<T>"
+            "The alignment of the slab layout is incompatible with SlabHeader<T>"
         );
     }
 
@@ -4065,6 +4269,40 @@ mod test_utils {
             total_set_bits,
             "`used_count` should match the total set bits in `used_bitmap`"
         )
+    }
+
+    pub unsafe fn verify_contained_slabs<T: Default>(
+        cache: *mut Cache<T>,
+        expected_slabs: &Vec<*mut u8>,
+        err_message: &str,
+    ) {
+        let mut expected_addrs = expected_slabs.iter().map(|&slab| slab.addr()).collect::<Vec<_>>();
+        expected_addrs.sort();
+
+        let mut actual_addrs = cache_slabs::<T>(cache)
+            .iter()
+            .map(|header| header.addr())
+            .collect::<Vec<_>>();
+        actual_addrs.sort();
+
+        assert_eq!(expected_addrs, actual_addrs, "{}", err_message,);
+    }
+
+    pub unsafe fn verify_allocated_objects<T: Default>(
+        cache: *mut Cache<T>,
+        expected_objects: &Vec<SlabObject<T>>,
+        err_message: &str,
+    ) {
+        let mut expected_addrs = expected_objects
+            .iter()
+            .map(|slab_object| slab_object.object.addr())
+            .collect::<Vec<_>>();
+        expected_addrs.sort();
+
+        let mut actual_addrs = cache_allocated_addrs(cache);
+        actual_addrs.sort();
+
+        assert_eq!(expected_addrs, actual_addrs, "{}", err_message,);
     }
 
     /// `cache_allocated_addrs` collects the address of the objects allocated from this `cache`.
