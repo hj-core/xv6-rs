@@ -923,6 +923,7 @@ mod cache_allocate_object_test {
     use crate::mem::slab::{CACHE_NAME_LENGTH, Cache, SlabHeader};
     use alloc::vec::Vec;
     use core::alloc::Layout;
+    use core::fmt::Debug;
     use core::ptr::null_mut;
 
     type Type1 = TestObject;
@@ -934,6 +935,18 @@ mod cache_allocate_object_test {
             $(
                 #[test]
                 #[should_panic(expected = $panic_msg)]
+                fn $fn_name() {
+                    $test::<$t>()
+                }
+
+            )+
+        };
+    }
+
+    macro_rules! test_against_types {
+        ($test:ident, $(($fn_name:tt, $t:ty)), +,) => {
+            $(
+                #[test]
                 fn $fn_name() {
                     $test::<$t>()
                 }
@@ -954,11 +967,9 @@ mod cache_allocate_object_test {
         (null_cache_panics_for_type3, Type3),
     );
 
-    #[test]
-    fn no_slabs_returns_no_slab_available_err_cache_unmodified() {
+    fn test_no_slabs_returns_no_slab_available_err_cache_unmodified<T: Default + Debug>() {
         // Arrange:
         // Create a cache with no slabs.
-        type T = TestObject;
         let layout = Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
             .expect("Failed to create layout");
         let name = ['c'; CACHE_NAME_LENGTH];
@@ -1025,6 +1036,22 @@ mod cache_allocate_object_test {
             );
         }
     }
+
+    test_against_types!(
+        test_no_slabs_returns_no_slab_available_err_cache_unmodified,
+        (
+            no_slabs_returns_no_slab_available_err_cache_unmodified_for_type1,
+            Type1
+        ),
+        (
+            no_slabs_returns_no_slab_available_err_cache_unmodified_for_type2,
+            Type2
+        ),
+        (
+            no_slabs_returns_no_slab_available_err_cache_unmodified_for_type3,
+            Type3
+        ),
+    );
 
     #[test]
     fn full_slabs_only_returns_no_slab_available_err_cache_unmodified() {
