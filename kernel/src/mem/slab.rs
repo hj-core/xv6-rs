@@ -970,8 +970,8 @@ mod cache_allocate_object_test {
     extern crate alloc;
     use crate::mem::slab::Error::NoSlabAvailable;
     use crate::mem::slab::test_utils::{
-        SlabMan, TestObject, TestObject2, contains_node, safe_slab_size, size_of_list,
-        verify_cache_invariants_v2,
+        SlabMan, TestObject, TestObject2, contains_node, prepend_new_full_slab, safe_slab_size,
+        size_of_list, verify_cache_invariants_v2,
     };
     use crate::mem::slab::{CACHE_NAME_LENGTH, Cache, SlabHeader};
     use alloc::vec::Vec;
@@ -1092,21 +1092,10 @@ mod cache_allocate_object_test {
         let mut slab_man = SlabMan::<T>::new(layout);
         let mut slab_objects = Vec::new();
 
-        let full_slab1 = slab_man.new_test_slab(&raw mut cache);
-        let full_slab2 = slab_man.new_test_slab(&raw mut cache);
         unsafe {
-            // Fill each slab to make it full
-            for slab in [full_slab1, full_slab2] {
-                while !SlabHeader::is_full(slab) {
-                    slab_objects.push(
-                        SlabHeader::allocate_object(slab).expect("Failed to allocate object"),
-                    );
-                }
-            }
-            (*full_slab1).next = full_slab2;
-            (*full_slab2).prev = full_slab1;
+            prepend_new_full_slab(&raw mut cache, &mut slab_man, &mut slab_objects);
+            prepend_new_full_slab(&raw mut cache, &mut slab_man, &mut slab_objects);
         }
-        cache.slabs_full = full_slab1;
 
         assert_eq!(
             null_mut(),
@@ -1401,15 +1390,9 @@ mod cache_allocate_object_test {
         }
         cache.slabs_partial = partial_slab;
 
-        let full_slab = slab_man.new_test_slab(&raw mut cache);
         unsafe {
-            while !SlabHeader::is_full(full_slab) {
-                slab_objects.push(
-                    SlabHeader::allocate_object(full_slab).expect("Failed to allocate object"),
-                );
-            }
+            prepend_new_full_slab(&raw mut cache, &mut slab_man, &mut slab_objects);
         }
-        cache.slabs_full = full_slab;
 
         assert_eq!(
             null_mut(),
@@ -1572,15 +1555,9 @@ mod cache_allocate_object_test {
         }
         cache.slabs_empty = empty_slab1;
 
-        let full_slab = slab_man.new_test_slab(&raw mut cache);
         unsafe {
-            while !SlabHeader::is_full(full_slab) {
-                slab_objects.push(
-                    SlabHeader::allocate_object(full_slab).expect("Failed to allocate object"),
-                )
-            }
+            prepend_new_full_slab(&raw mut cache, &mut slab_man, &mut slab_objects);
         }
-        cache.slabs_full = full_slab;
 
         assert_eq!(
             null_mut(),
@@ -1677,15 +1654,10 @@ mod cache_allocate_object_test {
         }
         cache.slabs_empty = empty_slab1;
 
-        let full_slab = slab_man.new_test_slab(&raw mut cache);
         unsafe {
-            while !SlabHeader::is_full(full_slab) {
-                slab_objects.push(
-                    SlabHeader::allocate_object(full_slab).expect("Failed to allocate object"),
-                )
-            }
+            prepend_new_full_slab(&raw mut cache, &mut slab_man, &mut slab_objects);
         }
-        cache.slabs_full = full_slab;
+        let full_slab = cache.slabs_full;
 
         assert_eq!(
             null_mut(),
@@ -1864,15 +1836,9 @@ mod cache_allocate_object_test {
         }
         cache.slabs_partial = partial_slab1;
 
-        let full_slab = slab_man.new_test_slab(&raw mut cache);
         unsafe {
-            while !SlabHeader::is_full(full_slab) {
-                slab_objects.push(
-                    SlabHeader::allocate_object(full_slab).expect("Failed to allocate object"),
-                );
-            }
+            prepend_new_full_slab(&raw mut cache, &mut slab_man, &mut slab_objects);
         }
-        cache.slabs_full = full_slab;
 
         assert_eq!(
             null_mut(),
@@ -1974,21 +1940,10 @@ mod cache_allocate_object_test {
         }
         cache.slabs_partial = partial_slab1;
 
-        let full_slab1 = slab_man.new_test_slab(&raw mut cache);
-        let full_slab2 = slab_man.new_test_slab(&raw mut cache);
         unsafe {
-            // Fill each slab to make it full
-            for slab in [full_slab1, full_slab2] {
-                while !SlabHeader::is_full(slab) {
-                    slab_objects.push(
-                        SlabHeader::allocate_object(slab).expect("Failed to allocate object"),
-                    );
-                }
-            }
-            (*full_slab1).next = full_slab2;
-            (*full_slab2).prev = full_slab1;
+            prepend_new_full_slab(&raw mut cache, &mut slab_man, &mut slab_objects);
+            prepend_new_full_slab(&raw mut cache, &mut slab_man, &mut slab_objects);
         }
-        cache.slabs_full = full_slab1;
 
         // Act
         let result = unsafe { Cache::allocate_object(&raw mut cache) };
