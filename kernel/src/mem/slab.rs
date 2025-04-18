@@ -3819,6 +3819,27 @@ mod test_utils {
         }
     }
 
+    #[derive(Debug, PartialEq)]
+    pub struct TestObject2 {
+        x: TestObject,
+        y: TestObject,
+        z: u128,
+    }
+
+    impl Default for TestObject2 {
+        fn default() -> Self {
+            Self {
+                x: TestObject::default(),
+                y: TestObject {
+                    x: 121,
+                    y: 222,
+                    z: 306,
+                },
+                z: 9124,
+            }
+        }
+    }
+
     /// Calls `alloc` with the `layout` `count` times and
     /// returns a collection of the returned pointers.
     pub fn acquire_memory(layout: Layout, count: usize) -> Vec<*mut u8> {
