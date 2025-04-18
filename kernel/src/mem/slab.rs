@@ -1145,11 +1145,9 @@ mod cache_allocate_object_test {
         ),
     );
 
-    #[test]
-    fn slabs_empty_becomes_null_slabs_empty_is_null() {
+    fn test_slabs_empty_becomes_null_slabs_empty_is_null<T: Default + Debug>() {
         // Arrange:
         // Create a cache that contains a single empty slab.
-        type T = TestObject;
         let layout = Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
             .expect("Failed to create layout");
         let name = ['c'; CACHE_NAME_LENGTH];
@@ -1194,6 +1192,22 @@ mod cache_allocate_object_test {
             );
         }
     }
+
+    test_against_types!(
+        test_slabs_empty_becomes_null_slabs_empty_is_null,
+        (
+            slabs_empty_becomes_null_slabs_empty_is_null_for_type1,
+            Type1
+        ),
+        (
+            slabs_empty_becomes_null_slabs_empty_is_null_for_type2,
+            Type2
+        ),
+        (
+            slabs_empty_becomes_null_slabs_empty_is_null_for_type3,
+            Type3
+        ),
+    );
 
     #[test]
     fn slabs_partial_becomes_non_null_slabs_partial_is_non_null() {
