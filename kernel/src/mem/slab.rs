@@ -1680,12 +1680,10 @@ mod cache_allocate_object_test {
         (an_empty_slab_becomes_full_moves_correctly_for_type2, Type2),
     );
 
-    #[test]
-    fn a_partial_slab_remains_partial_no_move() {
+    fn test_a_partial_slab_remains_partial_no_move<T: Default + Debug>() {
         // Arrange:
         // Create a cache that contains two partial slabs.
         // Both partial slabs have more than one available slot.
-        type T = TestObject;
         let layout = Layout::from_size_align(safe_slab_size::<T>(4), align_of::<SlabHeader<T>>())
             .expect("Failed to create layout");
         let name = ['c'; CACHE_NAME_LENGTH];
@@ -1754,6 +1752,13 @@ mod cache_allocate_object_test {
             );
         }
     }
+
+    test_against_types!(
+        test_a_partial_slab_remains_partial_no_move,
+        (a_partial_slab_remains_partial_no_move_for_type1, Type1),
+        (a_partial_slab_remains_partial_no_move_for_type2, Type2),
+        (a_partial_slab_remains_partial_no_move_for_type3, Type3),
+    );
 
     #[test]
     fn a_partial_slab_becomes_full_moves_correctly() {
