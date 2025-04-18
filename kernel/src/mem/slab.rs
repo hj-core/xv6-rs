@@ -3839,7 +3839,7 @@ mod test_utils {
     /// * `cache` must be a valid pointer.
     unsafe fn verify_cache_slab_layout<T: Default>(cache: *mut Cache<T>) {
         assert!(
-            size_of::<T>() + size_of::<SlabHeader<T>>() <= (*cache).slab_layout.size(),
+            Cache::<T>::min_slab_size() <= (*cache).slab_layout.size(),
             "The size of `slab_layout` is too small"
         );
         assert_eq!(
