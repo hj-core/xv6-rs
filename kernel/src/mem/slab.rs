@@ -1885,11 +1885,15 @@ mod cache_allocate_object_test {
         (partial_slab_becomes_full_for_type3, Type3),
     );
 
-    fn test_general_case<T: Default + Debug>() {
-        // Arrange:
-        // Create a cache that contains three empty slabs, three partial slabs and two full slabs.
+    fn test_general_case<T: Default + Debug>(
+        total_slots: usize,
+        new_fulls: usize,
+        new_partial_free_slots: &[usize],
+        new_empties: usize,
+    ) {
+        // Arrange
         let name = ['c'; CACHE_NAME_LENGTH];
-        let layout = safe_slab_layout::<T>(4);
+        let layout = safe_slab_layout::<T>(total_slots);
 
         let mut cache = Cache::<T>::new(name, layout);
         let mut slab_man = SlabMan::<T>::new(layout);
@@ -1900,11 +1904,29 @@ mod cache_allocate_object_test {
                 &raw mut cache,
                 &mut slab_man,
                 &mut slab_objects,
-                2,
-                &vec![2, 3, 1],
-                3,
+                new_fulls,
+                new_partial_free_slots,
+                new_empties,
             );
         }
+
+        let slab = if new_fulls > 0 {
+            cache.slabs_full
+        } else if new_partial_free_slots.len() > 0 {
+            cache.slabs_partial
+        } else {
+            assert!(
+                new_empties > 0,
+                "The cache should contain at least one slab"
+            );
+            cache.slabs_empty
+        };
+
+        assert_eq!(
+            total_slots,
+            unsafe { (*slab).total_slots },
+            "There is discrepancy between the desired total_slots and the actual total_slots"
+        );
 
         // Act
         let result = unsafe { Cache::allocate_object(&raw mut cache) };
@@ -1924,11 +1946,12 @@ mod cache_allocate_object_test {
         }
     }
 
-    test_against_types!(
+    test_against_types_arguments!(
         test_general_case,
-        (general_case_for_type1, Type1),
-        (general_case_for_type2, Type2),
-        (general_case_for_type3, Type3),
+        (general_case_1, Type1, 2, 4, &vec![], 2),
+        (general_case_2, Type1, 4, 1, &vec![2, 3], 0),
+        (general_case_3, Type2, 3, 2, &vec![1, 2], 3),
+        (general_case_4, Type2, 4, 0, &vec![3, 2], 1),
     );
 }
 
