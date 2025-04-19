@@ -1251,9 +1251,8 @@ mod cache_allocate_object_test {
     fn test_returned_object_has_default_value_for_partial<T: Default + Debug + PartialEq>() {
         // Arrange:
         // Create a cache that contains a single partial slab.
-        let layout = Layout::from_size_align(safe_slab_size::<T>(4), align_of::<SlabHeader<T>>())
-            .expect("Failed to create layout");
         let name = ['c'; CACHE_NAME_LENGTH];
+        let layout = safe_slab_layout::<T>(4);
 
         let mut cache = Cache::<T>::new(name, layout);
         let mut slab_man = SlabMan::<T>::new(layout);
@@ -1332,7 +1331,7 @@ mod cache_allocate_object_test {
         // Assert
         assert_eq!(
             empty_slab, allocated_object.source,
-            "The allocated object should come from the empty_slab"
+            "The allocated object should come from the empty slab"
         );
     }
 
@@ -1346,9 +1345,8 @@ mod cache_allocate_object_test {
     fn test_returned_object_has_correct_source_for_partial<T: Default + Debug>() {
         // Arrange:
         // Create a cache that contains one partial slab and two full slabs.
-        let layout = Layout::from_size_align(safe_slab_size::<T>(4), align_of::<SlabHeader<T>>())
-            .expect("Failed to create layout");
         let name = ['c'; CACHE_NAME_LENGTH];
+        let layout = safe_slab_layout::<T>(4);
 
         let mut cache = Cache::<T>::new(name, layout);
         let mut slab_man = SlabMan::<T>::new(layout);
@@ -1380,7 +1378,7 @@ mod cache_allocate_object_test {
         // Assert
         assert_eq!(
             partial_slab, allocated_object.source,
-            "The allocated object should come from the partial_slab"
+            "The allocated object should come from the partial slab"
         );
     }
 
@@ -1764,8 +1762,8 @@ mod cache_allocate_object_test {
 
     fn test_partial_slab_remains_partial<T: Default + Debug>() {
         // Arrange:
-        // Create a cache that contains two partial slabs.
-        // Both partial slabs have more than one available slot.
+        // Create a cache that contains two partial slabs. Both partial slabs have more than one
+        // available slot.
         let name = ['c'; CACHE_NAME_LENGTH];
         let layout = safe_slab_layout::<T>(4);
 
@@ -1828,8 +1826,8 @@ mod cache_allocate_object_test {
 
     fn test_partial_slab_becomes_full<T: Default + Debug>() {
         // Arrange:
-        // Create a cache that contains two partial slabs and one full slab.
-        // Both partial slabs have only one slot available.
+        // Create a cache that contains two partial slabs and one full slab. Both partial slabs
+        // have only one slot available.
         let name = ['c'; CACHE_NAME_LENGTH];
         let layout = safe_slab_layout::<T>(2);
 
