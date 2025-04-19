@@ -971,7 +971,8 @@ mod cache_allocate_object_test {
     use crate::mem::slab::Error::NoSlabAvailable;
     use crate::mem::slab::test_utils::{
         SlabMan, TestObject, TestObject2, contains_node, prepend_new_empty_slab,
-        prepend_new_full_slab, safe_slab_size, size_of_list, verify_cache_invariants_v2,
+        prepend_new_full_slab, prepend_new_partial_slab, safe_slab_size, size_of_list,
+        verify_cache_invariants_v2,
     };
     use crate::mem::slab::{CACHE_NAME_LENGTH, Cache, SlabHeader};
     use alloc::vec::Vec;
@@ -1382,19 +1383,11 @@ mod cache_allocate_object_test {
         let mut slab_man = SlabMan::<T>::new(layout);
         let mut slab_objects = Vec::new();
 
-        let partial_slab = slab_man.new_test_slab(&raw mut cache);
         unsafe {
-            while (*partial_slab).used_count < (*partial_slab).total_slots - 1 {
-                slab_objects.push(
-                    SlabHeader::allocate_object(partial_slab).expect("Failed to allocate object"),
-                );
-            }
-        }
-        cache.slabs_partial = partial_slab;
-
-        unsafe {
+            prepend_new_partial_slab(&raw mut cache, &mut slab_man, &mut slab_objects, 1);
             prepend_new_full_slab(&raw mut cache, &mut slab_man, &mut slab_objects);
         }
+        let partial_slab = cache.slabs_partial;
 
         assert_eq!(
             null_mut(),
@@ -1470,15 +1463,10 @@ mod cache_allocate_object_test {
         let mut slab_man = SlabMan::<T>::new(layout);
         let mut slab_objects = Vec::new();
 
-        let partial_slab = slab_man.new_test_slab(&raw mut cache);
         unsafe {
-            while (*partial_slab).used_count < (*partial_slab).total_slots - 1 {
-                slab_objects.push(
-                    SlabHeader::allocate_object(partial_slab).expect("Failed to allocate object"),
-                );
-            }
+            prepend_new_partial_slab(&raw mut cache, &mut slab_man, &mut slab_objects, 1);
         }
-        cache.slabs_partial = partial_slab;
+        let partial_slab = cache.slabs_partial;
 
         assert_eq!(
             null_mut(),
@@ -1734,21 +1722,12 @@ mod cache_allocate_object_test {
         let mut slab_man = SlabMan::<T>::new(layout);
         let mut slab_objects = Vec::new();
 
-        let partial_slab1 = slab_man.new_test_slab(&raw mut cache);
-        let partial_slab2 = slab_man.new_test_slab(&raw mut cache);
-
         unsafe {
-            // Allocate some objects in each partial slab, leaving more than one free slot
-            for slab in [partial_slab1, partial_slab2] {
-                while (*slab).used_count < (*slab).total_slots - 2 {
-                    slab_objects
-                        .push(SlabHeader::allocate_object(slab).expect("Failed to allocate object"))
-                }
-            }
-            (*partial_slab1).next = partial_slab2;
-            (*partial_slab2).prev = partial_slab1;
+            prepend_new_partial_slab(&raw mut cache, &mut slab_man, &mut slab_objects, 2);
+            prepend_new_partial_slab(&raw mut cache, &mut slab_man, &mut slab_objects, 3);
         }
-        cache.slabs_partial = partial_slab1;
+        let partial_slab1 = cache.slabs_partial;
+        let partial_slab2 = unsafe { (*partial_slab1).next };
 
         assert_eq!(
             null_mut(),
@@ -1814,25 +1793,13 @@ mod cache_allocate_object_test {
         let mut slab_man = SlabMan::<T>::new(layout);
         let mut slab_objects = Vec::new();
 
-        let partial_slab1 = slab_man.new_test_slab(&raw mut cache);
-        let partial_slab2 = slab_man.new_test_slab(&raw mut cache);
-
         unsafe {
-            // Fill each partial slab until only one slot is left
-            for slab in [partial_slab1, partial_slab2] {
-                while (*slab).used_count < (*slab).total_slots - 1 {
-                    slab_objects
-                        .push(SlabHeader::allocate_object(slab).expect("Failed to allocate object"))
-                }
-            }
-            (*partial_slab1).next = partial_slab2;
-            (*partial_slab2).prev = partial_slab1;
-        }
-        cache.slabs_partial = partial_slab1;
-
-        unsafe {
+            prepend_new_partial_slab(&raw mut cache, &mut slab_man, &mut slab_objects, 1);
+            prepend_new_partial_slab(&raw mut cache, &mut slab_man, &mut slab_objects, 1);
             prepend_new_full_slab(&raw mut cache, &mut slab_man, &mut slab_objects);
         }
+        let partial_slab1 = cache.slabs_partial;
+        let partial_slab2 = unsafe { (*partial_slab1).next };
 
         assert_eq!(
             null_mut(),
@@ -1911,24 +1878,11 @@ mod cache_allocate_object_test {
         let mut slab_man = SlabMan::<T>::new(layout);
         let mut slab_objects = Vec::new();
 
-        let partial_slab1 = slab_man.new_test_slab(&raw mut cache);
-        let partial_slab2 = slab_man.new_test_slab(&raw mut cache);
-        unsafe {
-            // Allocate some objects in each partial slab, leaving more than one free slot
-            for slab in [partial_slab1, partial_slab2] {
-                while (*slab).used_count < (*slab).total_slots - 2 {
-                    slab_objects
-                        .push(SlabHeader::allocate_object(slab).expect("Failed to allocate object"))
-                }
-            }
-            (*partial_slab1).next = partial_slab2;
-            (*partial_slab2).prev = partial_slab1;
-        }
-        cache.slabs_partial = partial_slab1;
-
         unsafe {
             prepend_new_empty_slab(&raw mut cache, &mut slab_man);
             prepend_new_empty_slab(&raw mut cache, &mut slab_man);
+            prepend_new_partial_slab(&raw mut cache, &mut slab_man, &mut slab_objects, 2);
+            prepend_new_partial_slab(&raw mut cache, &mut slab_man, &mut slab_objects, 3);
             prepend_new_full_slab(&raw mut cache, &mut slab_man, &mut slab_objects);
             prepend_new_full_slab(&raw mut cache, &mut slab_man, &mut slab_objects);
         }
