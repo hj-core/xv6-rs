@@ -749,7 +749,7 @@ mod test_marcos {
     /// `test_panic_against_types` generates the "should_panic" tests against the given types
     /// for a generic test method.
     ///
-    /// # Example:
+    /// # Example
     /// ```//noinspection
     /// test_panic_against_types!(
     ///     my_generic_test_method,
@@ -774,7 +774,7 @@ mod test_marcos {
 
     /// `test_against_types` generates the tests against the given types for a generic test method.
     ///
-    /// # Example:
+    /// # Example
     /// ```//noinspection
     /// test_against_types!(
     ///     my_generic_test_method,
@@ -791,6 +791,29 @@ mod test_marcos {
                     $test::<$t>()
                 }
 
+            )+
+        };
+    }
+
+    /// `test_against_types_arguments` generates the tests against the given types and arguments
+    /// for a generic test method.
+    ///
+    /// # Example
+    /// ```//noinspection
+    /// test_against_types_arguments!(
+    ///     my_generic_test_method,
+    ///     (name_for_the_generated_test1, Type1, arg1, arg2),
+    ///     (name_for_the_generated_test2, Type2, arg1, arg2),
+    ///     (name_for_the_generated_test3, Type3, arg1, arg2),
+    /// );
+    /// ```
+    macro_rules! test_against_types_arguments {
+        ($test:ident, $(($fn_name:tt, $t:ty, $($args:expr), *)), +,) => {
+            $(
+                #[test]
+                fn $fn_name() {
+                    $test::<$t>($($args), *);
+                }
             )+
         };
     }
