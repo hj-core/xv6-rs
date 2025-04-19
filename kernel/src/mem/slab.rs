@@ -4108,13 +4108,45 @@ mod test_utils {
         }
     }
 
+    /// `prepend_new_slabs` prepends `new_empties` empty slabs to the `slabs_empty`, `new_fulls`
+    /// full slabs to the `slabs_full`, and partial slabs according to `new_partial_free_slots`
+    /// to the `slabs_partial`. All slabs are acquired from the `slab_man`, and all allocated
+    /// objects are appended to the `slab_objects`.
+    ///
+    ///
+    /// # Safety
+    /// * `cache` must be a valid pointer and in a valid state.
+    /// * `cache` and `slab_man` must have a compatible slab layout.
+    ///
+    /// # Panics
+    /// This function will panic if any target-free slots in the `new_partial_free_slots` result
+    /// in either an empty slab or a full slab.
+    pub unsafe fn prepend_new_slabs<T: Default>(
+        cache: *mut Cache<T>,
+        slab_man: &mut SlabMan<T>,
+        slab_object: &mut Vec<SlabObject<T>>,
+        new_fulls: usize,
+        new_partial_free_slots: &[usize],
+        new_empties: usize,
+    ) {
+        for &target_free_slots in new_partial_free_slots.iter() {
+            prepend_new_partial_slab(cache, slab_man, slab_object, target_free_slots);
+        }
+        for _ in 0..new_empties {
+            prepend_new_empty_slab(cache, slab_man);
+        }
+        for _ in 0..new_fulls {
+            prepend_new_full_slab(cache, slab_man, slab_object)
+        }
+    }
+
     /// `prepend_new_empty_slab` prepends an empty slab to the `slabs_empty` of the `cache`.
     /// This empty slab is acquired from the `slab_man`.
     ///
     /// # Safety
     /// * `cache` must be a valid pointer and in a valid state.
     /// * `cache` and `slab_man` must have a compatible slab layout.
-    pub unsafe fn prepend_new_empty_slab<T: Default>(
+    unsafe fn prepend_new_empty_slab<T: Default>(
         cache: *mut Cache<T>,
         slab_man: &mut SlabMan<T>,
     ) {
@@ -4138,7 +4170,7 @@ mod test_utils {
     /// # Panics
     /// This function will panic if the `target_free_slots` results in either an empty slab
     /// or a full slab.
-    pub unsafe fn prepend_new_partial_slab<T: Default>(
+    unsafe fn prepend_new_partial_slab<T: Default>(
         cache: *mut Cache<T>,
         slab_man: &mut SlabMan<T>,
         slab_objects: &mut Vec<SlabObject<T>>,
@@ -4175,7 +4207,7 @@ mod test_utils {
     /// # Safety
     /// * `cache` must be a valid pointer and in a valid state.
     /// * `cache` and `slab_man` must have a compatible slab layout.
-    pub unsafe fn prepend_new_full_slab<T: Default>(
+    unsafe fn prepend_new_full_slab<T: Default>(
         cache: *mut Cache<T>,
         slab_man: &mut SlabMan<T>,
         slab_objects: &mut Vec<SlabObject<T>>,
