@@ -1218,6 +1218,102 @@ mod cache_allocate_object_test {
         (returned_object_has_default_value_for_type3, Type3),
     );
 
+    fn test_returned_object_has_correct_source_for_empty<T: Default + Debug>() {
+        // Arrange:
+        // Create a cache that contains one empty slab and two full slabs.
+        let layout = Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
+            .expect("Failed to create layout");
+        let name = ['c'; CACHE_NAME_LENGTH];
+
+        let mut cache = Cache::<T>::new(name, layout);
+        let mut slab_man = SlabMan::<T>::new(layout);
+        let mut slab_objects = Vec::new();
+
+        unsafe {
+            prepend_new_slabs(
+                &raw mut cache,
+                &mut slab_man,
+                &mut slab_objects,
+                2,
+                &Vec::new(),
+                1,
+            );
+        }
+        let empty_slab = cache.slabs_empty;
+
+        assert_eq!(
+            null_mut(),
+            cache.slabs_partial,
+            "The slabs_partial should be null initially to ensure the object is allocated from the empty slab"
+        );
+
+        // Act
+        let result = unsafe { Cache::allocate_object(&raw mut cache) };
+        assert!(result.is_ok(), "The result should be Ok but got {result:?}");
+
+        // Assert
+        let allocated_object = result.unwrap();
+        assert_eq!(
+            empty_slab, allocated_object.source,
+            "The allocated object should come from the empty_slab"
+        );
+    }
+
+    test_against_types!(
+        test_returned_object_has_correct_source_for_empty,
+        (returned_object_has_correct_source_for_empty_type1, Type1),
+        (returned_object_has_correct_source_for_empty_type2, Type2),
+        (returned_object_has_correct_source_for_empty_type3, Type3),
+    );
+
+    fn test_returned_object_has_correct_source_for_partial<T: Default + Debug>() {
+        // Arrange:
+        // Create a cache that contains one partial slab and two full slabs.
+        let layout = Layout::from_size_align(safe_slab_size::<T>(4), align_of::<SlabHeader<T>>())
+            .expect("Failed to create layout");
+        let name = ['c'; CACHE_NAME_LENGTH];
+
+        let mut cache = Cache::<T>::new(name, layout);
+        let mut slab_man = SlabMan::<T>::new(layout);
+        let mut slab_objects = Vec::new();
+
+        unsafe {
+            prepend_new_slabs(
+                &raw mut cache,
+                &mut slab_man,
+                &mut slab_objects,
+                2,
+                &vec![2],
+                0,
+            );
+        }
+        let partial_slab = cache.slabs_partial;
+
+        assert_eq!(
+            null_mut(),
+            cache.slabs_empty,
+            "The slabs_empty should be null initially to ensure the object is allocated from the partial slab"
+        );
+
+        // Act
+        let result = unsafe { Cache::allocate_object(&raw mut cache) };
+        assert!(result.is_ok(), "The result should be Ok but got {result:?}");
+
+        // Assert
+        let allocated_object = result.unwrap();
+        assert_eq!(
+            partial_slab, allocated_object.source,
+            "The allocated object should come from the empty_slab"
+        );
+    }
+
+    test_against_types!(
+        test_returned_object_has_correct_source_for_partial,
+        (returned_object_has_correct_sorce_for_partial_type1, Type1),
+        (returned_object_has_correct_sorce_for_partial_type2, Type2),
+        (returned_object_has_correct_sorce_for_partial_type3, Type3),
+    );
+
     fn test_slabs_empty_becomes_null<T: Default + Debug>() {
         // Arrange:
         // Create a cache that contains a single empty slab.
