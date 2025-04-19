@@ -4166,6 +4166,25 @@ mod test_utils {
         }
     }
 
+    /// `prepend_new_empty_slab` prepends an empty slab to the `slabs_empty` of the `cache`.
+    /// This empty slab is acquired from the `slab_man`.
+    ///
+    /// # Safety
+    /// * `cache` must be a valid pointer and in a valid state.
+    /// * `cache` and `slab_man` must have a compatible slab layout.
+    pub unsafe fn prepend_new_empty_slab<T: Default>(
+        cache: *mut Cache<T>,
+        slab_man: &mut SlabMan<T>,
+    ) {
+        let new_slab = slab_man.new_test_slab(cache);
+
+        if !(*cache).slabs_empty.is_null() {
+            (*new_slab).next = (*cache).slabs_empty;
+            (*(*cache).slabs_empty).prev = new_slab;
+        }
+        (*cache).slabs_empty = new_slab;
+    }
+
     /// `prepend_new_full_slab` prepends a full slab to the `slabs_full` of the `cache`.
     /// This full slab is acquired from the `slab_man`, and all its allocated objects are
     /// appended to the `slab_objects`.
