@@ -3853,6 +3853,7 @@ mod test_utils {
     use alloc::alloc::{alloc, dealloc};
     use alloc::vec::Vec;
     use core::alloc::Layout;
+    use core::cmp::max;
     use core::ptr::{NonNull, null_mut};
 
     #[derive(Debug, PartialEq)]
@@ -4016,8 +4017,19 @@ mod test_utils {
 
     /// `safe_slab_size` assumes the slot size is equal to the size of `T` and
     /// returns a slab size that can accommodate `total_slots`.
+    ///
+    /// # Panics
+    /// This function will panic if `total_slots` is zero.
     pub fn safe_slab_size<T: Default>(total_slots: usize) -> ByteSize {
-        size_of::<SlabHeader<T>>() + align_of::<T>() + size_of::<T>() * total_slots
+        assert!(
+            total_slots > 0,
+            "The total_slots should be greater than zero"
+        );
+
+        max(
+            Cache::<T>::min_slab_size(),
+            size_of::<SlabHeader<T>>() + align_of::<T>() + size_of::<T>() * total_slots,
+        )
     }
 
     /// Verify if the `cache` satisfies the invariants of a [Cache].
