@@ -971,8 +971,8 @@ mod cache_allocate_object_test {
 
     use crate::mem::slab::Error::NoSlabAvailable;
     use crate::mem::slab::test_utils::{
-        SlabMan, TestObject, TestObject2, contains_node, prepend_new_slabs, safe_slab_size,
-        size_of_list, verify_cache_invariants_v2,
+        SlabMan, TestObject, TestObject2, contains_node, prepend_new_slabs, safe_slab_layout,
+        safe_slab_size, size_of_list, verify_cache_invariants_v2,
     };
     use crate::mem::slab::{CACHE_NAME_LENGTH, Cache, SlabHeader};
     use alloc::vec;
@@ -1000,9 +1000,8 @@ mod cache_allocate_object_test {
     fn test_no_slabs_returns_no_slab_available_err_cache_unmodified<T: Default + Debug>() {
         // Arrange:
         // Create a cache with no slabs.
-        let layout = Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
-            .expect("Failed to create layout");
         let name = ['c'; CACHE_NAME_LENGTH];
+        let layout = safe_slab_layout::<T>(2);
 
         let mut cache = Cache::<T>::new(name, layout);
         let slab_man = SlabMan::<T>::new(layout);
@@ -1086,9 +1085,8 @@ mod cache_allocate_object_test {
     fn test_full_slabs_only_returns_no_slab_available_err_cache_unmodified<T: Default + Debug>() {
         // Arrange:
         // Create a cache that contains only two full slabs.
-        let layout = Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
-            .expect("Failed to create layout");
         let name = ['c'; CACHE_NAME_LENGTH];
+        let layout = safe_slab_layout::<T>(2);
 
         let mut cache = Cache::<T>::new(name, layout);
         let mut slab_man = SlabMan::<T>::new(layout);
@@ -1173,9 +1171,8 @@ mod cache_allocate_object_test {
     fn test_returned_object_has_default_value<T: Default + Debug + PartialEq>() {
         // Arrange:
         // Create a cache that contains a single empty slab.
-        let layout = Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
-            .expect("Failed to create layout");
         let name = ['c'; CACHE_NAME_LENGTH];
+        let layout = safe_slab_layout::<T>(2);
 
         let mut cache = Cache::<T>::new(name, layout);
         let mut slab_man = SlabMan::<T>::new(layout);
@@ -1221,9 +1218,8 @@ mod cache_allocate_object_test {
     fn test_returned_object_has_correct_source_for_empty<T: Default + Debug>() {
         // Arrange:
         // Create a cache that contains one empty slab and two full slabs.
-        let layout = Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
-            .expect("Failed to create layout");
         let name = ['c'; CACHE_NAME_LENGTH];
+        let layout = safe_slab_layout::<T>(2);
 
         let mut cache = Cache::<T>::new(name, layout);
         let mut slab_man = SlabMan::<T>::new(layout);
@@ -1317,9 +1313,8 @@ mod cache_allocate_object_test {
     fn test_slabs_empty_becomes_null<T: Default + Debug>() {
         // Arrange:
         // Create a cache that contains a single empty slab.
-        let layout = Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
-            .expect("Failed to create layout");
         let name = ['c'; CACHE_NAME_LENGTH];
+        let layout = safe_slab_layout::<T>(2);
 
         let mut cache = Cache::<T>::new(name, layout);
         let mut slab_man = SlabMan::<T>::new(layout);
@@ -1375,9 +1370,8 @@ mod cache_allocate_object_test {
     fn test_slabs_partial_becomes_non_null<T: Default + Debug>() {
         // Arrange:
         // Create a cache that contains two empty slabs.
-        let layout = Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
-            .expect("Failed to create layout");
         let name = ['c'; CACHE_NAME_LENGTH];
+        let layout = safe_slab_layout::<T>(2);
 
         let mut cache = Cache::<T>::new(name, layout);
         let mut slab_man = SlabMan::<T>::new(layout);
@@ -1461,9 +1455,8 @@ mod cache_allocate_object_test {
         // Arrange:
         // create a cache that contains a partial slab that is one free slot left and
         // a full slab.
-        let layout = Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
-            .expect("Failed to create layout");
         let name = ['c'; CACHE_NAME_LENGTH];
+        let layout = safe_slab_layout::<T>(2);
 
         let mut cache = Cache::<T>::new(name, layout);
         let mut slab_man = SlabMan::<T>::new(layout);
@@ -1533,9 +1526,8 @@ mod cache_allocate_object_test {
     fn test_slabs_full_becomes_non_null<T: Default + Debug>() {
         // Arrange:
         // Create a cache that contains a partial slab that is one free slot left.
-        let layout = Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
-            .expect("Failed to create layout");
         let name = ['c'; CACHE_NAME_LENGTH];
+        let layout = safe_slab_layout::<T>(2);
 
         let mut cache = Cache::<T>::new(name, layout);
         let mut slab_man = SlabMan::<T>::new(layout);
@@ -1600,9 +1592,8 @@ mod cache_allocate_object_test {
     fn test_empty_slab_becomes_partial<T: Default + Debug>() {
         // Arrange:
         // Create a cache that contains two empty slabs and a full slab.
-        let layout = Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
-            .expect("Failed to create layout");
         let name = ['c'; CACHE_NAME_LENGTH];
+        let layout = safe_slab_layout::<T>(2);
 
         let mut cache = Cache::<T>::new(name, layout);
         let mut slab_man = SlabMan::<T>::new(layout);
@@ -1685,9 +1676,8 @@ mod cache_allocate_object_test {
         // Arrange:
         // Create a cache that contains two empty slabs and a full slab.
         // All slabs have a total_slots of one.
-        let layout = Layout::from_size_align(safe_slab_size::<T>(1), align_of::<SlabHeader<T>>())
-            .expect("Failed to create layout");
         let name = ['c'; CACHE_NAME_LENGTH];
+        let layout = safe_slab_layout::<T>(1);
 
         let mut cache = Cache::<T>::new(name, layout);
         let mut slab_man = SlabMan::<T>::new(layout);
@@ -1775,9 +1765,8 @@ mod cache_allocate_object_test {
         // Arrange:
         // Create a cache that contains two partial slabs.
         // Both partial slabs have more than one available slot.
-        let layout = Layout::from_size_align(safe_slab_size::<T>(4), align_of::<SlabHeader<T>>())
-            .expect("Failed to create layout");
         let name = ['c'; CACHE_NAME_LENGTH];
+        let layout = safe_slab_layout::<T>(4);
 
         let mut cache = Cache::<T>::new(name, layout);
         let mut slab_man = SlabMan::<T>::new(layout);
@@ -1846,9 +1835,8 @@ mod cache_allocate_object_test {
         // Arrange:
         // Create a cache that contains two partial slabs and one full slab.
         // Both partial slabs have only one slot available.
-        let layout = Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
-            .expect("Failed to create layout");
         let name = ['c'; CACHE_NAME_LENGTH];
+        let layout = safe_slab_layout::<T>(2);
 
         let mut cache = Cache::<T>::new(name, layout);
         let mut slab_man = SlabMan::<T>::new(layout);
@@ -1932,9 +1920,8 @@ mod cache_allocate_object_test {
         // Arrange:
         // Create a cache that contains three empty slabs, three partial slabs and two full slabs.
         type T = TestObject;
-        let layout = Layout::from_size_align(safe_slab_size::<T>(4), align_of::<SlabHeader<T>>())
-            .expect("Failed to create layout");
         let name = ['c'; CACHE_NAME_LENGTH];
+        let layout = safe_slab_layout::<T>(4);
 
         let mut cache = Cache::<T>::new(name, layout);
         let mut slab_man = SlabMan::<T>::new(layout);
