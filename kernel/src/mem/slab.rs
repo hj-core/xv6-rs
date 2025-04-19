@@ -4210,10 +4210,7 @@ mod test_utils {
     /// # Safety
     /// * `cache` must be a valid pointer and in a valid state.
     /// * `cache` and `slab_man` must have a compatible slab layout.
-    unsafe fn prepend_new_empty_slab<T: Default>(
-        cache: *mut Cache<T>,
-        slab_man: &mut SlabMan<T>,
-    ) {
+    unsafe fn prepend_new_empty_slab<T: Default>(cache: *mut Cache<T>, slab_man: &mut SlabMan<T>) {
         let new_slab = slab_man.new_test_slab(cache);
 
         if !(*cache).slabs_empty.is_null() {
@@ -4287,6 +4284,27 @@ mod test_utils {
             (*(*cache).slabs_full).prev = new_slab;
         }
         (*cache).slabs_full = new_slab;
+    }
+
+    /// `safe_slab_layout` returns a layout that complies with the slab alignment and
+    /// can accommodate `total_slots`. It assumes the slot size is equal to the size of `T`.
+    ///
+    /// Please be aware that the size returned may lead to an actual `total_slots`
+    /// larger than the given value.
+    ///
+    /// # Panics
+    /// This function will panic when
+    /// * The `total_slots` is zero.
+    /// * The resulting size overflows isize.
+    pub fn safe_slab_layout<T: Default>(total_slots: usize) -> Layout {
+        assert!(
+            total_slots > 0,
+            "The total_slots should be greater than zero"
+        );
+
+        let size = safe_slab_size::<T>(total_slots);
+        let align = Cache::<T>::align_of_slab();
+        Layout::from_size_align(size, align).expect("Failed to create layout")
     }
 
     /// `safe_slab_size` assumes the slot size is equal to the size of `T` and
