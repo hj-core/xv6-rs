@@ -1170,7 +1170,7 @@ mod cache_allocate_object_test {
         ),
     );
 
-    fn test_allocation_returned_object_has_default_value<T: Default + Debug + PartialEq>() {
+    fn test_returned_object_has_default_value<T: Default + Debug + PartialEq>() {
         // Arrange:
         // Create a cache that contains a single empty slab.
         let layout = Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
@@ -1212,22 +1212,13 @@ mod cache_allocate_object_test {
     }
 
     test_against_types!(
-        test_allocation_returned_object_has_default_value,
-        (
-            allocation_returned_object_has_default_value_for_type1,
-            Type1
-        ),
-        (
-            allocation_returned_object_has_default_value_for_type2,
-            Type2
-        ),
-        (
-            allocation_returned_object_has_default_value_for_type3,
-            Type3
-        ),
+        test_returned_object_has_default_value,
+        (returned_object_has_default_value_for_type1, Type1),
+        (returned_object_has_default_value_for_type2, Type2),
+        (returned_object_has_default_value_for_type3, Type3),
     );
 
-    fn test_slabs_empty_becomes_null_slabs_empty_is_null<T: Default + Debug>() {
+    fn test_slabs_empty_becomes_null<T: Default + Debug>() {
         // Arrange:
         // Create a cache that contains a single empty slab.
         let layout = Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
@@ -1285,22 +1276,13 @@ mod cache_allocate_object_test {
     }
 
     test_against_types!(
-        test_slabs_empty_becomes_null_slabs_empty_is_null,
-        (
-            slabs_empty_becomes_null_slabs_empty_is_null_for_type1,
-            Type1
-        ),
-        (
-            slabs_empty_becomes_null_slabs_empty_is_null_for_type2,
-            Type2
-        ),
-        (
-            slabs_empty_becomes_null_slabs_empty_is_null_for_type3,
-            Type3
-        ),
+        test_slabs_empty_becomes_null,
+        (slabs_empty_becomes_null_for_type1, Type1),
+        (slabs_empty_becomes_null_for_type2, Type2),
+        (slabs_empty_becomes_null_for_type3, Type3),
     );
 
-    fn test_slabs_partial_becomes_non_null_slabs_partial_is_non_null<T: Default + Debug>() {
+    fn test_slabs_partial_becomes_non_null<T: Default + Debug>() {
         // Arrange:
         // Create a cache that contains two empty slabs.
         let layout = Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
@@ -1384,22 +1366,13 @@ mod cache_allocate_object_test {
     }
 
     test_against_types!(
-        test_slabs_partial_becomes_non_null_slabs_partial_is_non_null,
-        (
-            slabs_partial_becomes_non_null_slabs_partial_is_non_null_for_type1,
-            Type1
-        ),
-        (
-            slabs_partial_becomes_non_null_slabs_partial_is_non_null_for_type2,
-            Type2
-        ),
-        (
-            slabs_partial_becomes_non_null_slabs_partial_is_non_null_for_type3,
-            Type3
-        ),
+        test_slabs_partial_becomes_non_null,
+        (slabs_partial_becomes_non_null_for_type1, Type1),
+        (slabs_partial_becomes_non_null_for_type2, Type2),
+        (slabs_partial_becomes_non_null_for_type3, Type3),
     );
 
-    fn test_slabs_partial_becomes_null_slabs_partial_is_null<T: Default + Debug>() {
+    fn test_slabs_partial_becomes_null<T: Default + Debug>() {
         // Arrange:
         // create a cache that contains a partial slab that is one free slot left and
         // a full slab.
@@ -1471,22 +1444,13 @@ mod cache_allocate_object_test {
     }
 
     test_against_types!(
-        test_slabs_partial_becomes_null_slabs_partial_is_null,
-        (
-            slabs_partial_becomes_null_slabs_partial_is_null_for_type1,
-            Type1
-        ),
-        (
-            slabs_partial_becomes_null_slabs_partial_is_null_for_type2,
-            Type2
-        ),
-        (
-            slabs_partial_becomes_null_slabs_partial_is_null_for_type3,
-            Type3
-        ),
+        test_slabs_partial_becomes_null,
+        (slabs_partial_becomes_null_for_type1, Type1),
+        (slabs_partial_becomes_null_for_type2, Type2),
+        (slabs_partial_becomes_null_for_type3, Type3),
     );
 
-    fn test_slabs_full_becomes_non_null_slabs_full_is_non_null<T: Default + Debug>() {
+    fn test_slabs_full_becomes_non_null<T: Default + Debug>() {
         // Arrange:
         // Create a cache that contains a partial slab that is one free slot left.
         let layout = Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
@@ -1552,22 +1516,13 @@ mod cache_allocate_object_test {
     }
 
     test_against_types!(
-        test_slabs_full_becomes_non_null_slabs_full_is_non_null,
-        (
-            slabs_full_becomes_non_null_slabs_full_is_non_null_for_type1,
-            Type1
-        ),
-        (
-            slabs_full_becomes_non_null_slabs_full_is_non_null_for_type2,
-            Type2
-        ),
-        (
-            slabs_full_becomes_non_null_slabs_full_is_non_null_for_type3,
-            Type3
-        ),
+        test_slabs_full_becomes_non_null,
+        (slabs_full_becomes_non_null_for_type1, Type1),
+        (slabs_full_becomes_non_null_for_type2, Type2),
+        (slabs_full_becomes_non_null_for_type3, Type3),
     );
 
-    fn test_an_empty_slab_becomes_partial_moves_correctly<T: Default + Debug>() {
+    fn test_empty_slab_becomes_partial<T: Default + Debug>() {
         // Arrange:
         // Create a cache that contains two empty slabs and a full slab.
         let layout = Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
@@ -1651,22 +1606,13 @@ mod cache_allocate_object_test {
     }
 
     test_against_types!(
-        test_an_empty_slab_becomes_partial_moves_correctly,
-        (
-            an_empty_slab_becomes_partial_moves_correctly_for_type1,
-            Type1
-        ),
-        (
-            an_empty_slab_becomes_partial_moves_correctly_for_type2,
-            Type2
-        ),
-        (
-            an_empty_slab_becomes_partial_moves_correctly_for_type3,
-            Type3
-        ),
+        test_empty_slab_becomes_partial,
+        (empty_slab_becomes_partial_for_type1, Type1),
+        (empty_slab_becomes_partial_for_type2, Type2),
+        (empty_slab_becomes_partial_for_type3, Type3),
     );
 
-    fn test_an_empty_slab_becomes_full_moves_correctly<T: Default + Debug>() {
+    fn test_empty_slab_becomes_full<T: Default + Debug>() {
         // Arrange:
         // Create a cache that contains two empty slabs and a full slab.
         // All slabs have a total_slots of one.
@@ -1756,12 +1702,12 @@ mod cache_allocate_object_test {
     }
 
     test_against_types!(
-        test_an_empty_slab_becomes_full_moves_correctly,
-        (an_empty_slab_becomes_full_moves_correctly_for_type1, Type1),
-        (an_empty_slab_becomes_full_moves_correctly_for_type2, Type2),
+        test_empty_slab_becomes_full,
+        (empty_slab_becomes_full_for_type1, Type1),
+        (empty_slab_becomes_full_for_type2, Type2),
     );
 
-    fn test_a_partial_slab_remains_partial_no_move<T: Default + Debug>() {
+    fn test_partial_slab_remains_partial<T: Default + Debug>() {
         // Arrange:
         // Create a cache that contains two partial slabs.
         // Both partial slabs have more than one available slot.
@@ -1832,13 +1778,13 @@ mod cache_allocate_object_test {
     }
 
     test_against_types!(
-        test_a_partial_slab_remains_partial_no_move,
-        (a_partial_slab_remains_partial_no_move_for_type1, Type1),
-        (a_partial_slab_remains_partial_no_move_for_type2, Type2),
-        (a_partial_slab_remains_partial_no_move_for_type3, Type3),
+        test_partial_slab_remains_partial,
+        (partial_slab_remains_partial_for_type1, Type1),
+        (partial_slab_remains_partial_for_type2, Type2),
+        (partial_slab_remains_partial_for_type3, Type3),
     );
 
-    fn test_a_partial_slab_becomes_full_moves_correctly<T: Default + Debug>() {
+    fn test_partial_slab_becomes_full<T: Default + Debug>() {
         // Arrange:
         // Create a cache that contains two partial slabs and one full slab.
         // Both partial slabs have only one slot available.
@@ -1922,13 +1868,13 @@ mod cache_allocate_object_test {
     }
 
     test_against_types!(
-        test_a_partial_slab_becomes_full_moves_correctly,
-        (a_partial_slab_becomes_full_moves_correctly_for_type1, Type1),
-        (a_partial_slab_becomes_full_moves_correctly_for_type2, Type2),
-        (a_partial_slab_becomes_full_moves_correctly_for_type3, Type3),
+        test_partial_slab_becomes_full,
+        (partial_slab_becomes_full_for_type1, Type1),
+        (partial_slab_becomes_full_for_type2, Type2),
+        (partial_slab_becomes_full_for_type3, Type3),
     );
 
-    fn test_general_case_holds_cache_invariants<T: Default + Debug>() {
+    fn test_general_case<T: Default + Debug>() {
         // Arrange:
         // Create a cache that contains three empty slabs, three partial slabs and two full slabs.
         type T = TestObject;
@@ -1971,10 +1917,10 @@ mod cache_allocate_object_test {
     }
 
     test_against_types!(
-        test_general_case_holds_cache_invariants,
-        (general_case_holds_cache_invariants_for_type1, Type1),
-        (general_case_holds_cache_invariants_for_type2, Type2),
-        (general_case_holds_cache_invariants_for_type3, Type3),
+        test_general_case,
+        (general_case_for_type1, Type1),
+        (general_case_for_type2, Type2),
+        (general_case_for_type3, Type3),
     );
 }
 
