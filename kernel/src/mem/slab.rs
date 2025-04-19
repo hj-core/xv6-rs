@@ -4015,8 +4015,11 @@ mod test_utils {
         }
     }
 
-    /// `safe_slab_size` assumes the slot size is equal to the size of `T` and
-    /// returns a slab size that can accommodate `total_slots`.
+    /// `safe_slab_size` returns a slab size that can accommodate `total_slots`.
+    /// It assumes the slot size is equal to the size of `T`.
+    ///
+    /// Please be aware that the size returned may lead to an actual `total_slots`
+    /// larger than the given value.
     ///
     /// # Panics
     /// This function will panic if `total_slots` is zero.
