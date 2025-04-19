@@ -4038,6 +4038,120 @@ mod test_utils {
         }
     }
 
+    /// `prepend_new_slabs` prepends `new_empties` empty slabs to the `slabs_empty`, `new_fulls`
+    /// full slabs to the `slabs_full`, and partial slabs according to `new_partial_free_slots`
+    /// to the `slabs_partial`. All slabs are acquired from the `slab_man`, and all allocated
+    /// objects are appended to the `slab_objects`.
+    ///
+    ///
+    /// # Safety
+    /// * `cache` must be a valid pointer and in a valid state.
+    /// * `cache` and `slab_man` must have a compatible slab layout.
+    ///
+    /// # Panics
+    /// This function will panic if any target-free slots in the `new_partial_free_slots` result
+    /// in either an empty slab or a full slab.
+    pub unsafe fn prepend_new_slabs<T: Default>(
+        cache: *mut Cache<T>,
+        slab_man: &mut SlabMan<T>,
+        slab_object: &mut Vec<SlabObject<T>>,
+        new_fulls: usize,
+        new_partial_free_slots: &[usize],
+        new_empties: usize,
+    ) {
+        for &target_free_slots in new_partial_free_slots.iter() {
+            prepend_new_partial_slab(cache, slab_man, slab_object, target_free_slots);
+        }
+        for _ in 0..new_empties {
+            prepend_new_empty_slab(cache, slab_man);
+        }
+        for _ in 0..new_fulls {
+            prepend_new_full_slab(cache, slab_man, slab_object)
+        }
+    }
+
+    /// `prepend_new_empty_slab` prepends an empty slab to the `slabs_empty` of the `cache`.
+    /// This empty slab is acquired from the `slab_man`.
+    ///
+    /// # Safety
+    /// * `cache` must be a valid pointer and in a valid state.
+    /// * `cache` and `slab_man` must have a compatible slab layout.
+    unsafe fn prepend_new_empty_slab<T: Default>(cache: *mut Cache<T>, slab_man: &mut SlabMan<T>) {
+        let new_slab = slab_man.new_test_slab(cache);
+
+        if !(*cache).slabs_empty.is_null() {
+            (*new_slab).next = (*cache).slabs_empty;
+            (*(*cache).slabs_empty).prev = new_slab;
+        }
+        (*cache).slabs_empty = new_slab;
+    }
+
+    /// `prepend_new_partial_slab` prepends a partial slab to the `slabs_partial` of the
+    /// `cache`. This partial slab is acquired from the `slab_man`. It contains
+    /// `target_free_slots`, and all its allocated objects are appended to the `slab_objects`.
+    ///
+    /// # Safety
+    /// * `cache` must be a valid pointer and in a valid state.
+    /// * `cache` and `slab_man` must have a compatible slab layout.
+    ///
+    /// # Panics
+    /// This function will panic if the `target_free_slots` results in either an empty slab
+    /// or a full slab.
+    unsafe fn prepend_new_partial_slab<T: Default>(
+        cache: *mut Cache<T>,
+        slab_man: &mut SlabMan<T>,
+        slab_objects: &mut Vec<SlabObject<T>>,
+        target_free_slots: usize,
+    ) {
+        assert!(
+            target_free_slots > 0,
+            "A partial slab should have at least one free slot"
+        );
+
+        let new_slab = slab_man.new_test_slab(cache);
+        assert!(
+            target_free_slots < (*new_slab).total_slots,
+            "A partial slab should have at least one slot used"
+        );
+
+        let used_slots = (*new_slab).total_slots - target_free_slots;
+        for _ in 0..used_slots {
+            slab_objects
+                .push(SlabHeader::allocate_object(new_slab).expect("Failed to allocate object"));
+        }
+
+        if !(*cache).slabs_partial.is_null() {
+            (*new_slab).next = (*cache).slabs_partial;
+            (*(*cache).slabs_partial).prev = new_slab;
+        }
+        (*cache).slabs_partial = new_slab;
+    }
+
+    /// `prepend_new_full_slab` prepends a full slab to the `slabs_full` of the `cache`.
+    /// This full slab is acquired from the `slab_man`, and all its allocated objects are
+    /// appended to the `slab_objects`.
+    ///
+    /// # Safety
+    /// * `cache` must be a valid pointer and in a valid state.
+    /// * `cache` and `slab_man` must have a compatible slab layout.
+    unsafe fn prepend_new_full_slab<T: Default>(
+        cache: *mut Cache<T>,
+        slab_man: &mut SlabMan<T>,
+        slab_objects: &mut Vec<SlabObject<T>>,
+    ) {
+        let new_slab = slab_man.new_test_slab(cache);
+        while !SlabHeader::is_full(new_slab) {
+            slab_objects
+                .push(SlabHeader::allocate_object(new_slab).expect("Failed to allocate object"));
+        }
+
+        if !(*cache).slabs_full.is_null() {
+            (*new_slab).next = (*cache).slabs_full;
+            (*(*cache).slabs_full).prev = new_slab;
+        }
+        (*cache).slabs_full = new_slab;
+    }
+
     /// `safe_slab_size` returns a slab size that can accommodate `total_slots`.
     /// It assumes the slot size is equal to the size of `T`.
     ///
