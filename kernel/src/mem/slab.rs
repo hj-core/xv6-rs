@@ -968,13 +968,14 @@ mod cache_new_test {
 #[cfg(test)]
 mod cache_allocate_object_test {
     extern crate alloc;
+
     use crate::mem::slab::Error::NoSlabAvailable;
     use crate::mem::slab::test_utils::{
-        SlabMan, TestObject, TestObject2, contains_node, prepend_new_empty_slab,
-        prepend_new_full_slab, prepend_new_partial_slab, safe_slab_size, size_of_list,
-        verify_cache_invariants_v2,
+        SlabMan, TestObject, TestObject2, contains_node, prepend_new_slabs, safe_slab_size,
+        size_of_list, verify_cache_invariants_v2,
     };
     use crate::mem::slab::{CACHE_NAME_LENGTH, Cache, SlabHeader};
+    use alloc::vec;
     use alloc::vec::Vec;
     use core::alloc::Layout;
     use core::fmt::Debug;
@@ -1094,8 +1095,14 @@ mod cache_allocate_object_test {
         let mut slab_objects = Vec::new();
 
         unsafe {
-            prepend_new_full_slab(&raw mut cache, &mut slab_man, &mut slab_objects);
-            prepend_new_full_slab(&raw mut cache, &mut slab_man, &mut slab_objects);
+            prepend_new_slabs(
+                &raw mut cache,
+                &mut slab_man,
+                &mut slab_objects,
+                2,
+                &Vec::new(),
+                0,
+            );
         }
 
         assert_eq!(
@@ -1172,9 +1179,17 @@ mod cache_allocate_object_test {
 
         let mut cache = Cache::<T>::new(name, layout);
         let mut slab_man = SlabMan::<T>::new(layout);
+        let mut slab_objects = Vec::new();
 
         unsafe {
-            prepend_new_empty_slab(&raw mut cache, &mut slab_man);
+            prepend_new_slabs(
+                &raw mut cache,
+                &mut slab_man,
+                &mut slab_objects,
+                0,
+                &Vec::new(),
+                1,
+            );
         }
 
         assert_eq!(
@@ -1224,7 +1239,14 @@ mod cache_allocate_object_test {
         let mut slab_objects = Vec::new();
 
         unsafe {
-            prepend_new_empty_slab(&raw mut cache, &mut slab_man);
+            prepend_new_slabs(
+                &raw mut cache,
+                &mut slab_man,
+                &mut slab_objects,
+                0,
+                &Vec::new(),
+                1,
+            );
         }
         let empty_slab = cache.slabs_empty;
 
@@ -1290,8 +1312,14 @@ mod cache_allocate_object_test {
         let mut slab_objects = Vec::new();
 
         unsafe {
-            prepend_new_empty_slab(&raw mut cache, &mut slab_man);
-            prepend_new_empty_slab(&raw mut cache, &mut slab_man);
+            prepend_new_slabs(
+                &raw mut cache,
+                &mut slab_man,
+                &mut slab_objects,
+                0,
+                &Vec::new(),
+                2,
+            );
         }
         let empty_slab1 = cache.slabs_empty;
         let empty_slab2 = unsafe { (*empty_slab1).next };
@@ -1384,8 +1412,14 @@ mod cache_allocate_object_test {
         let mut slab_objects = Vec::new();
 
         unsafe {
-            prepend_new_partial_slab(&raw mut cache, &mut slab_man, &mut slab_objects, 1);
-            prepend_new_full_slab(&raw mut cache, &mut slab_man, &mut slab_objects);
+            prepend_new_slabs(
+                &raw mut cache,
+                &mut slab_man,
+                &mut slab_objects,
+                1,
+                &vec![1],
+                0,
+            );
         }
         let partial_slab = cache.slabs_partial;
 
@@ -1464,7 +1498,14 @@ mod cache_allocate_object_test {
         let mut slab_objects = Vec::new();
 
         unsafe {
-            prepend_new_partial_slab(&raw mut cache, &mut slab_man, &mut slab_objects, 1);
+            prepend_new_slabs(
+                &raw mut cache,
+                &mut slab_man,
+                &mut slab_objects,
+                0,
+                &vec![1],
+                0,
+            );
         }
         let partial_slab = cache.slabs_partial;
 
@@ -1538,9 +1579,14 @@ mod cache_allocate_object_test {
         let mut slab_objects = Vec::new();
 
         unsafe {
-            prepend_new_empty_slab(&raw mut cache, &mut slab_man);
-            prepend_new_empty_slab(&raw mut cache, &mut slab_man);
-            prepend_new_full_slab(&raw mut cache, &mut slab_man, &mut slab_objects);
+            prepend_new_slabs(
+                &raw mut cache,
+                &mut slab_man,
+                &mut slab_objects,
+                1,
+                &Vec::new(),
+                2,
+            );
         }
         let empty_slab1 = cache.slabs_empty;
         let empty_slab2 = unsafe { (*empty_slab1).next };
@@ -1633,9 +1679,14 @@ mod cache_allocate_object_test {
         let mut slab_objects = Vec::new();
 
         unsafe {
-            prepend_new_empty_slab(&raw mut cache, &mut slab_man);
-            prepend_new_empty_slab(&raw mut cache, &mut slab_man);
-            prepend_new_full_slab(&raw mut cache, &mut slab_man, &mut slab_objects);
+            prepend_new_slabs(
+                &raw mut cache,
+                &mut slab_man,
+                &mut slab_objects,
+                1,
+                &Vec::new(),
+                2,
+            );
         }
         let empty_slab1 = cache.slabs_empty;
         let empty_slab2 = unsafe { (*empty_slab1).next };
@@ -1723,8 +1774,14 @@ mod cache_allocate_object_test {
         let mut slab_objects = Vec::new();
 
         unsafe {
-            prepend_new_partial_slab(&raw mut cache, &mut slab_man, &mut slab_objects, 2);
-            prepend_new_partial_slab(&raw mut cache, &mut slab_man, &mut slab_objects, 3);
+            prepend_new_slabs(
+                &raw mut cache,
+                &mut slab_man,
+                &mut slab_objects,
+                0,
+                &vec![3, 2],
+                0,
+            );
         }
         let partial_slab1 = cache.slabs_partial;
         let partial_slab2 = unsafe { (*partial_slab1).next };
@@ -1794,9 +1851,14 @@ mod cache_allocate_object_test {
         let mut slab_objects = Vec::new();
 
         unsafe {
-            prepend_new_partial_slab(&raw mut cache, &mut slab_man, &mut slab_objects, 1);
-            prepend_new_partial_slab(&raw mut cache, &mut slab_man, &mut slab_objects, 1);
-            prepend_new_full_slab(&raw mut cache, &mut slab_man, &mut slab_objects);
+            prepend_new_slabs(
+                &raw mut cache,
+                &mut slab_man,
+                &mut slab_objects,
+                1,
+                &vec![1, 1],
+                0,
+            );
         }
         let partial_slab1 = cache.slabs_partial;
         let partial_slab2 = unsafe { (*partial_slab1).next };
@@ -1868,7 +1930,7 @@ mod cache_allocate_object_test {
 
     fn test_general_case_holds_cache_invariants<T: Default + Debug>() {
         // Arrange:
-        // Create a cache that contains two empty slabs, two partial slabs and two full slabs.
+        // Create a cache that contains three empty slabs, three partial slabs and two full slabs.
         type T = TestObject;
         let layout = Layout::from_size_align(safe_slab_size::<T>(4), align_of::<SlabHeader<T>>())
             .expect("Failed to create layout");
@@ -1879,12 +1941,14 @@ mod cache_allocate_object_test {
         let mut slab_objects = Vec::new();
 
         unsafe {
-            prepend_new_empty_slab(&raw mut cache, &mut slab_man);
-            prepend_new_empty_slab(&raw mut cache, &mut slab_man);
-            prepend_new_partial_slab(&raw mut cache, &mut slab_man, &mut slab_objects, 2);
-            prepend_new_partial_slab(&raw mut cache, &mut slab_man, &mut slab_objects, 3);
-            prepend_new_full_slab(&raw mut cache, &mut slab_man, &mut slab_objects);
-            prepend_new_full_slab(&raw mut cache, &mut slab_man, &mut slab_objects);
+            prepend_new_slabs(
+                &raw mut cache,
+                &mut slab_man,
+                &mut slab_objects,
+                2,
+                &vec![2, 3, 1],
+                3,
+            );
         }
 
         // Act
