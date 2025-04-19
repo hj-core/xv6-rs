@@ -1865,7 +1865,6 @@ mod cache_allocate_object_test {
     fn test_general_case<T: Default + Debug>() {
         // Arrange:
         // Create a cache that contains three empty slabs, three partial slabs and two full slabs.
-        type T = TestObject;
         let name = ['c'; CACHE_NAME_LENGTH];
         let layout = safe_slab_layout::<T>(4);
 
