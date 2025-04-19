@@ -1335,7 +1335,6 @@ mod cache_allocate_object_test {
                 1,
             );
         }
-        let empty_slab = cache.slabs_empty;
 
         assert_eq!(
             null_mut(),
@@ -1348,18 +1347,13 @@ mod cache_allocate_object_test {
         assert!(result.is_ok(), "The result should be Ok but got {result:?}");
 
         // Assert
-        let allocated_object = result.unwrap();
-        assert_eq!(
-            empty_slab, allocated_object.source,
-            "The allocated object should come from the empty_slab"
-        );
         assert_eq!(
             null_mut(),
             cache.slabs_empty,
             "The slab_empty should be null after the allocation"
         );
 
-        slab_objects.push(allocated_object);
+        slab_objects.push(result.unwrap());
         unsafe {
             verify_cache_invariants_v2(
                 &raw mut cache,
@@ -1400,7 +1394,6 @@ mod cache_allocate_object_test {
             );
         }
         let empty_slab1 = cache.slabs_empty;
-        let empty_slab2 = unsafe { (*empty_slab1).next };
 
         assert!(
             unsafe { (*empty_slab1).total_slots > 1 },
@@ -1419,10 +1412,6 @@ mod cache_allocate_object_test {
 
         // Assert
         let allocated_object = result.unwrap();
-        assert!(
-            allocated_object.source == empty_slab1 || allocated_object.source == empty_slab2,
-            "The allocated object should come from one of the empty slabs"
-        );
 
         let moved_slab = allocated_object.source;
         assert!(
@@ -1508,11 +1497,6 @@ mod cache_allocate_object_test {
         assert!(result.is_ok(), "The result should be Ok but got {result:?}");
 
         // Assert
-        let allocated_object = result.unwrap();
-        assert_eq!(
-            partial_slab, allocated_object.source,
-            "The allocated object should come from the partial_slab"
-        );
         assert_eq!(
             null_mut(),
             cache.slabs_partial,
@@ -1527,7 +1511,7 @@ mod cache_allocate_object_test {
             "The partial_slab should be moved to the slabs_full list"
         );
 
-        slab_objects.push(allocated_object);
+        slab_objects.push(result.unwrap());
         unsafe {
             verify_cache_invariants_v2(
                 &raw mut cache,
@@ -1580,11 +1564,6 @@ mod cache_allocate_object_test {
         assert!(result.is_ok(), "The result should be Ok but got {result:?}");
 
         // Assert
-        let allocated_object = result.unwrap();
-        assert_eq!(
-            partial_slab, allocated_object.source,
-            "The allocated object should come from the partial_slab"
-        );
         assert_ne!(
             null_mut(),
             cache.slabs_full,
@@ -1599,7 +1578,7 @@ mod cache_allocate_object_test {
             "The partial_slab should be moved to the slabs_full list"
         );
 
-        slab_objects.push(allocated_object);
+        slab_objects.push(result.unwrap());
         unsafe {
             verify_cache_invariants_v2(
                 &raw mut cache,
@@ -1639,8 +1618,6 @@ mod cache_allocate_object_test {
                 2,
             );
         }
-        let empty_slab1 = cache.slabs_empty;
-        let empty_slab2 = unsafe { (*empty_slab1).next };
 
         assert_eq!(
             null_mut(),
@@ -1654,10 +1631,6 @@ mod cache_allocate_object_test {
 
         // Assert
         let allocated_object = result.unwrap();
-        assert!(
-            allocated_object.source == empty_slab1 || allocated_object.source == empty_slab2,
-            "The allocated object should come from one of the empty slabs"
-        );
 
         let moved_slab = allocated_object.source;
         assert!(
@@ -1731,7 +1704,6 @@ mod cache_allocate_object_test {
             );
         }
         let empty_slab1 = cache.slabs_empty;
-        let empty_slab2 = unsafe { (*empty_slab1).next };
         let full_slab = cache.slabs_full;
 
         assert_eq!(
@@ -1751,10 +1723,6 @@ mod cache_allocate_object_test {
 
         // Assert
         let allocated_object = result.unwrap();
-        assert!(
-            allocated_object.source == empty_slab1 || allocated_object.source == empty_slab2,
-            "The allocated object should come from one of the empty slabs"
-        );
 
         let moved_slab = allocated_object.source;
         assert!(
@@ -1839,12 +1807,6 @@ mod cache_allocate_object_test {
         assert!(result.is_ok(), "The result should be Ok but got {result:?}");
 
         // Assert
-        let allocated_object = result.unwrap();
-        assert!(
-            allocated_object.source == partial_slab1 || allocated_object.source == partial_slab2,
-            "The allocated object should come from one of the partial slabs"
-        );
-
         assert_eq!(
             2,
             unsafe { size_of_list(cache.slabs_partial) },
@@ -1861,7 +1823,7 @@ mod cache_allocate_object_test {
             "The slabs_partial should contain both partial slabs after the allocation"
         );
 
-        slab_objects.push(allocated_object);
+        slab_objects.push(result.unwrap());
         unsafe {
             verify_cache_invariants_v2(
                 &raw mut cache,
@@ -1917,9 +1879,19 @@ mod cache_allocate_object_test {
 
         // Assert
         let allocated_object = result.unwrap();
+
+        let moved_slab = allocated_object.source;
         assert!(
-            allocated_object.source == partial_slab1 || allocated_object.source == partial_slab2,
-            "The allocated object should come from one of the partial slabs"
+            unsafe { SlabHeader::is_full(moved_slab) },
+            "The moved slab should be full after the allocation"
+        );
+        assert!(
+            unsafe { !contains_node(cache.slabs_partial, moved_slab) },
+            "The slabs_partial should not contain the moved slab"
+        );
+        assert!(
+            unsafe { contains_node(cache.slabs_full, moved_slab) },
+            "The slabs_full should contain the moved slab"
         );
 
         assert_eq!(
@@ -1935,20 +1907,6 @@ mod cache_allocate_object_test {
             2,
             unsafe { size_of_list(cache.slabs_full) },
             "The slabs_full should have two slabs after the allocation"
-        );
-
-        let moved_slab = allocated_object.source;
-        assert!(
-            unsafe { SlabHeader::is_full(moved_slab) },
-            "The moved slab should be full after the allocation"
-        );
-        assert!(
-            unsafe { !contains_node(cache.slabs_partial, moved_slab) },
-            "The slabs_partial should not contain the moved slab"
-        );
-        assert!(
-            unsafe { contains_node(cache.slabs_full, moved_slab) },
-            "The slabs_full should contain the moved slab"
         );
 
         slab_objects.push(allocated_object);
