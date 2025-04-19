@@ -4173,6 +4173,47 @@ mod test_utils {
         (*cache).slabs_empty = new_slab;
     }
 
+    /// `prepend_new_partial_slab` prepends a partial slab to the `slabs_partial` of the
+    /// `cache`. This partial slab is acquired from the `slab_man`. It contains
+    /// `target_free_slots`, and all its allocated objects are appended to the `slab_objects`.
+    ///
+    /// # Safety
+    /// * `cache` must be a valid pointer and in a valid state.
+    /// * `cache` and `slab_man` must have a compatible slab layout.
+    ///
+    /// # Panics
+    /// This function will panic if the `target_free_slots` results in either an empty slab
+    /// or a full slab.
+    pub unsafe fn prepend_new_partial_slab<T: Default>(
+        cache: *mut Cache<T>,
+        slab_man: &mut SlabMan<T>,
+        slab_objects: &mut Vec<SlabObject<T>>,
+        target_free_slots: usize,
+    ) {
+        assert!(
+            target_free_slots > 0,
+            "A partial slab should have at least one free slot"
+        );
+
+        let new_slab = slab_man.new_test_slab(cache);
+        assert!(
+            target_free_slots < (*new_slab).total_slots,
+            "A partial slab should have at least one slot used"
+        );
+
+        let used_slots = (*new_slab).total_slots - target_free_slots;
+        for _ in 0..used_slots {
+            slab_objects
+                .push(SlabHeader::allocate_object(new_slab).expect("Failed to allocate object"));
+        }
+
+        if !(*cache).slabs_partial.is_null() {
+            (*new_slab).next = (*cache).slabs_partial;
+            (*(*cache).slabs_partial).prev = new_slab;
+        }
+        (*cache).slabs_partial = new_slab;
+    }
+
     /// `prepend_new_full_slab` prepends a full slab to the `slabs_full` of the `cache`.
     /// This full slab is acquired from the `slab_man`, and all its allocated objects are
     /// appended to the `slab_objects`.
