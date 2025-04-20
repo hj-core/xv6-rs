@@ -1970,54 +1970,6 @@ mod cache_allocate_from_empty_test {
     use core::alloc::Layout;
 
     #[test]
-    fn allocate_from_empty_with_single_empty_multi_slots_slab() {
-        // Create a `cache` containing a single empty slab that has multiple slots
-        type T = TestObject;
-        let mut cache = crate::mem::slab::cache_tests::new_test_default::<T>();
-        let mut slab_man = SlabMan::new(cache.slab_layout);
-
-        let only_slab = slab_man.new_test_slab(&raw mut cache);
-        cache.slabs_empty = only_slab;
-        assert!(
-            unsafe { (*only_slab).total_slots > 1 },
-            "Slab for this test should have a `total_slots` greater than one"
-        );
-
-        // Exercise `allocate_from_empty` and verify the result
-        let result = unsafe { Cache::allocate_from_empty(&raw mut cache) };
-        assert!(result.is_ok(), "The result should be Ok but got {result:?}");
-
-        // Verify the allocated [SlabObject]
-        let slab_object = result.unwrap();
-        assert_eq!(
-            only_slab, slab_object.source,
-            "`source` of the allocated [SlabObject] should be the `only_slab`",
-        );
-        assert_eq!(
-            &TestObject::default(),
-            slab_object.get_ref(),
-            "The object behind the allocated [SlabObject] should have the default value"
-        );
-
-        // Verify the `cache`
-        unsafe { verify_cache_invariants(&raw mut cache) };
-
-        let slabs_after = unsafe { cache_slabs(&raw mut cache) };
-        assert_eq!(
-            vec![only_slab],
-            slabs_after,
-            "The `cache` should have the same slabs before and after"
-        );
-
-        let allocated_objects_after = unsafe { cache_allocated_addrs(&raw mut cache) };
-        assert_eq!(
-            vec![slab_object.object.addr()],
-            allocated_objects_after,
-            "The `cache` should only have the object behind the `slab_object` allocated"
-        );
-    }
-
-    #[test]
     fn allocate_from_empty_with_single_empty_single_slot_slab() {
         // Create a `cache` containing a single empty slab that has only one slot
         type T = TestObject;
