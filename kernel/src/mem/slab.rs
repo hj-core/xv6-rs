@@ -139,11 +139,8 @@ where
     ///
     /// # Safety:
     /// * `cache` must be a valid pointer.
+    /// * `cache` must contain at least one empty slab.
     unsafe fn allocate_from_empty(cache: *mut Cache<T>) -> Result<SlabObject<T>, Error> {
-        if (*cache).slabs_empty.is_null() {
-            return Err(AllocateFromNullSlab);
-        }
-
         let result = SlabHeader::allocate_object((*cache).slabs_empty)?;
 
         // Update list heads
@@ -1964,7 +1961,6 @@ mod cache_allocate_object_test {
 mod cache_allocate_from_empty_test {
     extern crate alloc;
 
-    use crate::mem::slab::Error::AllocateFromNullSlab;
     use crate::mem::slab::test_utils::{
         SlabMan, TestObject, cache_allocated_addrs, cache_slabs, safe_slab_size,
         verify_cache_invariants,
@@ -1972,49 +1968,6 @@ mod cache_allocate_from_empty_test {
     use crate::mem::slab::{Cache, SlabHeader};
     use alloc::vec;
     use core::alloc::Layout;
-
-    #[test]
-    fn allocate_from_empty_when_no_empty_slabs_return_null_err() {
-        // Create a `cache` containing a partial slab
-        type T = u128;
-        let mut cache = crate::mem::slab::cache_tests::new_test_default::<T>();
-        let mut slab_man = SlabMan::new(cache.slab_layout);
-
-        let only_slab = slab_man.new_test_slab(&raw mut cache);
-        let _slab_object1 = unsafe { SlabHeader::allocate_object(only_slab) }
-            .expect("Failed to allocate object from the `only_slab`");
-        cache.slabs_partial = only_slab;
-
-        // Exercise `allocate_from_empty` and verify the result
-        let result = unsafe { Cache::allocate_from_empty(&raw mut cache) };
-        assert!(
-            result.is_err(),
-            "The result should be Err(AllocateFromNullSlab) but got {result:?}"
-        );
-        let err = result.unwrap_err();
-        assert!(
-            matches!(err, AllocateFromNullSlab),
-            "The error should be {:?} but got {err:?});",
-            AllocateFromNullSlab,
-        );
-
-        // Verify the `cache`
-        unsafe { verify_cache_invariants(&raw mut cache) };
-
-        let slabs_after = unsafe { cache_slabs(&raw mut cache) };
-        assert_eq!(
-            vec![only_slab],
-            slabs_after,
-            "The `cache` should have the same slabs before and after"
-        );
-
-        let allocated_objects_after = unsafe { cache_allocated_addrs(&raw mut cache) };
-        assert_eq!(
-            vec![_slab_object1.object.addr()],
-            allocated_objects_after,
-            "The `cache` should have the same objects allocated before and after"
-        );
-    }
 
     #[test]
     fn allocate_from_empty_with_single_empty_multi_slots_slab() {
