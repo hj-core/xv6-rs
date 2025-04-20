@@ -139,7 +139,10 @@ where
     /// * `cache` must be a valid pointer and in a valid state.
     /// * `cache` must contain at least one empty slab.
     unsafe fn allocate_from_empty(cache: *mut Cache<T>) -> Result<SlabObject<T>, Error> {
-        let result = SlabHeader::allocate_object((*cache).slabs_empty)?;
+        let result = SlabHeader::allocate_object((*cache).slabs_empty);
+        if result.is_err() {
+            return result;
+        }
 
         // Update list heads
         let (moved_slab, new_head_empty) = Cache::pop_front((*cache).slabs_empty);
@@ -162,7 +165,7 @@ where
         //     either null or valid pointers without their `prev` linked.
         // * Therefore, if the allocation from `old_head_empty` is `Ok`, we can reach this code
         //   and resume `cache` to a valid state.
-        Ok(result)
+        result
     }
 
     /// `push_front` pushes the `node` to the front of the doubly-linked list `head` and
