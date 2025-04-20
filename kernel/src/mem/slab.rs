@@ -994,13 +994,12 @@ mod cache_allocate_object_test {
 
     use crate::mem::slab::Error::NoSlabAvailable;
     use crate::mem::slab::test_utils::{
-        SlabMan, TestObject, TestObject2, prepend_new_slabs, safe_slab_layout, safe_slab_size,
+        SlabMan, TestObject, TestObject2, prepend_new_slabs, safe_slab_layout,
         verify_cache_invariants_v2,
     };
     use crate::mem::slab::{CACHE_NAME_LENGTH, Cache, SlabHeader};
     use alloc::vec;
     use alloc::vec::Vec;
-    use core::alloc::Layout;
     use core::fmt::Debug;
     use core::ptr::null_mut;
 
