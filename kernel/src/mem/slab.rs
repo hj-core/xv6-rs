@@ -129,16 +129,14 @@ where
 
     /// `allocate_from_empty` attempts to allocate an object from one of the empty slabs.
     ///
-    /// It returns a [SlabObject] wrapping the allocated object if the attempt succeeds,
-    /// or returns the corresponding [Error] if it fails.
+    /// It returns a [SlabObject] wrapping the allocated object if the attempt succeeds, or returns
+    /// the corresponding [Error] if it fails. The allocated object has the default value of [T],
+    /// and clients can access it through the [SlabObject].
     ///
-    /// It is guaranteed that if an [Error] is returned, the states of `cache`
-    /// remain unmodified.
-    /// The allocated object has the default value of [T], and clients can access it
-    /// through the [SlabObject].
+    /// It is guaranteed that if an [Error] is returned, the state of the `cache` remain unmodified.
     ///
-    /// # Safety:
-    /// * `cache` must be a valid pointer.
+    /// # Safety
+    /// * `cache` must be a valid pointer and in a valid state.
     /// * `cache` must contain at least one empty slab.
     unsafe fn allocate_from_empty(cache: *mut Cache<T>) -> Result<SlabObject<T>, Error> {
         let result = SlabHeader::allocate_object((*cache).slabs_empty)?;
