@@ -1477,7 +1477,6 @@ mod cache_allocate_object_test {
             unsafe { (*empty_slab1).total_slots > 1 },
             "The empty slabs should have more than one free slot to ensure a partial slab after the allocation"
         );
-
         assert_eq!(
             null_mut(),
             cache.slabs_partial,
