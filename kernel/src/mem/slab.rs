@@ -140,8 +140,6 @@ where
     /// # Safety:
     /// * `cache` must be a valid pointer.
     unsafe fn allocate_from_empty(cache: *mut Cache<T>) -> Result<SlabObject<T>, Error> {
-        assert!(!cache.is_null(), "`cache` should not be null");
-
         if (*cache).slabs_empty.is_null() {
             return Err(AllocateFromNullSlab);
         }
@@ -1974,14 +1972,6 @@ mod cache_allocate_from_empty_test {
     use crate::mem::slab::{Cache, SlabHeader};
     use alloc::vec;
     use core::alloc::Layout;
-    use core::ptr::null_mut;
-
-    #[test]
-    #[should_panic(expected = "`cache` should not be null")]
-    fn allocate_from_empty_with_null_cache_should_panic() {
-        type T = u64;
-        let _ = unsafe { Cache::<T>::allocate_from_empty(null_mut()) };
-    }
 
     #[test]
     fn allocate_from_empty_when_no_empty_slabs_return_null_err() {
