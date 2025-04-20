@@ -546,6 +546,14 @@ where
         (*header).used_count == (*header).total_slots
     }
 
+    /// `is_empty` returns whether the underlying slab is empty.
+    ///
+    /// # SAFETY
+    /// * `header` must be a valid pointer.
+    unsafe fn is_empty(header: *mut SlabHeader<T>) -> bool {
+        (*header).used_count == 0
+    }
+
     /// `use_first_free_slot` attempts to mark the first free slot as used.
     ///
     /// The index of the free slot is returned if the attempt succeeds,
