@@ -1958,6 +1958,134 @@ mod cache_allocate_object_test {
 }
 
 #[cfg(test)]
+mod cache_pop_front_test {
+    extern crate alloc;
+
+    use crate::mem::slab::test_utils::{
+        SlabMan, contains_node, create_slab_list, safe_slab_size, size_of_list,
+        verify_list_doubly_linked, verify_node_isolated,
+    };
+    use crate::mem::slab::{Cache, SlabHeader};
+    use core::alloc::Layout;
+    use core::ptr::null_mut;
+
+    #[test]
+    #[should_panic(expected = "Cache::pop_front: head should not be null")]
+    fn null_head_panics() {
+        type T = u8;
+        let _ = unsafe { Cache::<T>::pop_front(null_mut()) };
+    }
+
+    #[test]
+    #[should_panic(expected = "head should not have its prev linked")]
+    fn head_has_prev_linked_panics() {
+        // Create a head with its prev linked
+        type T = u8;
+        let slab_layout =
+            Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
+                .expect("Failed to create slab_layout");
+        let mut slab_man = SlabMan::<T>::new(slab_layout);
+
+        let prev = create_slab_list(&mut slab_man, 2);
+        let head = unsafe { (*prev).next };
+
+        // Exercise pop_front
+        unsafe { Cache::pop_front(head) };
+    }
+
+    #[test]
+    fn single_node_list_returns_head_and_null() {
+        // Create a head containing a single node
+        type T = u8;
+        let slab_layout =
+            Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
+                .expect("Failed to create slab_layout");
+        let mut slab_man = SlabMan::new(slab_layout);
+
+        let head = slab_man.new_test_slab(null_mut());
+
+        // Exercise pop_front
+        let (node, new_head) = unsafe { Cache::<T>::pop_front(head) };
+
+        // Verify the detached node
+        assert_eq!(node, head, "The detached node should be the original head");
+        unsafe { verify_node_isolated(node) };
+
+        // Verify the new head
+        assert_eq!(null_mut(), new_head, "The new head should be null");
+    }
+
+    #[test]
+    fn two_nodes_list_returns_head_and_next() {
+        // Create a head containing two nodes
+        type T = u8;
+        let slab_layout =
+            Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
+                .expect("Failed to create slab_layout");
+        let mut slab_man = SlabMan::<T>::new(slab_layout);
+
+        let head = create_slab_list(&mut slab_man, 2);
+        let next = unsafe { (*head).next };
+
+        // Exercise pop_front
+        let (node, new_head) = unsafe { Cache::pop_front(head) };
+
+        // Verify the detached node
+        assert_eq!(node, head, "The detached node should be the original head");
+        unsafe { verify_node_isolated(node) };
+
+        // Verify the new head
+        assert_eq!(
+            next, new_head,
+            "The new head should be the next of the original head"
+        );
+        assert_eq!(
+            1,
+            unsafe { size_of_list(new_head) },
+            "The new head should contain one node"
+        );
+        unsafe { verify_list_doubly_linked(new_head) };
+    }
+
+    #[test]
+    fn multi_nodes_list_returns_head_and_next() {
+        // Create a head containing three nodes
+        type T = u8;
+        let slab_layout =
+            Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
+                .expect("Failed to create slab_layout");
+        let mut slab_man = SlabMan::<T>::new(slab_layout);
+
+        let head = create_slab_list(&mut slab_man, 3);
+        let next = unsafe { (*head).next };
+        let next_next = unsafe { (*next).next };
+
+        // Exercise pop_front
+        let (node, new_head) = unsafe { Cache::pop_front(head) };
+
+        // Verify the detached node
+        assert_eq!(node, head, "The detached node should be the original head");
+        unsafe { verify_node_isolated(node) };
+
+        // Verify the new head
+        assert_eq!(
+            next, new_head,
+            "The new head should be the next of the original head"
+        );
+        assert_eq!(
+            2,
+            unsafe { size_of_list(new_head) },
+            "The new head should contain two nodes"
+        );
+        assert!(
+            unsafe { contains_node(new_head, next_next) },
+            "The new head should contain the next_next"
+        );
+        unsafe { verify_list_doubly_linked(new_head) };
+    }
+}
+
+#[cfg(test)]
 mod cache_tests {
     extern crate alloc;
     use super::*;
@@ -2109,121 +2237,6 @@ mod cache_tests {
             "The new head should contain the expected nodes"
         );
 
-        unsafe { verify_list_doubly_linked(new_head) };
-    }
-
-    #[test]
-    #[should_panic(expected = "Cache::pop_front: head should not be null")]
-    fn pop_front_with_null_head_should_panic() {
-        type T = u8;
-        let _ = unsafe { Cache::<T>::pop_front(null_mut()) };
-    }
-
-    #[test]
-    #[should_panic(expected = "head should not have its prev linked")]
-    fn pop_front_prev_linked_head_panics() {
-        // Create a head with its prev linked
-        type T = u8;
-        let slab_layout =
-            Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
-                .expect("Failed to create slab_layout");
-        let mut slab_man = SlabMan::<T>::new(slab_layout);
-
-        let prev = create_slab_list(&mut slab_man, 2);
-        let head = unsafe { (*prev).next };
-
-        // Exercise pop_front
-        unsafe { Cache::pop_front(head) };
-    }
-
-    #[test]
-    fn pop_front_single_node_return_head_and_null() {
-        // Create a head containing a single node
-        type T = u8;
-        let slab_layout =
-            Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
-                .expect("Failed to create slab_layout");
-        let mut slab_man = SlabMan::new(slab_layout);
-
-        let head = slab_man.new_test_slab(null_mut());
-
-        // Exercise pop_front
-        let (node, new_head) = unsafe { Cache::<T>::pop_front(head) };
-
-        // Verify the detached node
-        assert_eq!(node, head, "The detached node should be the original head");
-        unsafe { verify_node_isolated(node) };
-
-        // Verify the new head
-        assert_eq!(null_mut(), new_head, "The new head should be null");
-    }
-
-    #[test]
-    fn pop_front_two_nodes_returns_head_and_next() {
-        // Create a head containing two nodes
-        type T = u8;
-        let slab_layout =
-            Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
-                .expect("Failed to create slab_layout");
-        let mut slab_man = SlabMan::<T>::new(slab_layout);
-
-        let head = create_slab_list(&mut slab_man, 2);
-        let next = unsafe { (*head).next };
-
-        // Exercise pop_front
-        let (node, new_head) = unsafe { Cache::pop_front(head) };
-
-        // Verify the detached node
-        assert_eq!(node, head, "The detached node should be the original head");
-        unsafe { verify_node_isolated(node) };
-
-        // Verify the new head
-        assert_eq!(
-            next, new_head,
-            "The new head should be the next of the original head"
-        );
-        assert_eq!(
-            1,
-            unsafe { size_of_list(new_head) },
-            "The new head should contain one node"
-        );
-        unsafe { verify_list_doubly_linked(new_head) };
-    }
-
-    #[test]
-    fn pop_front_multi_nodes_return_head_and_next() {
-        // Create a head containing three nodes
-        type T = u8;
-        let slab_layout =
-            Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
-                .expect("Failed to create slab_layout");
-        let mut slab_man = SlabMan::<T>::new(slab_layout);
-
-        let head = create_slab_list(&mut slab_man, 3);
-        let next = unsafe { (*head).next };
-        let next_next = unsafe { (*next).next };
-
-        // Exercise pop_front
-        let (node, new_head) = unsafe { Cache::pop_front(head) };
-
-        // Verify the detached node
-        assert_eq!(node, head, "The detached node should be the original head");
-        unsafe { verify_node_isolated(node) };
-
-        // Verify the new head
-        assert_eq!(
-            next, new_head,
-            "The new head should be the next of the original head"
-        );
-        assert_eq!(
-            2,
-            unsafe { size_of_list(new_head) },
-            "The new head should contain two nodes"
-        );
-        assert!(
-            unsafe { contains_node(new_head, next_next) },
-            "The new head should contain the next_next"
-        );
         unsafe { verify_list_doubly_linked(new_head) };
     }
 
