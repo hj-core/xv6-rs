@@ -1414,6 +1414,11 @@ mod cache_allocate_object_test {
             cache.slabs_partial,
             "The slabs_partial should be null initially to ensure the object is allocated from the empty slab"
         );
+        assert_ne!(
+            null_mut(),
+            cache.slabs_empty,
+            "The slabs_empty should not be null initially"
+        );
 
         // Act
         let result = unsafe { Cache::allocate_object(&raw mut cache) };
