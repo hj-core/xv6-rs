@@ -308,7 +308,7 @@ where
         }
         Cache::detach_node_from_list(header);
 
-        if (*header).used_count == 0 {
+        if SlabHeader::is_empty(header) {
             (*cache).slabs_empty = Cache::push_front((*cache).slabs_empty, header);
         } else if (*header).used_count < (*header).total_slots {
             (*cache).slabs_partial = Cache::push_front((*cache).slabs_partial, header);
@@ -1682,9 +1682,8 @@ mod cache_allocate_object_test {
             unsafe { !SlabHeader::is_full(moved_slab) },
             "The moved slab should not be full"
         );
-        assert_ne!(
-            0,
-            unsafe { (*moved_slab).used_count },
+        assert!(
+            unsafe { !SlabHeader::is_empty(moved_slab) },
             "The moved slab should not be empty"
         );
 
@@ -1810,9 +1809,8 @@ mod cache_allocate_object_test {
             unsafe { !SlabHeader::is_full(moved_slab) },
             "The moved slab should not be full"
         );
-        assert_ne!(
-            0,
-            unsafe { (*moved_slab).used_count },
+        assert!(
+            unsafe { !SlabHeader::is_empty(moved_slab) },
             "The moved slab should not be empty"
         );
 
@@ -4522,9 +4520,8 @@ mod test_utils {
     unsafe fn verify_list_slabs_all_empty<T: Default>(head: *mut SlabHeader<T>) {
         let mut curr = head;
         while !curr.is_null() {
-            assert_eq!(
-                0,
-                (*curr).used_count,
+            assert!(
+                SlabHeader::is_empty(curr),
                 "Slabs in this `list` should be empty"
             );
             curr = (*curr).next;
