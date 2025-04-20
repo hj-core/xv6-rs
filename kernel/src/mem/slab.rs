@@ -991,31 +991,39 @@ mod cache_new_test {
 #[cfg(test)]
 mod cache_allocate_object_test {
     extern crate alloc;
+
     use crate::mem::slab::Error::NoSlabAvailable;
     use crate::mem::slab::test_utils::{
-        SlabMan, TestObject, contains_node, safe_slab_size, size_of_list,
+        SlabMan, TestObject, TestObject2, prepend_new_slabs, safe_slab_layout,
         verify_cache_invariants_v2,
     };
     use crate::mem::slab::{CACHE_NAME_LENGTH, Cache, SlabHeader};
+    use alloc::vec;
     use alloc::vec::Vec;
-    use core::alloc::Layout;
+    use core::fmt::Debug;
     use core::ptr::null_mut;
 
-    #[test]
-    #[should_panic(expected = "Cache::allocate_object: cache should not be null")]
-    fn null_cache_panics() {
-        type T = TestObject;
+    type Type1 = TestObject;
+    type Type2 = TestObject2;
+    type Type3 = u8;
+
+    fn test_null_cache_panics<T: Default>() {
         let _ = unsafe { Cache::<T>::allocate_object(null_mut()) };
     }
 
-    #[test]
-    fn no_slabs_returns_no_slab_available_err_cache_unmodified() {
+    test_panic_against_types!(
+        test_null_cache_panics,
+        "Cache::allocate_object: cache should not be null",
+        (null_cache_panics_for_type1, Type1),
+        (null_cache_panics_for_type2, Type2),
+        (null_cache_panics_for_type3, Type3),
+    );
+
+    fn test_no_slabs_returns_no_slab_available_err_cache_unmodified<T: Default + Debug>() {
         // Arrange:
         // Create a cache with no slabs.
-        type T = TestObject;
-        let layout = Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
-            .expect("Failed to create layout");
         let name = ['c'; CACHE_NAME_LENGTH];
+        let layout = safe_slab_layout::<T>(2);
 
         let mut cache = Cache::<T>::new(name, layout);
         let slab_man = SlabMan::<T>::new(layout);
@@ -1080,35 +1088,48 @@ mod cache_allocate_object_test {
         }
     }
 
-    #[test]
-    fn full_slabs_only_returns_no_slab_available_err_cache_unmodified() {
+    test_against_types!(
+        test_no_slabs_returns_no_slab_available_err_cache_unmodified,
+        (
+            no_slabs_returns_no_slab_available_err_cache_unmodified_for_type1,
+            Type1
+        ),
+        (
+            no_slabs_returns_no_slab_available_err_cache_unmodified_for_type2,
+            Type2
+        ),
+        (
+            no_slabs_returns_no_slab_available_err_cache_unmodified_for_type3,
+            Type3
+        ),
+    );
+
+    fn test_full_slabs_only_returns_no_slab_available_err_cache_unmodified<T: Default + Debug>() {
         // Arrange:
         // Create a cache that contains only two full slabs.
-        type T = TestObject;
-        let layout = Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
-            .expect("Failed to create layout");
         let name = ['c'; CACHE_NAME_LENGTH];
+        let layout = safe_slab_layout::<T>(2);
 
         let mut cache = Cache::<T>::new(name, layout);
         let mut slab_man = SlabMan::<T>::new(layout);
         let mut slab_objects = Vec::new();
 
-        let full_slab1 = slab_man.new_test_slab(&raw mut cache);
-        let full_slab2 = slab_man.new_test_slab(&raw mut cache);
         unsafe {
-            // Fill each slab to make it full
-            for slab in [full_slab1, full_slab2] {
-                while !SlabHeader::is_full(slab) {
-                    slab_objects.push(
-                        SlabHeader::allocate_object(slab).expect("Failed to allocate object"),
-                    );
-                }
-            }
-            (*full_slab1).next = full_slab2;
-            (*full_slab2).prev = full_slab1;
+            prepend_new_slabs(
+                &raw mut cache,
+                &mut slab_man,
+                &mut slab_objects,
+                2,
+                &Vec::new(),
+                0,
+            );
         }
-        cache.slabs_full = full_slab1;
 
+        assert_ne!(
+            null_mut(),
+            cache.slabs_full,
+            "The slabs_full should not be null initially"
+        );
         assert_eq!(
             null_mut(),
             cache.slabs_partial,
@@ -1136,6 +1157,11 @@ mod cache_allocate_object_test {
             NoSlabAvailable,
         );
 
+        assert_ne!(
+            null_mut(),
+            cache.slabs_full,
+            "The slabs_full should remain not null after the allocation"
+        );
         assert_eq!(
             null_mut(),
             cache.slabs_partial,
@@ -1158,21 +1184,42 @@ mod cache_allocate_object_test {
         }
     }
 
-    #[test]
-    fn slabs_empty_becomes_null_slabs_empty_is_null() {
+    test_against_types!(
+        test_full_slabs_only_returns_no_slab_available_err_cache_unmodified,
+        (
+            full_slabs_only_returns_no_slab_available_err_cache_unmodified_for_type1,
+            Type1
+        ),
+        (
+            full_slabs_only_returns_no_slab_available_err_cache_unmodified_for_type2,
+            Type2
+        ),
+        (
+            full_slabs_only_returns_no_slab_available_err_cache_unmodified_for_type3,
+            Type3
+        ),
+    );
+
+    fn test_returned_object_has_default_value_for_empty<T: Default + Debug + PartialEq>() {
         // Arrange:
         // Create a cache that contains a single empty slab.
-        type T = TestObject;
-        let layout = Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
-            .expect("Failed to create layout");
         let name = ['c'; CACHE_NAME_LENGTH];
+        let layout = safe_slab_layout::<T>(2);
 
         let mut cache = Cache::<T>::new(name, layout);
         let mut slab_man = SlabMan::<T>::new(layout);
         let mut slab_objects = Vec::new();
 
-        let empty_slab = slab_man.new_test_slab(&raw mut cache);
-        cache.slabs_empty = empty_slab;
+        unsafe {
+            prepend_new_slabs(
+                &raw mut cache,
+                &mut slab_man,
+                &mut slab_objects,
+                0,
+                &Vec::new(),
+                1,
+            );
+        }
 
         assert_eq!(
             null_mut(),
@@ -1183,97 +1230,206 @@ mod cache_allocate_object_test {
         // Act
         let result = unsafe { Cache::allocate_object(&raw mut cache) };
         assert!(result.is_ok(), "The result should be Ok but got {result:?}");
+        let allocated_object = result.unwrap();
 
         // Assert
-        let allocated_object = result.unwrap();
         assert_eq!(
-            empty_slab, allocated_object.source,
-            "The allocated object should come from the empty_slab"
+            &T::default(),
+            allocated_object.get_ref(),
+            "The allocated object should have the default value"
         );
-        assert_eq!(
-            null_mut(),
-            cache.slabs_empty,
-            "The slab_empty should be null after the allocation"
-        );
-
-        slab_objects.push(allocated_object);
-        unsafe {
-            verify_cache_invariants_v2(
-                &raw mut cache,
-                &name,
-                layout,
-                slab_man.allocated_addrs(),
-                &slab_objects,
-            );
-        }
     }
 
-    #[test]
-    fn slabs_partial_becomes_non_null_slabs_partial_is_non_null() {
+    test_against_types!(
+        test_returned_object_has_default_value_for_empty,
+        (returned_object_has_default_value_for_empty_type1, Type1),
+        (returned_object_has_default_value_for_empty_type2, Type2),
+        (returned_object_has_default_value_for_empty_type3, Type3),
+    );
+
+    fn test_returned_object_has_default_value_for_partial<T: Default + Debug + PartialEq>() {
         // Arrange:
-        // Create a cache that contains two empty slabs.
-        type T = TestObject;
-        let layout = Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
-            .expect("Failed to create layout");
+        // Create a cache that contains a single partial slab.
         let name = ['c'; CACHE_NAME_LENGTH];
+        let layout = safe_slab_layout::<T>(4);
 
         let mut cache = Cache::<T>::new(name, layout);
         let mut slab_man = SlabMan::<T>::new(layout);
         let mut slab_objects = Vec::new();
 
-        let empty_slab1 = slab_man.new_test_slab(&raw mut cache);
-        let empty_slab2 = slab_man.new_test_slab(&raw mut cache);
         unsafe {
-            (*empty_slab1).next = empty_slab2;
-            (*empty_slab2).prev = empty_slab1;
+            prepend_new_slabs(
+                &raw mut cache,
+                &mut slab_man,
+                &mut slab_objects,
+                1,
+                &vec![2],
+                0,
+            );
         }
-        cache.slabs_empty = empty_slab1;
-
-        assert!(
-            unsafe { (*empty_slab1).total_slots > 1 },
-            "The empty slabs should have more than one free slot to ensure a partial slab after the allocation"
-        );
 
         assert_eq!(
             null_mut(),
-            cache.slabs_partial,
-            "The slab_partial should be null initially"
+            cache.slabs_empty,
+            "The slabs_empty should be null initially to ensure the object is allocated from the partial slab"
         );
 
         // Act
         let result = unsafe { Cache::allocate_object(&raw mut cache) };
         assert!(result.is_ok(), "The result should be Ok but got {result:?}");
+        let allocated_object = result.unwrap();
 
         // Assert
-        let allocated_object = result.unwrap();
-        assert!(
-            allocated_object.source == empty_slab1 || allocated_object.source == empty_slab2,
-            "The allocated object should come from one of the empty slabs"
+        assert_eq!(
+            &T::default(),
+            allocated_object.get_ref(),
+            "The allocated object should have the default value"
+        );
+    }
+
+    test_against_types!(
+        test_returned_object_has_default_value_for_partial,
+        (returned_object_has_default_value_for_partial_type1, Type1),
+        (returned_object_has_default_value_for_partial_type2, Type2),
+        (returned_object_has_default_value_for_partial_type3, Type3),
+    );
+
+    fn test_returned_object_has_correct_source_for_empty<T: Default + Debug>() {
+        // Arrange:
+        // Create a cache that contains one empty slab and two full slabs.
+        let name = ['c'; CACHE_NAME_LENGTH];
+        let layout = safe_slab_layout::<T>(2);
+
+        let mut cache = Cache::<T>::new(name, layout);
+        let mut slab_man = SlabMan::<T>::new(layout);
+        let mut slab_objects = Vec::new();
+
+        unsafe {
+            prepend_new_slabs(
+                &raw mut cache,
+                &mut slab_man,
+                &mut slab_objects,
+                2,
+                &Vec::new(),
+                1,
+            );
+        }
+        let empty_slab = cache.slabs_empty;
+
+        assert_eq!(
+            null_mut(),
+            cache.slabs_partial,
+            "The slabs_partial should be null initially to ensure the object is allocated from the empty slab"
         );
 
-        let moved_slab = allocated_object.source;
-        assert!(
-            unsafe { !SlabHeader::is_full(moved_slab) },
-            "The moved slab should not be full after the allocation"
-        );
+        // Act
+        let result = unsafe { Cache::allocate_object(&raw mut cache) };
+        assert!(result.is_ok(), "The result should be Ok but got {result:?}");
+        let allocated_object = result.unwrap();
+
+        // Assert
         assert_eq!(
-            1,
-            unsafe { size_of_list(cache.slabs_empty) },
-            "The slabs_empty should have a single slab after the allocation"
+            empty_slab, allocated_object.source,
+            "The allocated object should come from the empty slab"
+        );
+    }
+
+    test_against_types!(
+        test_returned_object_has_correct_source_for_empty,
+        (returned_object_has_correct_source_for_empty_type1, Type1),
+        (returned_object_has_correct_source_for_empty_type2, Type2),
+        (returned_object_has_correct_source_for_empty_type3, Type3),
+    );
+
+    fn test_returned_object_has_correct_source_for_partial<T: Default + Debug>() {
+        // Arrange:
+        // Create a cache that contains one partial slab and two full slabs.
+        let name = ['c'; CACHE_NAME_LENGTH];
+        let layout = safe_slab_layout::<T>(4);
+
+        let mut cache = Cache::<T>::new(name, layout);
+        let mut slab_man = SlabMan::<T>::new(layout);
+        let mut slab_objects = Vec::new();
+
+        unsafe {
+            prepend_new_slabs(
+                &raw mut cache,
+                &mut slab_man,
+                &mut slab_objects,
+                2,
+                &vec![2],
+                0,
+            );
+        }
+        let partial_slab = cache.slabs_partial;
+
+        assert_eq!(
+            null_mut(),
+            cache.slabs_empty,
+            "The slabs_empty should be null initially to ensure the object is allocated from the partial slab"
+        );
+
+        // Act
+        let result = unsafe { Cache::allocate_object(&raw mut cache) };
+        assert!(result.is_ok(), "The result should be Ok but got {result:?}");
+        let allocated_object = result.unwrap();
+
+        // Assert
+        assert_eq!(
+            partial_slab, allocated_object.source,
+            "The allocated object should come from the partial slab"
+        );
+    }
+
+    test_against_types!(
+        test_returned_object_has_correct_source_for_partial,
+        (returned_object_has_correct_sorce_for_partial_type1, Type1),
+        (returned_object_has_correct_sorce_for_partial_type2, Type2),
+        (returned_object_has_correct_sorce_for_partial_type3, Type3),
+    );
+
+    fn test_slabs_empty_becomes_null<T: Default + Debug>() {
+        // Arrange:
+        // Create a cache that contains a single empty slab.
+        let name = ['c'; CACHE_NAME_LENGTH];
+        let layout = safe_slab_layout::<T>(2);
+
+        let mut cache = Cache::<T>::new(name, layout);
+        let mut slab_man = SlabMan::<T>::new(layout);
+        let mut slab_objects = Vec::new();
+
+        unsafe {
+            prepend_new_slabs(
+                &raw mut cache,
+                &mut slab_man,
+                &mut slab_objects,
+                0,
+                &Vec::new(),
+                1,
+            );
+        }
+
+        assert_eq!(
+            null_mut(),
+            cache.slabs_partial,
+            "The slabs_partial should be null initially to ensure the object is allocated from the empty slab"
         );
         assert_ne!(
             null_mut(),
-            cache.slabs_partial,
-            "The slab_partial should not be null after the allocation"
+            cache.slabs_empty,
+            "The slabs_empty should not be null initially"
         );
+
+        // Act
+        let result = unsafe { Cache::allocate_object(&raw mut cache) };
+        assert!(result.is_ok(), "The result should be Ok but got {result:?}");
+        let allocated_object = result.unwrap();
+
+        // Assert
         assert_eq!(
-            1,
-            unsafe { size_of_list(cache.slabs_partial) },
-            "The slabs_partial should have a single slab after the allocation"
-        );
-        assert!(
-            unsafe { contains_node(cache.slabs_partial, moved_slab) },
-            "The slabs_partial should contain the moved slab after the allocation"
+            null_mut(),
+            cache.slabs_empty,
+            "The slabs_empty should be null after the allocation"
         );
 
         slab_objects.push(allocated_object);
@@ -1288,39 +1444,97 @@ mod cache_allocate_object_test {
         }
     }
 
-    #[test]
-    fn slabs_partial_becomes_null_slabs_partial_is_null() {
+    test_against_types!(
+        test_slabs_empty_becomes_null,
+        (slabs_empty_becomes_null_for_type1, Type1),
+        (slabs_empty_becomes_null_for_type2, Type2),
+        (slabs_empty_becomes_null_for_type3, Type3),
+    );
+
+    fn test_slabs_partial_becomes_non_null<T: Default + Debug>() {
         // Arrange:
-        // create a cache that contains a partial slab that is one free slot left and
-        // a full slab.
-        type T = TestObject;
-        let layout = Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
-            .expect("Failed to create layout");
+        // Create a cache that contains two empty slabs.
         let name = ['c'; CACHE_NAME_LENGTH];
+        let layout = safe_slab_layout::<T>(2);
 
         let mut cache = Cache::<T>::new(name, layout);
         let mut slab_man = SlabMan::<T>::new(layout);
         let mut slab_objects = Vec::new();
 
-        let partial_slab = slab_man.new_test_slab(&raw mut cache);
         unsafe {
-            while (*partial_slab).used_count < (*partial_slab).total_slots - 1 {
-                slab_objects.push(
-                    SlabHeader::allocate_object(partial_slab).expect("Failed to allocate object"),
-                );
-            }
+            prepend_new_slabs(
+                &raw mut cache,
+                &mut slab_man,
+                &mut slab_objects,
+                0,
+                &Vec::new(),
+                2,
+            );
         }
-        cache.slabs_partial = partial_slab;
+        let empty_slab1 = cache.slabs_empty;
 
-        let full_slab = slab_man.new_test_slab(&raw mut cache);
+        assert!(
+            unsafe { (*empty_slab1).total_slots > 1 },
+            "The empty slabs should have more than one free slot to ensure a partial slab after the allocation"
+        );
+        assert_eq!(
+            null_mut(),
+            cache.slabs_partial,
+            "The slabs_partial should be null initially"
+        );
+
+        // Act
+        let result = unsafe { Cache::allocate_object(&raw mut cache) };
+        assert!(result.is_ok(), "The result should be Ok but got {result:?}");
+        let allocated_object = result.unwrap();
+
+        // Assert
+        assert_ne!(
+            null_mut(),
+            cache.slabs_partial,
+            "The slabs_partial should not be null after the allocation"
+        );
+
+        slab_objects.push(allocated_object);
         unsafe {
-            while !SlabHeader::is_full(full_slab) {
-                slab_objects.push(
-                    SlabHeader::allocate_object(full_slab).expect("Failed to allocate object"),
-                );
-            }
+            verify_cache_invariants_v2(
+                &raw mut cache,
+                &name,
+                layout,
+                slab_man.allocated_addrs(),
+                &slab_objects,
+            );
         }
-        cache.slabs_full = full_slab;
+    }
+
+    test_against_types!(
+        test_slabs_partial_becomes_non_null,
+        (slabs_partial_becomes_non_null_for_type1, Type1),
+        (slabs_partial_becomes_non_null_for_type2, Type2),
+        (slabs_partial_becomes_non_null_for_type3, Type3),
+    );
+
+    fn test_slabs_partial_becomes_null<T: Default + Debug>() {
+        // Arrange:
+        // create a cache that contains a partial slab that is one free slot left and
+        // a full slab.
+        let name = ['c'; CACHE_NAME_LENGTH];
+        let layout = safe_slab_layout::<T>(2);
+
+        let mut cache = Cache::<T>::new(name, layout);
+        let mut slab_man = SlabMan::<T>::new(layout);
+        let mut slab_objects = Vec::new();
+
+        unsafe {
+            prepend_new_slabs(
+                &raw mut cache,
+                &mut slab_man,
+                &mut slab_objects,
+                1,
+                &vec![1],
+                0,
+            );
+        }
 
         assert_eq!(
             null_mut(),
@@ -1336,25 +1550,13 @@ mod cache_allocate_object_test {
         // Act
         let result = unsafe { Cache::allocate_object(&raw mut cache) };
         assert!(result.is_ok(), "The result should be Ok but got {result:?}");
+        let allocated_object = result.unwrap();
 
         // Assert
-        let allocated_object = result.unwrap();
-        assert_eq!(
-            partial_slab, allocated_object.source,
-            "The allocated object should come from the partial_slab"
-        );
         assert_eq!(
             null_mut(),
             cache.slabs_partial,
-            "slabs_partial should be null after the allocation"
-        );
-        assert!(
-            unsafe { SlabHeader::is_full(partial_slab) },
-            "The partial_slab should be full after the allocation"
-        );
-        assert!(
-            unsafe { contains_node(cache.slabs_full, partial_slab) },
-            "The partial_slab should be moved to the slabs_full list"
+            "The slabs_partial should be null after the allocation"
         );
 
         slab_objects.push(allocated_object);
@@ -1369,28 +1571,33 @@ mod cache_allocate_object_test {
         }
     }
 
-    #[test]
-    fn slabs_full_becomes_non_null_slabs_full_is_non_null() {
+    test_against_types!(
+        test_slabs_partial_becomes_null,
+        (slabs_partial_becomes_null_for_type1, Type1),
+        (slabs_partial_becomes_null_for_type2, Type2),
+        (slabs_partial_becomes_null_for_type3, Type3),
+    );
+
+    fn test_slabs_full_becomes_non_null<T: Default + Debug>() {
         // Arrange:
         // Create a cache that contains a partial slab that is one free slot left.
-        type T = TestObject;
-        let layout = Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
-            .expect("Failed to create layout");
         let name = ['c'; CACHE_NAME_LENGTH];
+        let layout = safe_slab_layout::<T>(2);
 
         let mut cache = Cache::<T>::new(name, layout);
         let mut slab_man = SlabMan::<T>::new(layout);
         let mut slab_objects = Vec::new();
 
-        let partial_slab = slab_man.new_test_slab(&raw mut cache);
         unsafe {
-            while (*partial_slab).used_count < (*partial_slab).total_slots - 1 {
-                slab_objects.push(
-                    SlabHeader::allocate_object(partial_slab).expect("Failed to allocate object"),
-                );
-            }
+            prepend_new_slabs(
+                &raw mut cache,
+                &mut slab_man,
+                &mut slab_objects,
+                0,
+                &vec![1],
+                0,
+            );
         }
-        cache.slabs_partial = partial_slab;
 
         assert_eq!(
             null_mut(),
@@ -1401,25 +1608,13 @@ mod cache_allocate_object_test {
         // Act
         let result = unsafe { Cache::allocate_object(&raw mut cache) };
         assert!(result.is_ok(), "The result should be Ok but got {result:?}");
+        let allocated_object = result.unwrap();
 
         // Assert
-        let allocated_object = result.unwrap();
-        assert_eq!(
-            partial_slab, allocated_object.source,
-            "The allocated object should come from the partial_slab"
-        );
         assert_ne!(
             null_mut(),
             cache.slabs_full,
-            "slabs_full should not be null"
-        );
-        assert!(
-            unsafe { SlabHeader::is_full(partial_slab) },
-            "The partial_slab should be full after the allocation"
-        );
-        assert!(
-            unsafe { contains_node(cache.slabs_full, partial_slab) },
-            "The partial_slab should be moved to the slabs_full list"
+            "The slabs_full should not be null after the allocation"
         );
 
         slab_objects.push(allocated_object);
@@ -1434,36 +1629,33 @@ mod cache_allocate_object_test {
         }
     }
 
-    #[test]
-    fn an_empty_slab_becomes_partial_moves_correctly() {
+    test_against_types!(
+        test_slabs_full_becomes_non_null,
+        (slabs_full_becomes_non_null_for_type1, Type1),
+        (slabs_full_becomes_non_null_for_type2, Type2),
+        (slabs_full_becomes_non_null_for_type3, Type3),
+    );
+
+    fn test_empty_slab_becomes_partial<T: Default + Debug>() {
         // Arrange:
         // Create a cache that contains two empty slabs and a full slab.
-        type T = TestObject;
-        let layout = Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
-            .expect("Failed to create layout");
         let name = ['c'; CACHE_NAME_LENGTH];
+        let layout = safe_slab_layout::<T>(2);
 
         let mut cache = Cache::<T>::new(name, layout);
         let mut slab_man = SlabMan::<T>::new(layout);
         let mut slab_objects = Vec::new();
 
-        let empty_slab1 = slab_man.new_test_slab(&raw mut cache);
-        let empty_slab2 = slab_man.new_test_slab(&raw mut cache);
         unsafe {
-            (*empty_slab1).next = empty_slab2;
-            (*empty_slab2).prev = empty_slab1;
+            prepend_new_slabs(
+                &raw mut cache,
+                &mut slab_man,
+                &mut slab_objects,
+                1,
+                &Vec::new(),
+                2,
+            );
         }
-        cache.slabs_empty = empty_slab1;
-
-        let full_slab = slab_man.new_test_slab(&raw mut cache);
-        unsafe {
-            while !SlabHeader::is_full(full_slab) {
-                slab_objects.push(
-                    SlabHeader::allocate_object(full_slab).expect("Failed to allocate object"),
-                )
-            }
-        }
-        cache.slabs_full = full_slab;
 
         assert_eq!(
             null_mut(),
@@ -1474,42 +1666,18 @@ mod cache_allocate_object_test {
         // Act
         let result = unsafe { Cache::allocate_object(&raw mut cache) };
         assert!(result.is_ok(), "The result should be Ok but got {result:?}");
+        let allocated_object = result.unwrap();
 
         // Assert
-        let allocated_object = result.unwrap();
-        assert!(
-            allocated_object.source == empty_slab1 || allocated_object.source == empty_slab2,
-            "The allocated object should come from one of the empty slabs"
-        );
-
         let moved_slab = allocated_object.source;
         assert!(
             unsafe { !SlabHeader::is_full(moved_slab) },
             "The moved slab should not be full"
         );
-
-        assert_eq!(
-            1,
-            unsafe { size_of_list(cache.slabs_empty) },
-            "The slabs_empty should have a single slab after the allocation"
-        );
-        assert!(
-            unsafe { !contains_node(cache.slabs_empty, moved_slab) },
-            "The slabs_empty should not contain the moved slab"
-        );
-        assert_eq!(
-            1,
-            unsafe { size_of_list(cache.slabs_partial) },
-            "The slabs_partial should have a single slab after the allocation"
-        );
-        assert!(
-            unsafe { contains_node(cache.slabs_partial, moved_slab) },
-            "The slabs_partial should contain the moved slab"
-        );
-        assert_eq!(
-            1,
-            unsafe { size_of_list(cache.slabs_full) },
-            "The slabs_full should have a single slab after the allocation"
+        assert_ne!(
+            0,
+            unsafe { (*moved_slab).used_count },
+            "The moved slab should not be empty"
         );
 
         slab_objects.push(allocated_object);
@@ -1524,87 +1692,57 @@ mod cache_allocate_object_test {
         }
     }
 
-    #[test]
-    fn an_empty_slab_becomes_full_moves_correctly() {
+    test_against_types!(
+        test_empty_slab_becomes_partial,
+        (empty_slab_becomes_partial_for_type1, Type1),
+        (empty_slab_becomes_partial_for_type2, Type2),
+        (empty_slab_becomes_partial_for_type3, Type3),
+    );
+
+    fn test_empty_slab_becomes_full<T: Default + Debug>() {
         // Arrange:
-        // Create a cache that contains two empty slabs and a full slab.
-        // All slabs have a total_slots of one.
-        type T = TestObject;
-        let layout = Layout::from_size_align(safe_slab_size::<T>(1), align_of::<SlabHeader<T>>())
-            .expect("Failed to create layout");
+        // Create a cache that contains two empty slabs and a full slab. All slabs have a
+        // total_slots of one.
         let name = ['c'; CACHE_NAME_LENGTH];
+        let layout = safe_slab_layout::<T>(1);
 
         let mut cache = Cache::<T>::new(name, layout);
         let mut slab_man = SlabMan::<T>::new(layout);
         let mut slab_objects = Vec::new();
 
-        let empty_slab1 = slab_man.new_test_slab(&raw mut cache);
-        let empty_slab2 = slab_man.new_test_slab(&raw mut cache);
         unsafe {
-            (*empty_slab1).next = empty_slab2;
-            (*empty_slab2).prev = empty_slab1;
+            prepend_new_slabs(
+                &raw mut cache,
+                &mut slab_man,
+                &mut slab_objects,
+                1,
+                &Vec::new(),
+                2,
+            );
         }
-        cache.slabs_empty = empty_slab1;
+        let empty_slab1 = cache.slabs_empty;
 
-        let full_slab = slab_man.new_test_slab(&raw mut cache);
-        unsafe {
-            while !SlabHeader::is_full(full_slab) {
-                slab_objects.push(
-                    SlabHeader::allocate_object(full_slab).expect("Failed to allocate object"),
-                )
-            }
-        }
-        cache.slabs_full = full_slab;
-
-        assert_eq!(
-            null_mut(),
-            cache.slabs_partial,
-            "The slabs_partial should be null initially"
-        );
         assert_eq!(
             1,
             unsafe { (*empty_slab1).total_slots },
             "The slabs should have a total slots of one"
         );
+        assert_eq!(
+            null_mut(),
+            cache.slabs_partial,
+            "The slabs_partial should be null initially to ensure the object is allocated from the empty slabs"
+        );
 
         // Act
         let result = unsafe { Cache::allocate_object(&raw mut cache) };
         assert!(result.is_ok(), "The result should be Ok but got {result:?}");
-
-        // Assert:
         let allocated_object = result.unwrap();
-        assert!(
-            allocated_object.source == empty_slab1 || allocated_object.source == empty_slab2,
-            "The allocated object should come from one of the empty slabs"
-        );
 
+        // Assert
         let moved_slab = allocated_object.source;
         assert!(
             unsafe { SlabHeader::is_full(moved_slab) },
-            "The moved slab should be full after the allocation"
-        );
-        assert_eq!(
-            1,
-            unsafe { size_of_list(cache.slabs_empty) },
-            "The slabs_empty should have a single slab after the allocation"
-        );
-        assert_eq!(
-            null_mut(),
-            cache.slabs_partial,
-            "The slabs_partial should be null after the allocation"
-        );
-        assert_eq!(
-            2,
-            unsafe { size_of_list(cache.slabs_full) },
-            "The slabs_full should have two slabs after the allocation"
-        );
-        assert!(
-            unsafe { contains_node(cache.slabs_full, moved_slab) },
-            "The slabs_full should contain the moved slab after the allocation"
-        );
-        assert!(
-            unsafe { contains_node(cache.slabs_full, full_slab) },
-            "The slabs_full should contain the full_slab after the allocation"
+            "The moved slab should be full"
         );
 
         slab_objects.push(allocated_object);
@@ -1619,35 +1757,33 @@ mod cache_allocate_object_test {
         }
     }
 
-    #[test]
-    fn a_partial_slab_remains_partial_no_move() {
+    test_against_types!(
+        test_empty_slab_becomes_full,
+        (empty_slab_becomes_full_for_type1, Type1),
+        (empty_slab_becomes_full_for_type2, Type2),
+    );
+
+    fn test_partial_slab_remains_partial<T: Default + Debug>() {
         // Arrange:
-        // Create a cache that contains two partial slabs.
-        // Both partial slabs have more than one available slot.
-        type T = TestObject;
-        let layout = Layout::from_size_align(safe_slab_size::<T>(4), align_of::<SlabHeader<T>>())
-            .expect("Failed to create layout");
+        // Create a cache that contains two partial slabs. Both partial slabs have more than one
+        // available slot.
         let name = ['c'; CACHE_NAME_LENGTH];
+        let layout = safe_slab_layout::<T>(4);
 
         let mut cache = Cache::<T>::new(name, layout);
         let mut slab_man = SlabMan::<T>::new(layout);
         let mut slab_objects = Vec::new();
 
-        let partial_slab1 = slab_man.new_test_slab(&raw mut cache);
-        let partial_slab2 = slab_man.new_test_slab(&raw mut cache);
-
         unsafe {
-            // Allocate some objects in each partial slab, leaving more than one free slot
-            for slab in [partial_slab1, partial_slab2] {
-                while (*slab).used_count < (*slab).total_slots - 2 {
-                    slab_objects
-                        .push(SlabHeader::allocate_object(slab).expect("Failed to allocate object"))
-                }
-            }
-            (*partial_slab1).next = partial_slab2;
-            (*partial_slab2).prev = partial_slab1;
+            prepend_new_slabs(
+                &raw mut cache,
+                &mut slab_man,
+                &mut slab_objects,
+                0,
+                &vec![3, 2],
+                0,
+            );
         }
-        cache.slabs_partial = partial_slab1;
 
         assert_eq!(
             null_mut(),
@@ -1658,28 +1794,18 @@ mod cache_allocate_object_test {
         // Act
         let result = unsafe { Cache::allocate_object(&raw mut cache) };
         assert!(result.is_ok(), "The result should be Ok but got {result:?}");
+        let allocated_object = result.unwrap();
 
         // Assert
-        let allocated_object = result.unwrap();
+        let moved_slab = allocated_object.source;
         assert!(
-            allocated_object.source == partial_slab1 || allocated_object.source == partial_slab2,
-            "The allocated object should come from one of the partial slabs"
+            unsafe { !SlabHeader::is_full(moved_slab) },
+            "The moved slab should not be full"
         );
-
-        assert_eq!(
-            2,
-            unsafe { size_of_list(cache.slabs_partial) },
-            "The slabs_partial should have two slabs after the allocation"
-        );
-        assert_eq!(
-            null_mut(),
-            cache.slabs_full,
-            "The slabs_full should be null after the allocation"
-        );
-        assert!(
-            unsafe { contains_node(cache.slabs_partial, partial_slab1) }
-                && unsafe { contains_node(cache.slabs_partial, partial_slab2) },
-            "The slabs_partial should contain both partial slabs after the allocation"
+        assert_ne!(
+            0,
+            unsafe { (*moved_slab).used_count },
+            "The moved slab should not be empty"
         );
 
         slab_objects.push(allocated_object);
@@ -1694,45 +1820,34 @@ mod cache_allocate_object_test {
         }
     }
 
-    #[test]
-    fn a_partial_slab_becomes_full_moves_correctly() {
+    test_against_types!(
+        test_partial_slab_remains_partial,
+        (partial_slab_remains_partial_for_type1, Type1),
+        (partial_slab_remains_partial_for_type2, Type2),
+        (partial_slab_remains_partial_for_type3, Type3),
+    );
+
+    fn test_partial_slab_becomes_full<T: Default + Debug>() {
         // Arrange:
-        // Create a cache that contains two partial slabs and one full slab.
-        // Both partial slabs have only one slot available.
-        type T = TestObject;
-        let layout = Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
-            .expect("Failed to create layout");
+        // Create a cache that contains two partial slabs and one full slab. Both partial slabs
+        // have only one slot available.
         let name = ['c'; CACHE_NAME_LENGTH];
+        let layout = safe_slab_layout::<T>(2);
 
         let mut cache = Cache::<T>::new(name, layout);
         let mut slab_man = SlabMan::<T>::new(layout);
         let mut slab_objects = Vec::new();
 
-        let partial_slab1 = slab_man.new_test_slab(&raw mut cache);
-        let partial_slab2 = slab_man.new_test_slab(&raw mut cache);
-
         unsafe {
-            // Fill each partial slab until only one slot is left
-            for slab in [partial_slab1, partial_slab2] {
-                while (*slab).used_count < (*slab).total_slots - 1 {
-                    slab_objects
-                        .push(SlabHeader::allocate_object(slab).expect("Failed to allocate object"))
-                }
-            }
-            (*partial_slab1).next = partial_slab2;
-            (*partial_slab2).prev = partial_slab1;
+            prepend_new_slabs(
+                &raw mut cache,
+                &mut slab_man,
+                &mut slab_objects,
+                1,
+                &vec![1, 1],
+                0,
+            );
         }
-        cache.slabs_partial = partial_slab1;
-
-        let full_slab = slab_man.new_test_slab(&raw mut cache);
-        unsafe {
-            while !SlabHeader::is_full(full_slab) {
-                slab_objects.push(
-                    SlabHeader::allocate_object(full_slab).expect("Failed to allocate object"),
-                );
-            }
-        }
-        cache.slabs_full = full_slab;
 
         assert_eq!(
             null_mut(),
@@ -1743,41 +1858,13 @@ mod cache_allocate_object_test {
         // Act
         let result = unsafe { Cache::allocate_object(&raw mut cache) };
         assert!(result.is_ok(), "The result should be Ok but got {result:?}");
+        let allocated_object = result.unwrap();
 
         // Assert
-        let allocated_object = result.unwrap();
-        assert!(
-            allocated_object.source == partial_slab1 || allocated_object.source == partial_slab2,
-            "The allocated object should come from one of the partial slabs"
-        );
-
-        assert_eq!(
-            1,
-            unsafe { size_of_list(cache.slabs_partial) },
-            "The slabs_partial should have a single slab after the allocation"
-        );
-        assert!(
-            cache.slabs_partial == partial_slab1 || cache.slabs_partial == partial_slab2,
-            "The slabs_partial should be the one of the partial slabs after the allocation"
-        );
-        assert_eq!(
-            2,
-            unsafe { size_of_list(cache.slabs_full) },
-            "The slabs_full should have two slabs after the allocation"
-        );
-
         let moved_slab = allocated_object.source;
         assert!(
             unsafe { SlabHeader::is_full(moved_slab) },
-            "The moved slab should be full after the allocation"
-        );
-        assert!(
-            unsafe { !contains_node(cache.slabs_partial, moved_slab) },
-            "The slabs_partial should not contain the moved slab"
-        );
-        assert!(
-            unsafe { contains_node(cache.slabs_full, moved_slab) },
-            "The slabs_full should contain the moved slab"
+            "The moved slab should be full"
         );
 
         slab_objects.push(allocated_object);
@@ -1792,65 +1879,62 @@ mod cache_allocate_object_test {
         }
     }
 
-    #[test]
-    fn general_case_holds_cache_invariants() {
-        // Arrange:
-        // Create a cache that contains two empty slabs, two partial slabs and two full slabs.
-        type T = TestObject;
-        let layout = Layout::from_size_align(safe_slab_size::<T>(4), align_of::<SlabHeader<T>>())
-            .expect("Failed to create layout");
+    test_against_types!(
+        test_partial_slab_becomes_full,
+        (partial_slab_becomes_full_for_type1, Type1),
+        (partial_slab_becomes_full_for_type2, Type2),
+        (partial_slab_becomes_full_for_type3, Type3),
+    );
+
+    fn test_general_case<T: Default + Debug>(
+        total_slots: usize,
+        new_fulls: usize,
+        new_partial_free_slots: &[usize],
+        new_empties: usize,
+    ) {
+        // Arrange
         let name = ['c'; CACHE_NAME_LENGTH];
+        let layout = safe_slab_layout::<T>(total_slots);
 
         let mut cache = Cache::<T>::new(name, layout);
         let mut slab_man = SlabMan::<T>::new(layout);
         let mut slab_objects = Vec::new();
 
-        let empty_slab1 = slab_man.new_test_slab(&raw mut cache);
-        let empty_slab2 = slab_man.new_test_slab(&raw mut cache);
         unsafe {
-            (*empty_slab1).next = empty_slab2;
-            (*empty_slab2).prev = empty_slab1;
+            prepend_new_slabs(
+                &raw mut cache,
+                &mut slab_man,
+                &mut slab_objects,
+                new_fulls,
+                new_partial_free_slots,
+                new_empties,
+            );
         }
-        cache.slabs_empty = empty_slab1;
 
-        let partial_slab1 = slab_man.new_test_slab(&raw mut cache);
-        let partial_slab2 = slab_man.new_test_slab(&raw mut cache);
-        unsafe {
-            // Allocate some objects in each partial slab, leaving more than one free slot
-            for slab in [partial_slab1, partial_slab2] {
-                while (*slab).used_count < (*slab).total_slots - 2 {
-                    slab_objects
-                        .push(SlabHeader::allocate_object(slab).expect("Failed to allocate object"))
-                }
-            }
-            (*partial_slab1).next = partial_slab2;
-            (*partial_slab2).prev = partial_slab1;
-        }
-        cache.slabs_partial = partial_slab1;
+        let slab = if new_fulls > 0 {
+            cache.slabs_full
+        } else if new_partial_free_slots.len() > 0 {
+            cache.slabs_partial
+        } else {
+            assert!(
+                new_empties > 0,
+                "The cache should contain at least one slab"
+            );
+            cache.slabs_empty
+        };
 
-        let full_slab1 = slab_man.new_test_slab(&raw mut cache);
-        let full_slab2 = slab_man.new_test_slab(&raw mut cache);
-        unsafe {
-            // Fill each slab to make it full
-            for slab in [full_slab1, full_slab2] {
-                while !SlabHeader::is_full(slab) {
-                    slab_objects.push(
-                        SlabHeader::allocate_object(slab).expect("Failed to allocate object"),
-                    );
-                }
-            }
-            (*full_slab1).next = full_slab2;
-            (*full_slab2).prev = full_slab1;
-        }
-        cache.slabs_full = full_slab1;
+        assert_eq!(
+            total_slots,
+            unsafe { (*slab).total_slots },
+            "There is discrepancy between the desired total_slots and the actual total_slots"
+        );
 
         // Act
         let result = unsafe { Cache::allocate_object(&raw mut cache) };
         assert!(result.is_ok(), "The result should be Ok but got {result:?}");
-
-        // Assert
         let allocated_object = result.unwrap();
 
+        // Assert
         slab_objects.push(allocated_object);
         unsafe {
             verify_cache_invariants_v2(
@@ -1862,6 +1946,14 @@ mod cache_allocate_object_test {
             );
         }
     }
+
+    test_against_types_arguments!(
+        test_general_case,
+        (general_case_1, Type1, 2, 4, &vec![], 2),
+        (general_case_2, Type1, 4, 1, &vec![2, 3], 0),
+        (general_case_3, Type2, 3, 2, &vec![1, 2], 3),
+        (general_case_4, Type2, 4, 0, &vec![3, 2], 1),
+    );
 }
 
 #[cfg(test)]
@@ -3892,6 +3984,27 @@ mod test_utils {
                 x: 256,
                 y: 128,
                 z: 1024,
+            }
+        }
+    }
+
+    #[derive(Debug, PartialEq)]
+    pub struct TestObject2 {
+        x: TestObject,
+        y: TestObject,
+        z: u128,
+    }
+
+    impl Default for TestObject2 {
+        fn default() -> Self {
+            Self {
+                x: TestObject::default(),
+                y: TestObject {
+                    x: 121,
+                    y: 222,
+                    z: 306,
+                },
+                z: 9124,
             }
         }
     }
