@@ -2107,97 +2107,94 @@ mod cache_push_front_test {
     #[test]
     #[should_panic(expected = "Cache::push_front: node should not be null")]
     fn valid_head_null_node_panics() {
+        // Arrange:
         // Create a head containing two nodes
         let layout = safe_slab_layout::<T>(2);
         let mut slab_man = SlabMan::new(layout);
-
         let head = create_slab_list(&mut slab_man, 2);
 
-        // Exercise push_front
+        // Act
         let _ = unsafe { Cache::<T>::push_front(head, null_mut()) };
     }
 
     #[test]
     #[should_panic(expected = "Cache::push_front: head should not have its prev linked")]
     fn head_has_prev_linked_panics() {
-        // Create a head with its prev linked
+        // Arrange:
+        // Create a head with its prev linked and a node to be pushed.
         let layout = safe_slab_layout::<T>(2);
         let mut slab_man = SlabMan::<T>::new(layout);
-
         let prev = create_slab_list(&mut slab_man, 2);
         let head = unsafe { (*prev).next };
-
-        // Create the node to be inserted
         let node = slab_man.new_test_slab(null_mut());
 
-        // Exercise push_front
+        // Act
         unsafe { Cache::push_front(head, node) };
     }
 
     #[test]
     #[should_panic(expected = "Cache::push_front: node should not have its prev linked")]
     fn node_has_prev_linked_panics() {
-        // Create a node with its prev linked
+        // Arrange:
+        // Create a node with its prev linked.
         let layout = safe_slab_layout::<T>(2);
         let mut slab_man = SlabMan::<T>::new(layout);
-
         let prev = create_slab_list(&mut slab_man, 2);
         let node = unsafe { (*prev).next };
 
-        // Exercise push_front
+        // Act
         unsafe { Cache::push_front(null_mut(), node) };
     }
 
     #[test]
     #[should_panic(expected = "Cache::push_front: node should not have its next linked")]
     fn node_has_next_linked_panics() {
-        // Create a node with its next linked
+        // Arrange:
+        // Create a node with its next linked.
         let layout = safe_slab_layout::<T>(2);
         let mut slab_man = SlabMan::<T>::new(layout);
-
         let node = create_slab_list(&mut slab_man, 2);
 
-        // Exercise push_front
+        // Act
         unsafe { Cache::push_front(null_mut(), node) };
     }
 
     #[test]
     fn null_head_valid_node_returns_node() {
-        // Create the node to be inserted
+        // Arrange:
+        // Create the node to be inserted.
         let layout = safe_slab_layout::<T>(2);
         let mut slab_man = SlabMan::<T>::new(layout);
-
         let node = slab_man.new_test_slab(null_mut());
 
-        // Exercise push_front
+        // Act
         let new_head = unsafe { Cache::push_front(null_mut(), node) };
 
-        // Verify the new head
+        // Assert
         assert_eq!(node, new_head, "The new head should be the node");
         assert_eq!(
             1,
             unsafe { size_of_list(new_head) },
             "The new head should contain one node"
         );
+
         unsafe { verify_list_doubly_linked(new_head) };
     }
 
     #[test]
     fn valid_head_valid_node_returns_node() {
-        // Create a head containing two nodes
+        // Arrange:
+        // Create a head containing two nodes and a node to be inserted.
         let layout = safe_slab_layout::<T>(2);
         let mut slab_man = SlabMan::<T>::new(layout);
-
         let head = create_slab_list(&mut slab_man, 2);
         let next = unsafe { (*head).next };
-
-        // Create the node to be inserted
         let node = slab_man.new_test_slab(null_mut());
 
-        // Exercise push_front
+        // Act
         let new_head = unsafe { Cache::push_front(head, node) };
 
-        // Verify the new head
+        // Assert
         assert_eq!(node, new_head, "The new head should be the node");
 
         let mut expected_list_nodes = vec![new_head, head, next];
