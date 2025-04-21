@@ -216,7 +216,7 @@ where
         assert_eq!(
             null_mut(),
             (*head).prev,
-            "head should not have its prev linked"
+            "Cache::pop_front: head should not have its prev linked"
         );
 
         let new_head = (*head).next;
@@ -1977,7 +1977,7 @@ mod cache_pop_front_test {
     }
 
     #[test]
-    #[should_panic(expected = "head should not have its prev linked")]
+    #[should_panic(expected = "Cache::pop_front: head should not have its prev linked")]
     fn head_has_prev_linked_panics() {
         // Create a head with its prev linked
         type T = u8;
