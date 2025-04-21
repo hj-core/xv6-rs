@@ -110,11 +110,25 @@ where
     /// * The `cache` must be a valid pointer and in a valid state.
     ///
     /// # Panics
-    /// * This function panics if the `cache` is null.
+    /// This function panics if:
+    /// * The `cache` is null.
+    /// * Any of the slab list heads has its `prev` linked.
     unsafe fn allocate_object(cache: *mut Cache<T>) -> Result<SlabObject<T>, Error> {
         assert!(
             !cache.is_null(),
             "Cache::allocate_object: cache should not be null"
+        );
+        assert!(
+            (*cache).slabs_full.is_null() || (*(*cache).slabs_full).prev.is_null(),
+            "Cache::allocate_object: slabs_full should not have its prev linked"
+        );
+        assert!(
+            (*cache).slabs_partial.is_null() || (*(*cache).slabs_partial).prev.is_null(),
+            "Cache::allocate_object: slabs_partial should not have its prev linked"
+        );
+        assert!(
+            (*cache).slabs_empty.is_null() || (*(*cache).slabs_empty).prev.is_null(),
+            "Cache::allocate_object: slabs_empty should not have its prev linked"
         );
 
         if !(*cache).slabs_partial.is_null() {
