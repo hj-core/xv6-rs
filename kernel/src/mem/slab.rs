@@ -191,7 +191,6 @@ where
         if node.is_null() {
             panic!("Cache::push_front: node should not be null")
         }
-
         assert_eq!(
             null_mut(),
             (*node).prev,
@@ -206,7 +205,6 @@ where
         if head.is_null() {
             return node;
         };
-
         assert_eq!(
             null_mut(),
             (*head).prev,
