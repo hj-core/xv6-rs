@@ -2085,37 +2085,28 @@ mod cache_pop_front_test {
 }
 
 #[cfg(test)]
-mod cache_tests {
+mod cache_push_front_test {
     extern crate alloc;
-    use super::*;
-    use alloc::vec;
-    use alloc::vec::Vec;
-    use test_utils::*;
 
-    fn new_test_default<T: Default>() -> Cache<T> {
-        Cache::<T> {
-            name: ['c'; CACHE_NAME_LENGTH],
-            slab_layout: Layout::from_size_align(
-                safe_slab_size::<T>(2),
-                align_of::<SlabHeader<T>>(),
-            )
-            .expect("Failed to create the `slab_layout`"),
-            slabs_full: null_mut(),
-            slabs_partial: null_mut(),
-            slabs_empty: null_mut(),
-        }
-    }
+    use crate::mem::slab::test_utils::{
+        SlabMan, collect_list_slabs, create_slab_list, safe_slab_size, size_of_list,
+        verify_list_doubly_linked,
+    };
+    use crate::mem::slab::{Cache, SlabHeader};
+    use alloc::vec;
+    use core::alloc::Layout;
+    use core::ptr::null_mut;
 
     #[test]
     #[should_panic(expected = "Cache::push_front: node should not be null")]
-    fn push_front_null_head_and_node_panics() {
+    fn null_head_null_node_panics() {
         type T = u8;
         let _ = unsafe { Cache::<T>::push_front(null_mut(), null_mut()) };
     }
 
     #[test]
     #[should_panic(expected = "Cache::push_front: node should not be null")]
-    fn push_front_valid_head_null_node_panics() {
+    fn valid_head_null_node_panics() {
         // Create a head containing two nodes
         type T = u8;
         let slab_layout =
@@ -2131,7 +2122,7 @@ mod cache_tests {
 
     #[test]
     #[should_panic(expected = "Cache::push_front: head should not have its prev linked")]
-    fn push_front_prev_linked_head_panics() {
+    fn head_has_prev_linked_panics() {
         // Create a head with its prev linked
         type T = u8;
         let slab_layout =
@@ -2151,7 +2142,7 @@ mod cache_tests {
 
     #[test]
     #[should_panic(expected = "Cache::push_front: node should not have its prev linked")]
-    fn push_front_prev_linked_node_panics() {
+    fn node_has_prev_linked_panics() {
         // Create a node with its prev linked
         type T = u8;
         let slab_layout =
@@ -2168,7 +2159,7 @@ mod cache_tests {
 
     #[test]
     #[should_panic(expected = "Cache::push_front: node should not have its next linked")]
-    fn push_front_next_linked_node_panics() {
+    fn node_has_next_linked_panics() {
         // Create a node with its next linked
         type T = u8;
         let slab_layout =
@@ -2183,7 +2174,7 @@ mod cache_tests {
     }
 
     #[test]
-    fn push_front_null_head_valid_node_return_node() {
+    fn null_head_valid_node_returns_node() {
         // Create the node to be inserted
         type T = u8;
         let slab_layout =
@@ -2207,7 +2198,7 @@ mod cache_tests {
     }
 
     #[test]
-    fn push_front_valid_head_and_node_return_node() {
+    fn valid_head_valid_node_returns_node() {
         // Create a head containing two nodes
         type T = u8;
         let slab_layout =
@@ -2237,6 +2228,29 @@ mod cache_tests {
         );
 
         unsafe { verify_list_doubly_linked(new_head) };
+    }
+}
+
+#[cfg(test)]
+mod cache_tests {
+    extern crate alloc;
+    use super::*;
+    use alloc::vec;
+    use alloc::vec::Vec;
+    use test_utils::*;
+
+    fn new_test_default<T: Default>() -> Cache<T> {
+        Cache::<T> {
+            name: ['c'; CACHE_NAME_LENGTH],
+            slab_layout: Layout::from_size_align(
+                safe_slab_size::<T>(2),
+                align_of::<SlabHeader<T>>(),
+            )
+            .expect("Failed to create the `slab_layout`"),
+            slabs_full: null_mut(),
+            slabs_partial: null_mut(),
+            slabs_empty: null_mut(),
+        }
     }
 
     #[test]
