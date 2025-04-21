@@ -1961,12 +1961,11 @@ mod cache_allocate_object_test {
 mod cache_pop_front_test {
     extern crate alloc;
 
+    use crate::mem::slab::Cache;
     use crate::mem::slab::test_utils::{
-        SlabMan, contains_node, create_slab_list, safe_slab_size, size_of_list,
+        SlabMan, contains_node, create_slab_list, safe_slab_layout, size_of_list,
         verify_list_doubly_linked, verify_node_isolated,
     };
-    use crate::mem::slab::{Cache, SlabHeader};
-    use core::alloc::Layout;
     use core::ptr::null_mut;
 
     type T = u8;
@@ -1981,10 +1980,8 @@ mod cache_pop_front_test {
     #[should_panic(expected = "Cache::pop_front: head should not have its prev linked")]
     fn head_has_prev_linked_panics() {
         // Create a head with its prev linked
-        let slab_layout =
-            Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
-                .expect("Failed to create slab_layout");
-        let mut slab_man = SlabMan::<T>::new(slab_layout);
+        let layout = safe_slab_layout::<T>(2);
+        let mut slab_man = SlabMan::<T>::new(layout);
 
         let prev = create_slab_list(&mut slab_man, 2);
         let head = unsafe { (*prev).next };
@@ -1996,10 +1993,8 @@ mod cache_pop_front_test {
     #[test]
     fn single_node_list_returns_head_and_null() {
         // Create a head containing a single node
-        let slab_layout =
-            Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
-                .expect("Failed to create slab_layout");
-        let mut slab_man = SlabMan::new(slab_layout);
+        let layout = safe_slab_layout::<T>(2);
+        let mut slab_man = SlabMan::new(layout);
 
         let head = slab_man.new_test_slab(null_mut());
 
@@ -2017,10 +2012,8 @@ mod cache_pop_front_test {
     #[test]
     fn two_nodes_list_returns_head_and_next() {
         // Create a head containing two nodes
-        let slab_layout =
-            Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
-                .expect("Failed to create slab_layout");
-        let mut slab_man = SlabMan::<T>::new(slab_layout);
+        let layout = safe_slab_layout::<T>(2);
+        let mut slab_man = SlabMan::<T>::new(layout);
 
         let head = create_slab_list(&mut slab_man, 2);
         let next = unsafe { (*head).next };
@@ -2048,10 +2041,8 @@ mod cache_pop_front_test {
     #[test]
     fn multi_nodes_list_returns_head_and_next() {
         // Create a head containing three nodes
-        let slab_layout =
-            Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
-                .expect("Failed to create slab_layout");
-        let mut slab_man = SlabMan::<T>::new(slab_layout);
+        let layout = safe_slab_layout::<T>(2);
+        let mut slab_man = SlabMan::<T>::new(layout);
 
         let head = create_slab_list(&mut slab_man, 3);
         let next = unsafe { (*head).next };
