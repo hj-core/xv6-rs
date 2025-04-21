@@ -1969,10 +1969,11 @@ mod cache_pop_front_test {
     use core::alloc::Layout;
     use core::ptr::null_mut;
 
+    type T = u8;
+
     #[test]
     #[should_panic(expected = "Cache::pop_front: head should not be null")]
     fn null_head_panics() {
-        type T = u8;
         let _ = unsafe { Cache::<T>::pop_front(null_mut()) };
     }
 
@@ -1980,7 +1981,6 @@ mod cache_pop_front_test {
     #[should_panic(expected = "Cache::pop_front: head should not have its prev linked")]
     fn head_has_prev_linked_panics() {
         // Create a head with its prev linked
-        type T = u8;
         let slab_layout =
             Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
                 .expect("Failed to create slab_layout");
@@ -1996,7 +1996,6 @@ mod cache_pop_front_test {
     #[test]
     fn single_node_list_returns_head_and_null() {
         // Create a head containing a single node
-        type T = u8;
         let slab_layout =
             Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
                 .expect("Failed to create slab_layout");
@@ -2018,7 +2017,6 @@ mod cache_pop_front_test {
     #[test]
     fn two_nodes_list_returns_head_and_next() {
         // Create a head containing two nodes
-        type T = u8;
         let slab_layout =
             Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
                 .expect("Failed to create slab_layout");
@@ -2050,7 +2048,6 @@ mod cache_pop_front_test {
     #[test]
     fn multi_nodes_list_returns_head_and_next() {
         // Create a head containing three nodes
-        type T = u8;
         let slab_layout =
             Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
                 .expect("Failed to create slab_layout");
