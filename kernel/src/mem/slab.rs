@@ -2088,13 +2088,12 @@ mod cache_pop_front_test {
 mod cache_push_front_test {
     extern crate alloc;
 
+    use crate::mem::slab::Cache;
     use crate::mem::slab::test_utils::{
-        SlabMan, collect_list_slabs, create_slab_list, safe_slab_size, size_of_list,
+        SlabMan, collect_list_slabs, create_slab_list, safe_slab_layout, size_of_list,
         verify_list_doubly_linked,
     };
-    use crate::mem::slab::{Cache, SlabHeader};
     use alloc::vec;
-    use core::alloc::Layout;
     use core::ptr::null_mut;
 
     type T = u8;
@@ -2109,10 +2108,8 @@ mod cache_push_front_test {
     #[should_panic(expected = "Cache::push_front: node should not be null")]
     fn valid_head_null_node_panics() {
         // Create a head containing two nodes
-        let slab_layout =
-            Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
-                .expect("Failed to create slab_layout");
-        let mut slab_man = SlabMan::new(slab_layout);
+        let layout = safe_slab_layout::<T>(2);
+        let mut slab_man = SlabMan::new(layout);
 
         let head = create_slab_list(&mut slab_man, 2);
 
@@ -2124,10 +2121,8 @@ mod cache_push_front_test {
     #[should_panic(expected = "Cache::push_front: head should not have its prev linked")]
     fn head_has_prev_linked_panics() {
         // Create a head with its prev linked
-        let slab_layout =
-            Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
-                .expect("Failed to create slab_layout");
-        let mut slab_man = SlabMan::<T>::new(slab_layout);
+        let layout = safe_slab_layout::<T>(2);
+        let mut slab_man = SlabMan::<T>::new(layout);
 
         let prev = create_slab_list(&mut slab_man, 2);
         let head = unsafe { (*prev).next };
@@ -2143,10 +2138,8 @@ mod cache_push_front_test {
     #[should_panic(expected = "Cache::push_front: node should not have its prev linked")]
     fn node_has_prev_linked_panics() {
         // Create a node with its prev linked
-        let slab_layout =
-            Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
-                .expect("Failed to create slab_layout");
-        let mut slab_man = SlabMan::<T>::new(slab_layout);
+        let layout = safe_slab_layout::<T>(2);
+        let mut slab_man = SlabMan::<T>::new(layout);
 
         let prev = create_slab_list(&mut slab_man, 2);
         let node = unsafe { (*prev).next };
@@ -2159,10 +2152,8 @@ mod cache_push_front_test {
     #[should_panic(expected = "Cache::push_front: node should not have its next linked")]
     fn node_has_next_linked_panics() {
         // Create a node with its next linked
-        let slab_layout =
-            Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
-                .expect("Failed to create slab_layout");
-        let mut slab_man = SlabMan::<T>::new(slab_layout);
+        let layout = safe_slab_layout::<T>(2);
+        let mut slab_man = SlabMan::<T>::new(layout);
 
         let node = create_slab_list(&mut slab_man, 2);
 
@@ -2173,10 +2164,8 @@ mod cache_push_front_test {
     #[test]
     fn null_head_valid_node_returns_node() {
         // Create the node to be inserted
-        let slab_layout =
-            Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
-                .expect("Failed to create slab_layout");
-        let mut slab_man = SlabMan::<T>::new(slab_layout);
+        let layout = safe_slab_layout::<T>(2);
+        let mut slab_man = SlabMan::<T>::new(layout);
 
         let node = slab_man.new_test_slab(null_mut());
 
@@ -2196,10 +2185,8 @@ mod cache_push_front_test {
     #[test]
     fn valid_head_valid_node_returns_node() {
         // Create a head containing two nodes
-        let slab_layout =
-            Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
-                .expect("Failed to create slab_layout");
-        let mut slab_man = SlabMan::<T>::new(slab_layout);
+        let layout = safe_slab_layout::<T>(2);
+        let mut slab_man = SlabMan::<T>::new(layout);
 
         let head = create_slab_list(&mut slab_man, 2);
         let next = unsafe { (*head).next };
