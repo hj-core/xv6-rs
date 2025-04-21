@@ -2182,7 +2182,7 @@ mod cache_push_front_test {
     }
 
     #[test]
-    fn valid_head_valid_node_returns_node() {
+    fn valid_head_valid_node_returns_node_preserve_order() {
         // Arrange:
         // Create a head containing two nodes and a node to be inserted.
         let layout = safe_slab_layout::<T>(2);
@@ -2196,14 +2196,10 @@ mod cache_push_front_test {
 
         // Assert
         assert_eq!(node, new_head, "The new head should be the node");
-
-        let mut expected_list_nodes = vec![new_head, head, next];
-        expected_list_nodes.sort();
-        let mut actual_list_nodes = unsafe { collect_list_slabs(node) };
-        actual_list_nodes.sort();
         assert_eq!(
-            expected_list_nodes, actual_list_nodes,
-            "The new head should contain the expected nodes"
+            vec![new_head, head, next],
+            unsafe { collect_list_slabs(node) },
+            "The new head should contain the expected nodes in the correct order"
         );
 
         unsafe { verify_list_doubly_linked(new_head) };
