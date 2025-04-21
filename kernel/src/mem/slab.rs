@@ -2229,7 +2229,7 @@ mod cache_tests {
 
         let mut expected_list_nodes = vec![new_head, head, next];
         expected_list_nodes.sort();
-        let mut actual_list_nodes = unsafe { list_slabs(node) };
+        let mut actual_list_nodes = unsafe { collect_list_slabs(node) };
         actual_list_nodes.sort();
         assert_eq!(
             expected_list_nodes, actual_list_nodes,
@@ -4503,19 +4503,22 @@ mod test_utils {
             return Vec::new();
         }
         let mut result = Vec::new();
-        result.append(&mut list_slabs((*cache).slabs_full));
-        result.append(&mut list_slabs((*cache).slabs_partial));
-        result.append(&mut list_slabs((*cache).slabs_empty));
+        result.append(&mut collect_list_slabs((*cache).slabs_full));
+        result.append(&mut collect_list_slabs((*cache).slabs_partial));
+        result.append(&mut collect_list_slabs((*cache).slabs_empty));
         result
     }
 
-    /// `list_slabs` returns a list containing the slabs that belong to the `head` list.
-    ///
+    /// `collect_list_slabs` returns a list containing the `head` and the slabs after it.
     /// The slabs on the `prev` side of the `head` are ignored.
     ///
+    /// The order of the slabs is preserved.
+    ///
     /// # SAFETY:
-    /// * `head` must be either null or a valid pointer.
-    pub unsafe fn list_slabs<T: Default>(head: *mut SlabHeader<T>) -> Vec<*mut SlabHeader<T>> {
+    /// * `head` must be either null or a pointer to a valid doubly-linked slab list.
+    pub unsafe fn collect_list_slabs<T: Default>(
+        head: *mut SlabHeader<T>,
+    ) -> Vec<*mut SlabHeader<T>> {
         let mut result = Vec::new();
         if head.is_null() {
             return result;
@@ -4584,7 +4587,7 @@ mod test_utils {
         // Verify the size of the returned head
         assert_eq!(
             3,
-            unsafe { list_slabs(head).len() },
+            unsafe { collect_list_slabs(head).len() },
             "The size of head is incorrect"
         );
     }
@@ -4618,7 +4621,7 @@ mod test_utils {
         let head = create_slab_list(&mut slab_man, 3);
 
         // Verify whether each slab has a null source
-        for slab in unsafe { list_slabs(head) } {
+        for slab in unsafe { collect_list_slabs(head) } {
             assert_eq!(
                 null_mut(),
                 unsafe { (*slab).source },
