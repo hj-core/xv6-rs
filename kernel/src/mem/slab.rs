@@ -1975,9 +1975,10 @@ mod cache_pop_front_test {
 
     use crate::mem::slab::Cache;
     use crate::mem::slab::test_utils::{
-        SlabMan, contains_node, create_slab_list, safe_slab_layout, size_of_list,
-        verify_list_doubly_linked, verify_node_isolated,
+        SlabMan, collect_list_slabs, contains_node, create_slab_list, safe_slab_layout,
+        size_of_list, verify_list_doubly_linked, verify_node_isolated,
     };
+    use alloc::vec;
     use core::ptr::null_mut;
 
     type T = u8;
@@ -2078,6 +2079,31 @@ mod cache_pop_front_test {
         assert!(
             unsafe { contains_node(new_head, next_next) },
             "The new head should contain the next_next"
+        );
+    }
+
+    #[test]
+    fn multi_nodes_list_new_head_preserve_node_order() {
+        // Arrange:
+        // Create a head containing four nodes.
+        let layout = safe_slab_layout::<T>(2);
+        let mut slab_man = SlabMan::<T>::new(layout);
+        let head = create_slab_list(&mut slab_man, 4);
+        let next = unsafe { (*head).next };
+        let next_next = unsafe { (*next).next };
+        let next_next_next = unsafe { (*next_next).next };
+
+        // Act
+        let (node, new_head) = unsafe { Cache::pop_front(head) };
+
+        // Assert
+        unsafe { verify_node_isolated(node) };
+        unsafe { verify_list_doubly_linked(new_head) };
+
+        assert_eq!(
+            vec![next, next_next, next_next_next],
+            unsafe { collect_list_slabs(new_head) },
+            "The new head should contain the expected nodes in the correct order"
         );
     }
 }
