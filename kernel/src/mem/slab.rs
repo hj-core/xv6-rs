@@ -2097,10 +2097,11 @@ mod cache_push_front_test {
     use core::alloc::Layout;
     use core::ptr::null_mut;
 
+    type T = u8;
+
     #[test]
     #[should_panic(expected = "Cache::push_front: node should not be null")]
     fn null_head_null_node_panics() {
-        type T = u8;
         let _ = unsafe { Cache::<T>::push_front(null_mut(), null_mut()) };
     }
 
@@ -2108,7 +2109,6 @@ mod cache_push_front_test {
     #[should_panic(expected = "Cache::push_front: node should not be null")]
     fn valid_head_null_node_panics() {
         // Create a head containing two nodes
-        type T = u8;
         let slab_layout =
             Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
                 .expect("Failed to create slab_layout");
@@ -2124,7 +2124,6 @@ mod cache_push_front_test {
     #[should_panic(expected = "Cache::push_front: head should not have its prev linked")]
     fn head_has_prev_linked_panics() {
         // Create a head with its prev linked
-        type T = u8;
         let slab_layout =
             Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
                 .expect("Failed to create slab_layout");
@@ -2144,7 +2143,6 @@ mod cache_push_front_test {
     #[should_panic(expected = "Cache::push_front: node should not have its prev linked")]
     fn node_has_prev_linked_panics() {
         // Create a node with its prev linked
-        type T = u8;
         let slab_layout =
             Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
                 .expect("Failed to create slab_layout");
@@ -2161,7 +2159,6 @@ mod cache_push_front_test {
     #[should_panic(expected = "Cache::push_front: node should not have its next linked")]
     fn node_has_next_linked_panics() {
         // Create a node with its next linked
-        type T = u8;
         let slab_layout =
             Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
                 .expect("Failed to create slab_layout");
@@ -2176,7 +2173,6 @@ mod cache_push_front_test {
     #[test]
     fn null_head_valid_node_returns_node() {
         // Create the node to be inserted
-        type T = u8;
         let slab_layout =
             Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
                 .expect("Failed to create slab_layout");
@@ -2200,7 +2196,6 @@ mod cache_push_front_test {
     #[test]
     fn valid_head_valid_node_returns_node() {
         // Create a head containing two nodes
-        type T = u8;
         let slab_layout =
             Layout::from_size_align(safe_slab_size::<T>(2), align_of::<SlabHeader<T>>())
                 .expect("Failed to create slab_layout");
