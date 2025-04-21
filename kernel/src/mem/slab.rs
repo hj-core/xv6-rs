@@ -222,8 +222,8 @@ where
         let new_head = (*head).next;
         if !new_head.is_null() {
             (*new_head).prev = null_mut();
+            (*head).next = null_mut();
         }
-        (*head).next = null_mut();
 
         (head, new_head)
     }
